@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shiv Video Vision</title>
+
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/dark.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+<header>
+  <img src="assets/logo.png">
+  <strong>Shiv Video Vision</strong>
+  <div id="netStatus" style="margin-left:auto;font-size:12px"></div>
+  <button onclick="toggleTheme()">🌙</button>
+</header>
+
+<div class="layout">
+<aside>
+  <button onclick="showDashboard()">🏠 Dashboard</button>
+  <button onclick="loadSection('upad')">👷 Upad</button>
+  <button onclick="loadSection('expenses')">📒 Expenses</button>
+  <button onclick="loadSection('salary')">💰 Salary</button>
+  <button onclick="loadSection('invoice')">🧾 Invoice</button>
+  <button class="ownerOnly" onclick="loadSection('gst')">📊 GST</button>
+</aside>
+
+<main id="content"></main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/accounting.js"></script>
+<script src="js/sync.js"></script>
+</body>
+</html>
