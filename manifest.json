@@ -1,0 +1,12 @@
+{
+  "name":"Shiv Video",
+  "short_name":"SVV",
+  "start_url":"index.html",
+  "display":"standalone",
+  "theme_color":"#ff6a00",
+  "background_color":"#ffffff",
+  "icons":[
+    {"src":"assets/icon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"assets/icon-512.png","sizes":"512x512","type":"image/png"}
+  ]
+}
