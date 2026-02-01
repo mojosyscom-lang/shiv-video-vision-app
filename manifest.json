@@ -1,6 +1,6 @@
 {
-  "name":"Shiv Video",
-  "short_name":"SVV",
+  "name":"Shiv Video Vision",
+  "short_name":"Shiv Video",
   "start_url":"index.html",
   "display":"standalone",
   "theme_color":"#ff6a00",
