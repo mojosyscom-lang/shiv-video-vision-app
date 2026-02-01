@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shiv Video Vision</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff6a00">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+
+<style>
+body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui}
+.loader{text-align:center}
+.loader img{width:160px}
+.bar{height:6px;width:160px;background:#eee;border-radius:20px;margin-top:20px;overflow:hidden}
+.bar span{display:block;height:100%;width:50%;background:#ff6a00;animation:move 1.2s infinite}
+@keyframes move{from{transform:translateX(-100%)}to{transform:translateX(200%)}}
+</style>
+</head>
+
+<body>
+<div class="loader">
+  <img src="assets/logo.png">
+  <div class="bar"><span></span></div>
+</div>
+
+<script>
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js")}
+setTimeout(()=>location.href="login.html",2200);
+</script>
+</body>
+</html>
