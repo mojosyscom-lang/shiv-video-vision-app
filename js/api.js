@@ -1,6 +1,7 @@
 const API = "https://script.google.com/macros/s/AKfycbwaWc2LJ2vzCRzJlbpYRiQ58b555JR7-s2TscDD9pSz6P7SyVzpz5t2MOmtf7u62pia/exec";
 
 let _redirectingToLogin = false;
+
 async function api(data) {
   // Attach session without overwriting business fields
   if (data.action !== "login") {
@@ -10,9 +11,9 @@ async function api(data) {
 
   let res;
   try {
+    // IMPORTANT: No Content-Type header → avoids CORS preflight on Apps Script
     res = await fetch(API, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     });
   } catch (err) {
@@ -20,12 +21,13 @@ async function api(data) {
     throw err;
   }
 
+  // Apps Script sometimes returns text/HTML on errors; parse safely
+  const text = await res.text();
+
   let json;
   try {
-    json = await res.json();
+    json = JSON.parse(text);
   } catch (err) {
-    // If Apps Script returns HTML/text instead of JSON
-    const text = await res.text().catch(() => "");
     return { error: "Invalid server response", detail: text.slice(0, 200) };
   }
 
