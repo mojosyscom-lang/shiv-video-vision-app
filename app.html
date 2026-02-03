@@ -1,51 +1,118 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shiv Video Vision</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Shiv Video Vision</title>
 
-<link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/dark.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/dark.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
-<body>
-<header>
-  <img src="assets/logo.png">
-  <strong>Shiv Video Vision</strong>
-  <div id="netStatus" style="font-size:12px;margin-left:auto;"></div>
-<div id="syncCount" style="font-size:12px;margin-left:auto;"></div>
-  <button onclick="toggleTheme()">🌙</button>
-</header>
+<body class="no-scroll">
+  <div class="appShell safe">
 
-<div class="layout">
+    <!-- Fullscreen overlay -->
+    <div id="drawerOverlay" class="drawerOverlay"></div>
 
-  <aside>
-  <button onclick="showDashboard()">🏠 Dashboard</button>
+    <!-- Slide-out drawer -->
+    <aside id="drawer" class="drawer">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <img src="assets/logo.png" style="height:26px;">
+        <strong>Menu</strong>
+      </div>
 
-  <h4 style="padding:10px;color:#aaa;">ACCOUNTING</h4>
-  <button onclick="loadSection('upad')">👷 Upad</button>
-  <button onclick="loadSection('expenses')">📒 Expenses</button>
-<button onclick="loadSection('salary')">💰 Salary</button>
-  <h4 style="padding:10px;color:#aaa;">INVOICE</h4>
-  <button onclick="loadSection('invoice')">🧾 Create Invoice</button>
-<button class="superadminOnly" onclick="loadSection('export')">📤 Export</button>
-  <h4 style="padding:10px;color:#aaa;">ADMIN</h4>
-    
-  <button class="superadminOnly" onclick="loadSection('userMgmt')">🛡 User Management</button>
-<button class="superadminOnly" onclick="loadSection('gst')">📊 GST</button>
-  <button onclick="logout()" style="margin-top:20px;">🚪 Logout</button>
-</aside>
+      <button onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
 
+      <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ACCOUNTING</h4>
+      <button onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
+      <button onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
+      <button onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
 
-<main id="content"></main>
-</div>
+      <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">INVOICE</h4>
+      <button onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
 
-<script src="js/api.js"></script>
+      <div class="superadminOnly">
+        <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ADMIN</h4>
+        <button onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
+        <button onclick="navTo('gst'); closeDrawer()">📊 GST</button>
+        <button onclick="navTo('export'); closeDrawer()">📤 Export</button>
+      </div>
+
+      <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.12);padding-top:10px;">
+        <button onclick="logout()">🚪 Logout</button>
+      </div>
+    </aside>
+
+    <!-- Header -->
+    <header class="appHeader">
+      <button class="iconBtn backBtn" id="btnBack" title="Back"></button>
+      <button class="iconBtn menuBtn" id="btnMenu" title="Menu"></button>
+
+      <img src="assets/logo.png" alt="SVV">
+      <strong>Shiv Video Vision</strong>
+
+      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
+        <span id="netStatus" style="font-size:12px;"></span>
+        <span id="syncCount" style="font-size:12px;"></span>
+        <button class="iconBtn" onclick="toggleTheme()" title="Theme">🌙</button>
+      </div>
+    </header>
+
+    <!-- Main fixed content (no scroll) -->
+    <main class="appMain" id="content"></main>
+
+  </div>
+
+  <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/sync.js"></script>
-<script src="js/accounting.js"></script>
+  <script src="js/accounting.js"></script>
 
+  <script>
+    // Drawer controls
+    const drawer = document.getElementById("drawer");
+    const overlay = document.getElementById("drawerOverlay");
+
+    function openDrawer() {
+      drawer.classList.add("open");
+      overlay.classList.add("open");
+    }
+    function closeDrawer() {
+      drawer.classList.remove("open");
+      overlay.classList.remove("open");
+    }
+
+    document.getElementById("btnMenu").addEventListener("click", openDrawer);
+    overlay.addEventListener("click", closeDrawer);
+
+    // Navigation helper to build a back stack
+    window.__navStack = window.__navStack || ["dashboard"];
+
+    window.navTo = async function(section) {
+      if (section === "dashboard") {
+        window.__navStack.push("dashboard");
+        showDashboard();
+        return;
+      }
+      window.__navStack.push(section);
+      await loadSection(section);
+    };
+
+    function goBack() {
+      if (!window.__navStack || window.__navStack.length <= 1) {
+        showDashboard();
+        window.__navStack = ["dashboard"];
+        return;
+      }
+      window.__navStack.pop();
+      const prev = window.__navStack[window.__navStack.length - 1] || "dashboard";
+      if (prev === "dashboard") showDashboard();
+      else loadSection(prev);
+    }
+
+    document.getElementById("btnBack").addEventListener("click", goBack);
+  </script>
 </body>
 </html>
