@@ -2,6 +2,7 @@ const API = "https://script.google.com/macros/s/AKfycbwaWc2LJ2vzCRzJlbpYRiQ58b55
 
 let _redirectingToLogin = false;
 
+
 async function api(data) {
   // Attach session without overwriting business fields
   if (data.action !== "login") {
