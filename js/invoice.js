@@ -11,15 +11,14 @@ async function initInvoice() {
   try {
     const r = await api({ action: "getNextInvoiceNo" });
     const noEl = document.getElementById("invNo");
-    if (r && r.invoice_no && noEl) {
-      noEl.value = r.invoice_no;
-    }
+    if (r && r.invoice_no && noEl) noEl.value = r.invoice_no;
   } catch (e) {
     console.error("Invoice number error", e);
   }
 
   // Start with one row
   addItemRow();
+  calculateTotal();
 }
 
 // ---------- CALCULATIONS ----------
@@ -48,6 +47,7 @@ function addItemRow() {
 
   row.querySelector(".itemQty").addEventListener("input", () => rowCalc(row));
   row.querySelector(".itemRate").addEventListener("input", () => rowCalc(row));
+  rowCalc(row); // compute immediately
 }
 
 // ---------- ROW CALC ----------
@@ -62,57 +62,80 @@ function rowCalc(row) {
 
 // ---------- SAVE INVOICE (HEADER + ITEMS) ----------
 async function saveInvoice() {
-  const invNo = document.getElementById("invNo").value;
-  const invDate = document.getElementById("invDate").value;
-  const client = document.getElementById("client").value;
-  const totalAmt = Number(document.getElementById("total").value || 0);
+  const btn = document.getElementById("btn_save_invoice");
+  const unlock = lockButton(btn, "Saving...");
 
-  if (!client || !totalAmt) {
-    alert("Please enter client name and items");
-    return;
-  }
+  try {
+    const invNo = (document.getElementById("invNo")?.value || "").trim();
+    const invDate = (document.getElementById("invDate")?.value || "").trim();
+    const client = (document.getElementById("client")?.value || "").trim();
+    const totalAmt = Number(document.getElementById("total")?.value || 0);
 
-  const subtotal = totalAmt;
-  const gst = Math.round(subtotal * 0.18);
-  const grandTotal = subtotal + gst;
+    if (!invNo) {
+      alert("Invoice number missing. Reload page.");
+      return;
+    }
+    if (!client) {
+      alert("Please enter client name");
+      return;
+    }
+    if (!totalAmt) {
+      alert("Please add at least one item with amount");
+      return;
+    }
 
-  // 1️⃣ Save invoice header (WRITE = apiSafe)
-  const headerRes = await apiSafe({
-    action: "addInvoice",
-    invoice_no: invNo,
-    date: invDate,
-    client,
-    subtotal,
-    gst,
-    total: grandTotal
-  });
+    const subtotal = totalAmt;
+    const gst = Math.round(subtotal * 0.18);
+    const grandTotal = subtotal + gst;
 
-  if (headerRes && headerRes.queued) {
-    alert("Offline: Invoice saved locally. Will sync when online.");
-  }
-
-  // 2️⃣ Save invoice items
-  const rows = document.querySelectorAll("#itemsTable tr");
-  for (const row of rows) {
-    const desc = row.querySelector(".itemDesc")?.value?.trim();
-    const qty = Number(row.querySelector(".itemQty")?.value || 0);
-    const rate = Number(row.querySelector(".itemRate")?.value || 0);
-    const amt = qty * rate;
-
-    if (!desc || !qty) continue;
-
-    await apiSafe({
-      action: "addInvoiceItem",
+    // 1) Save invoice header (WRITE = apiSafe)
+    const headerRes = await apiSafe({
+      action: "addInvoice",
       invoice_no: invNo,
       date: invDate,
-      description: desc,
-      qty,
-      rate,
-      amount: amt
+      client,
+      subtotal,
+      gst,
+      total: grandTotal
     });
-  }
 
-  alert("Invoice saved successfully");
+    if (headerRes && headerRes.queued) {
+      alert("Offline: Invoice saved locally. Will sync when online.");
+    }
+
+    // 2) Save invoice items
+    // Skip header row by selecting rows that have .itemDesc
+    const rows = document.querySelectorAll("#itemsTable tr");
+    for (const row of rows) {
+      const descEl = row.querySelector(".itemDesc");
+      if (!descEl) continue; // header row or unexpected row
+
+      const desc = descEl.value.trim();
+      const qty = Number(row.querySelector(".itemQty")?.value || 0);
+      const rate = Number(row.querySelector(".itemRate")?.value || 0);
+      const amt = qty * rate;
+
+      if (!desc || qty <= 0) continue;
+
+      await apiSafe({
+        action: "addInvoiceItem",
+        invoice_no: invNo,
+        date: invDate,
+        description: desc,
+        qty,
+        rate,
+        amount: amt
+      });
+    }
+
+    alert("Invoice saved successfully");
+  } catch (e) {
+    console.error("Save invoice error:", e);
+    alert("Error saving invoice. Check console.");
+  } finally {
+    // small delay prevents fast double-click spam
+    setTimeout(unlock, 600);
+  }
 }
 
 // ---------- EXPORT PDF ----------
@@ -124,13 +147,39 @@ function exportInvoice() {
 function sendWhatsApp() {
   const msg = `
 Shiv Video Vision
-Invoice No: ${document.getElementById("invNo").value}
-Client: ${document.getElementById("client").value}
-Total Amount: ₹${document.getElementById("total").value}
+Invoice No: ${(document.getElementById("invNo")?.value || "").trim()}
+Client: ${(document.getElementById("client")?.value || "").trim()}
+Total Amount: ₹${(document.getElementById("total")?.value || "").trim()}
 
 Thank you.
-`;
+`.trim();
 
   const url = "https://wa.me/?text=" + encodeURIComponent(msg);
   window.open(url, "_blank");
+}
+
+// ---------- Button Lock Helper ----------
+function lockButton(btn, savingText = "Saving...") {
+  if (!btn) return () => {};
+
+  const original = {
+    disabled: btn.disabled,
+    text: btn.innerText,
+    opacity: btn.style.opacity,
+    cursor: btn.style.cursor
+  };
+
+  btn.disabled = true;
+  btn.innerText = savingText;
+  btn.style.opacity = "0.6";
+  btn.style.cursor = "not-allowed";
+  btn.classList.add("btn-saving");
+
+  return () => {
+    btn.disabled = original.disabled;
+    btn.innerText = original.text;
+    btn.style.opacity = original.opacity;
+    btn.style.cursor = original.cursor;
+    btn.classList.remove("btn-saving");
+  };
 }
