@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Shiv Video Vision</title>
 
-  <link rel="stylesheet" href="css/style.css?v=10">
-  <link rel="stylesheet" href="css/dark.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=11">
+  <link rel="stylesheet" href="css/dark.css?v=11">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
@@ -57,6 +57,16 @@
       -webkit-overflow-scrolling:touch;
       padding:12px;
     }
+
+    /* Smaller logo everywhere */
+    .appHeader img {
+      height: 22px !important;
+      width: auto !important;
+    }
+    .appHeader strong {
+      font-size: 16px;
+      line-height: 1;
+    }
   </style>
 </head>
 
@@ -68,7 +78,7 @@
 
     <aside id="drawer" class="drawer mobileOnly">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <img src="assets/logo.png" style="height:26px;">
+        <img src="assets/logo.png" style="height:22px;width:auto;">
         <strong>Menu</strong>
       </div>
 
@@ -100,7 +110,7 @@
       <button class="iconBtn backBtn mobileOnly" id="btnBack" title="Back"></button>
       <button class="iconBtn menuBtn mobileOnly" id="btnMenu" title="Menu"></button>
 
-      <img src="assets/logo.png" height="35px" width="35px" alt="SVV">
+      <img src="assets/logo.png" alt="SVV">
       <strong>Shiv Video Vision</strong>
 
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
@@ -144,35 +154,37 @@
 
   </div>
 
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/sync.js"></script>
-  <script src="js/accounting.js"></script>
+  <!-- Cache-bust JS too (important for iPhone PWA) -->
+  <script src="js/api.js?v=11"></script>
+  <script src="js/auth.js?v=11"></script>
+  <script src="js/sync.js?v=11"></script>
+  <script src="js/accounting.js?v=11"></script>
 
   <script>
-    /* ---------- LAYOUT MODE (fix 2 menus on iPhone) ---------- */
-    function applyMode(){
-      const isDesktop = window.matchMedia("(min-width: 900px)").matches;
-      document.body.classList.toggle("is-desktop", isDesktop);
-      document.body.classList.toggle("is-mobile", !isDesktop);
-      placeContent();
-      // Close drawer if switching modes
-      closeDrawer();
-    }
+  document.addEventListener("DOMContentLoaded", () => {
 
+    /* ---------- LAYOUT MODE ---------- */
     function placeContent(){
       const content = document.getElementById("content");
       const desktopHost = document.getElementById("desktopHost");
       const mobileHost = document.getElementById("mobileHost");
       const isDesktop = document.body.classList.contains("is-desktop");
-      if (isDesktop) desktopHost.appendChild(content);
-      else mobileHost.appendChild(content);
+      if (isDesktop && desktopHost) desktopHost.appendChild(content);
+      if (!isDesktop && mobileHost) mobileHost.appendChild(content);
+    }
+
+    function applyMode(){
+      const isDesktop = window.matchMedia("(min-width: 900px)").matches;
+      document.body.classList.toggle("is-desktop", isDesktop);
+      document.body.classList.toggle("is-mobile", !isDesktop);
+      placeContent();
+      closeDrawer();
     }
 
     window.addEventListener("resize", applyMode);
     applyMode();
 
-    /* ---------- THEME (fix white header + toggle not working) ---------- */
+    /* ---------- THEME (WORKING) ---------- */
     function applyTheme(){
       const t = localStorage.getItem("theme") || "light";
       document.body.classList.toggle("dark", t === "dark");
@@ -184,7 +196,11 @@
       applyTheme();
     }
 
-    document.getElementById("btnTheme").addEventListener("click", toggleTheme);
+    // Expose so any old onclick toggleTheme() still works
+    window.toggleTheme = toggleTheme;
+
+    const btnTheme = document.getElementById("btnTheme");
+    if (btnTheme) btnTheme.addEventListener("click", toggleTheme);
     applyTheme();
 
     /* ---------- MOBILE DRAWER ---------- */
@@ -201,6 +217,8 @@
       drawer.classList.remove("open");
       overlay.classList.remove("open");
     }
+
+    // Expose for inline buttons closeDrawer()
     window.closeDrawer = closeDrawer;
 
     const btnMenu = document.getElementById("btnMenu");
@@ -234,6 +252,8 @@
 
     const btnBack = document.getElementById("btnBack");
     if (btnBack) btnBack.addEventListener("click", goBack);
+
+  });
   </script>
 </body>
 </html>
