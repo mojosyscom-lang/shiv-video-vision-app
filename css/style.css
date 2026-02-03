@@ -9,7 +9,7 @@ html, body {
   overflow: hidden !important;
   height: 100dvh;
   width: 100vw;
-  touch-action: none; /* prevents scroll gestures affecting body */
+  touch-action: manipulation; /* prevents scroll gestures affecting body */
 }
 
 /* iPhone notch safe areas */
