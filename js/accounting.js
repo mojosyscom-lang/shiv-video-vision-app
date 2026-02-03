@@ -147,7 +147,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       content.querySelectorAll("button[data-target]").forEach(btn => {
         btn.addEventListener("click", async () => {
-          await toggleUser(btn.dataset.target, btn.dataset.next);
+          // lock THIS specific button so they can’t spam clicks
+          const unlock = lockButton(btn, "Updating...");
+          try {
+            await toggleUser(btn.dataset.target, btn.dataset.next);
+          } finally {
+            setTimeout(unlock, 500);
+          }
         });
       });
       return;
@@ -157,96 +163,127 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function addUpad() {
-    const worker = document.getElementById("upad_worker").value.trim();
-    const amount = Number(document.getElementById("upad_amount").value || 0);
-    const month = document.getElementById("upad_month").value.trim() || "Current";
+    const btn = document.getElementById("btn_upad");
+    const unlock = lockButton(btn, "Saving...");
 
-    if (!worker || !amount) return alert("Enter worker and amount");
+    try {
+      const worker = document.getElementById("upad_worker").value.trim();
+      const amount = Number(document.getElementById("upad_amount").value || 0);
+      const month = document.getElementById("upad_month").value.trim() || "Current";
 
-    const r = await apiSafe({
-      action: "addUpad",
-      date: new Date().toISOString().slice(0, 10),
-      worker,
-      amount,
-      month
-    });
-    if (r && r.queued) alert("Saved offline. Will sync when online.");
-else alert("Upad added");
+      if (!worker || !amount) return alert("Enter worker and amount");
 
-    document.getElementById("upad_worker").value = "";
-    document.getElementById("upad_amount").value = "";
+      const r = await apiSafe({
+        action: "addUpad",
+        date: new Date().toISOString().slice(0, 10),
+        worker,
+        amount,
+        month
+      });
+
+      if (r && r.queued) alert("Saved offline. Will sync when online.");
+      else alert("Upad added");
+
+      document.getElementById("upad_worker").value = "";
+      document.getElementById("upad_amount").value = "";
+    } finally {
+      setTimeout(unlock, 600);
+    }
   }
 
   async function addExpense() {
-    const category = document.getElementById("exp_category").value;
-    const desc = document.getElementById("exp_desc").value.trim();
-    const amount = Number(document.getElementById("exp_amount").value || 0);
+    const btn = document.getElementById("btn_exp");
+    const unlock = lockButton(btn, "Saving...");
 
-    if (!desc || !amount) return alert("Enter description and amount");
+    try {
+      const category = document.getElementById("exp_category").value;
+      const desc = document.getElementById("exp_desc").value.trim();
+      const amount = Number(document.getElementById("exp_amount").value || 0);
 
-    const r = await apiSafe({
-      action: "addExpense",
-      date: new Date().toISOString().slice(0, 10),
-      category,
-      desc,
-      amount
-    });
-if (r && r.queued) alert("Saved offline. Will sync when online.");
-else alert("Expense added");
-    document.getElementById("exp_desc").value = "";
-    document.getElementById("exp_amount").value = "";
+      if (!desc || !amount) return alert("Enter description and amount");
+
+      const r = await apiSafe({
+        action: "addExpense",
+        date: new Date().toISOString().slice(0, 10),
+        category,
+        desc,
+        amount
+      });
+
+      if (r && r.queued) alert("Saved offline. Will sync when online.");
+      else alert("Expense added");
+
+      document.getElementById("exp_desc").value = "";
+      document.getElementById("exp_amount").value = "";
+    } finally {
+      setTimeout(unlock, 600);
+    }
   }
 
   async function loadSalarySummary() {
-    const month = document.getElementById("sal_month").value.trim();
-    const rows = await api({ action: "getSalarySummary", month });
+    const btn = document.getElementById("btn_sal_load");
+    const unlock = lockButton(btn, "Loading...");
 
-    const box = document.getElementById("sal_result");
-    if (!rows || rows.length === 0) {
-      box.innerHTML = `<p>No salary data found.</p>`;
-      return;
-    }
+    try {
+      const month = document.getElementById("sal_month").value.trim();
+      const rows = await api({ action: "getSalarySummary", month });
 
-    box.innerHTML = `
-      <h3>Summary ${month ? "(" + escapeHtml(month) + ")" : ""}</h3>
-      <table style="width:100%;border-collapse:collapse;">
-        <tr>
-          <th align="left">Worker</th>
-          <th align="right">Upad</th>
-          <th align="right">Paid</th>
-          <th align="right">Balance</th>
-        </tr>
-        ${rows.map(r => `
-          <tr style="border-top:1px solid #eee;">
-            <td>${escapeHtml(r.worker)}</td>
-            <td align="right">₹${Number(r.upad_total).toFixed(0)}</td>
-            <td align="right">₹${Number(r.paid_total).toFixed(0)}</td>
-            <td align="right"><strong>₹${Number(r.balance).toFixed(0)}</strong></td>
+      const box = document.getElementById("sal_result");
+      if (!rows || rows.length === 0) {
+        box.innerHTML = `<p>No salary data found.</p>`;
+        return;
+      }
+
+      box.innerHTML = `
+        <h3>Summary ${month ? "(" + escapeHtml(month) + ")" : ""}</h3>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Worker</th>
+            <th align="right">Upad</th>
+            <th align="right">Paid</th>
+            <th align="right">Balance</th>
           </tr>
-        `).join("")}
-      </table>
-    `;
+          ${rows.map(r => `
+            <tr style="border-top:1px solid #eee;">
+              <td>${escapeHtml(r.worker)}</td>
+              <td align="right">₹${Number(r.upad_total).toFixed(0)}</td>
+              <td align="right">₹${Number(r.paid_total).toFixed(0)}</td>
+              <td align="right"><strong>₹${Number(r.balance).toFixed(0)}</strong></td>
+            </tr>
+          `).join("")}
+        </table>
+      `;
+    } finally {
+      setTimeout(unlock, 400);
+    }
   }
 
   async function addSalaryPayment() {
-    const worker = document.getElementById("sal_worker").value.trim();
-    const amount = Number(document.getElementById("sal_amount").value || 0);
-    const month = document.getElementById("sal_pay_month").value.trim() || "Current";
+    const btn = document.getElementById("btn_sal_pay");
+    const unlock = lockButton(btn, "Saving...");
 
-    if (!worker || !amount) return alert("Enter worker and amount");
+    try {
+      const worker = document.getElementById("sal_worker").value.trim();
+      const amount = Number(document.getElementById("sal_amount").value || 0);
+      const month = document.getElementById("sal_pay_month").value.trim() || "Current";
 
-    const r = await apiSafe({
-      action: "addSalaryPayment",
-      date: new Date().toISOString().slice(0, 10),
-      worker,
-      amount,
-      month
-    });
-if (r && r.queued) alert("Payment saved offline. Will sync when online.");
-else alert("Payment added");
-    
-    document.getElementById("sal_amount").value = "";
-    // refresh summary optionally
+      if (!worker || !amount) return alert("Enter worker and amount");
+
+      const r = await apiSafe({
+        action: "addSalaryPayment",
+        date: new Date().toISOString().slice(0, 10),
+        worker,
+        amount,
+        month
+      });
+
+      if (r && r.queued) alert("Payment saved offline. Will sync when online.");
+      else alert("Payment added");
+
+      document.getElementById("sal_amount").value = "";
+    } finally {
+      setTimeout(unlock, 600);
+    }
   }
 
   async function toggleUser(targetUsername, status) {
@@ -256,7 +293,7 @@ else alert("Payment added");
       status
     });
 
-    if (r && r.error) return; // api() will handle forced logout if needed
+    if (r && r.error) return;
     alert(`Updated: ${targetUsername} → ${status}`);
     loadSection("userMgmt");
   }
@@ -271,6 +308,32 @@ else alert("Payment added");
 
   showDashboard();
 });
+
+/* ---------- Button Lock Helper ---------- */
+function lockButton(btn, savingText = "Saving...") {
+  if (!btn) return () => {};
+
+  const original = {
+    disabled: btn.disabled,
+    text: btn.innerText,
+    opacity: btn.style.opacity,
+    cursor: btn.style.cursor
+  };
+
+  btn.disabled = true;
+  btn.innerText = savingText;
+  btn.style.opacity = "0.6";
+  btn.style.cursor = "not-allowed";
+  btn.classList.add("btn-saving");
+
+  return () => {
+    btn.disabled = original.disabled;
+    btn.innerText = original.text;
+    btn.style.opacity = original.opacity;
+    btn.style.cursor = original.cursor;
+    btn.classList.remove("btn-saving");
+  };
+}
 
 function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
