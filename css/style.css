@@ -1,0 +1,12 @@
+:root{--brand:#ff6a00}
+body{margin:0;font-family:system-ui;background:#f2f4f7}
+header{display:flex;align-items:center;gap:12px;padding:10px;background:#fff;border-bottom:1px solid #ddd}
+header img{height:40px}
+.layout{display:flex;height:calc(100vh - 60px)}
+aside{width:220px;background:#111;color:#fff}
+aside button{width:100%;padding:12px;border:none;background:none;color:#fff;text-align:left}
+aside button:hover{background:#222}
+main{flex:1;padding:16px;overflow:auto}
+.card{background:#fff;padding:16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.08);margin-bottom:16px}
+input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #ccc}
+.primary{background:var(--brand);color:#fff;border:none;padding:10px 14px;border-radius:10px}
