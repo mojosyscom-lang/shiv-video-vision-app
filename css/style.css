@@ -10,3 +10,6 @@ main{flex:1;padding:16px;overflow:auto}
 .card{background:#fff;padding:16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.08);margin-bottom:16px}
 input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #ccc}
 .primary{background:var(--brand);color:#fff;border:none;padding:10px 14px;border-radius:10px}
+.btn-saving {
+  filter: grayscale(30%);
+}
