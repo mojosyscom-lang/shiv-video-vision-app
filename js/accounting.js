@@ -163,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!worker || !amount) return alert("Enter worker and amount");
 
-    await api({
+    await apiSafe({
       action: "addUpad",
       date: new Date().toISOString().slice(0, 10),
       worker,
@@ -183,7 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!desc || !amount) return alert("Enter description and amount");
 
-    await api({
+    await apiSafe({
       action: "addExpense",
       date: new Date().toISOString().slice(0, 10),
       category,
@@ -234,7 +234,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!worker || !amount) return alert("Enter worker and amount");
 
-    await api({
+    await apiSafe({
       action: "addSalaryPayment",
       date: new Date().toISOString().slice(0, 10),
       worker,
