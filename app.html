@@ -8,47 +8,107 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/dark.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* App layout mode switching (only in app.html) */
+    .desktopOnly { display: none; }
+    .mobileOnly  { display: block; }
+
+    /* Desktop = Windows / big screens */
+    @media (min-width: 900px) {
+      .desktopOnly { display: block; }
+      .mobileOnly  { display: none; }
+    }
+
+    /* Desktop layout container */
+    .desktopLayout {
+      display: flex;
+      height: calc(100dvh - 56px); /* header height approx */
+      overflow: hidden;
+    }
+    .desktopSidebar {
+      width: 260px;
+      background: #111;
+      color: #fff;
+      padding: 12px;
+      overflow: hidden;
+    }
+    .desktopSidebar h4 {
+      margin: 12px 0 6px;
+      padding: 10px 8px;
+      color: #aaa;
+      font-size: 12px;
+      letter-spacing: .04em;
+    }
+    .desktopSidebar button {
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      color: #fff;
+      padding: 10px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .desktopSidebar button:hover {
+      background: rgba(255,255,255,0.08);
+    }
+    .desktopMainHost {
+      flex: 1;
+      overflow: auto;              /* desktop can scroll inside main */
+      -webkit-overflow-scrolling: touch;
+      padding: 12px;
+    }
+
+    /* Make sure mobile host uses appMain rules */
+    .mobileMainHost {
+      height: 100%;
+    }
+  </style>
 </head>
 
 <body class="no-scroll">
   <div class="appShell safe">
 
-    <!-- Fullscreen overlay -->
-    <div id="drawerOverlay" class="drawerOverlay"></div>
+    <!-- ===================== MOBILE ONLY: Drawer + Overlay ===================== -->
+    <div class="mobileOnly">
+      <div id="drawerOverlay" class="drawerOverlay"></div>
 
-    <!-- Slide-out drawer -->
-    <aside id="drawer" class="drawer">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <img src="assets/logo.png" style="height:26px;">
-        <strong>Menu</strong>
-      </div>
+      <aside id="drawer" class="drawer">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <img src="assets/logo.png" style="height:26px;">
+          <strong>Menu</strong>
+        </div>
 
-      <button onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
+        <button onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
 
-      <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ACCOUNTING</h4>
-      <button onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
-      <button onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
-      <button onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
+        <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ACCOUNTING</h4>
+        <button onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
+        <button onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
+        <button onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
 
-      <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">INVOICE</h4>
-      <button onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
+        <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">INVOICE</h4>
+        <button onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
 
-      <div class="superadminOnly">
-        <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ADMIN</h4>
-        <button onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
-        <button onclick="navTo('gst'); closeDrawer()">📊 GST</button>
-        <button onclick="navTo('export'); closeDrawer()">📤 Export</button>
-      </div>
+        <div class="superadminOnly">
+          <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ADMIN</h4>
+          <button onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
+          <button onclick="navTo('gst'); closeDrawer()">📊 GST</button>
+          <button onclick="navTo('export'); closeDrawer()">📤 Export</button>
+        </div>
 
-      <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.12);padding-top:10px;">
-        <button onclick="logout()">🚪 Logout</button>
-      </div>
-    </aside>
+        <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.12);padding-top:10px;">
+          <button onclick="logout()">🚪 Logout</button>
+        </div>
+      </aside>
+    </div>
 
-    <!-- Header -->
+    <!-- ===================== HEADER (shared) ===================== -->
     <header class="appHeader">
-      <button class="iconBtn backBtn" id="btnBack" title="Back"></button>
-      <button class="iconBtn menuBtn" id="btnMenu" title="Menu"></button>
+      <!-- Mobile back/menu -->
+      <button class="iconBtn backBtn mobileOnly" id="btnBack" title="Back"></button>
+      <button class="iconBtn menuBtn mobileOnly" id="btnMenu" title="Menu"></button>
 
       <img src="assets/logo.png" alt="SVV">
       <strong>Shiv Video Vision</strong>
@@ -60,8 +120,43 @@
       </div>
     </header>
 
-    <!-- Main fixed content (no scroll) -->
-    <main class="appMain" id="content"></main>
+    <!-- ===================== CONTENT HOSTS ===================== -->
+
+    <!-- Desktop host (old look) -->
+    <div class="desktopOnly desktopLayout">
+      <aside class="desktopSidebar">
+        <button onclick="showDashboard()">🏠 Dashboard</button>
+
+        <h4>ACCOUNTING</h4>
+        <button onclick="loadSection('upad')">👷 Upad</button>
+        <button onclick="loadSection('expenses')">📒 Expenses</button>
+        <button onclick="loadSection('salary')">💰 Salary</button>
+
+        <h4>INVOICE</h4>
+        <button onclick="loadSection('invoice')">🧾 Create Invoice</button>
+
+        <div class="superadminOnly">
+          <h4>ADMIN</h4>
+          <button onclick="loadSection('userMgmt')">🛡 User Management</button>
+          <button onclick="loadSection('gst')">📊 GST</button>
+          <button onclick="loadSection('export')">📤 Export</button>
+        </div>
+
+        <button onclick="logout()" style="margin-top:20px;">🚪 Logout</button>
+      </aside>
+
+      <main id="desktopHost" class="desktopMainHost">
+        <!-- #content will be moved here on desktop -->
+      </main>
+    </div>
+
+    <!-- Mobile host (drawer mode) -->
+    <main id="mobileHost" class="appMain mobileOnly mobileMainHost">
+      <!-- #content will be moved here on mobile -->
+    </main>
+
+    <!-- The single content node (moved into correct host by JS) -->
+    <div id="content"></div>
 
   </div>
 
@@ -71,23 +166,43 @@
   <script src="js/accounting.js"></script>
 
   <script>
-    // Drawer controls
+    // -------- Move #content into correct host (desktop vs mobile) --------
+    function placeContent() {
+      const content = document.getElementById("content");
+      const desktopHost = document.getElementById("desktopHost");
+      const mobileHost = document.getElementById("mobileHost");
+      const isDesktop = window.matchMedia("(min-width: 900px)").matches;
+
+      if (isDesktop) {
+        desktopHost.appendChild(content);
+      } else {
+        mobileHost.appendChild(content);
+      }
+    }
+    window.addEventListener("resize", placeContent);
+    placeContent();
+
+    // -------- Mobile drawer controls (only used on mobile) --------
     const drawer = document.getElementById("drawer");
     const overlay = document.getElementById("drawerOverlay");
 
     function openDrawer() {
+      if (!drawer || !overlay) return;
       drawer.classList.add("open");
       overlay.classList.add("open");
     }
     function closeDrawer() {
+      if (!drawer || !overlay) return;
       drawer.classList.remove("open");
       overlay.classList.remove("open");
     }
+    window.closeDrawer = closeDrawer;
 
-    document.getElementById("btnMenu").addEventListener("click", openDrawer);
-    overlay.addEventListener("click", closeDrawer);
+    const btnMenu = document.getElementById("btnMenu");
+    if (btnMenu) btnMenu.addEventListener("click", openDrawer);
+    if (overlay) overlay.addEventListener("click", closeDrawer);
 
-    // Navigation helper to build a back stack
+    // -------- Mobile back stack navigation --------
     window.__navStack = window.__navStack || ["dashboard"];
 
     window.navTo = async function(section) {
@@ -112,7 +227,8 @@
       else loadSection(prev);
     }
 
-    document.getElementById("btnBack").addEventListener("click", goBack);
+    const btnBack = document.getElementById("btnBack");
+    if (btnBack) btnBack.addEventListener("click", goBack);
   </script>
 </body>
 </html>
