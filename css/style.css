@@ -1,45 +1,22 @@
-:root{--brand:#ff6a00}
-body{margin:0;font-family:system-ui;background:#f2f4f7}
-header{display:flex;align-items:center;gap:12px;padding:10px;background:#fff;border-bottom:1px solid #ddd}
-header img{height:40px}
-.layout{display:flex;height:calc(100vh - 60px)}
-aside{width:220px;background:#111;color:#fff}
-aside button{width:100%;padding:12px;border:none;background:none;color:#fff;text-align:left}
-aside button:hover{background:#222}
-main{flex:1;padding:16px;overflow:auto}
-.card{background:#fff;padding:16px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.08);margin-bottom:16px}
-input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #ccc}
-.primary{background:var(--brand);color:#fff;border:none;padding:10px 14px;border-radius:10px}
-.btn-saving {
-  filter: grayscale(40%);
-}
-button:disabled {
-  opacity: 0.6;
-}
-/* ---------- Fullscreen, No Scroll App ---------- */
 html, body {
   height: 100%;
   margin: 0;
+  overscroll-behavior: none; /* stop pull-to-refresh / bounce on many browsers */
 }
 
 .no-scroll {
   overflow: hidden !important;
-  height: 100dvh;           /* modern mobile */
+  height: 100dvh;
   width: 100vw;
+  touch-action: none; /* prevents scroll gestures from trying to scroll */
 }
 
-body {
-  background: #0b0b0b;      /* you can keep your existing background too */
-  color: #111;
-}
-
-/* Safe area padding (iPhone notch) */
+/* Optional: safe areas for iPhone */
 .safe {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* App container fixed fullscreen */
 .appShell {
   position: fixed;
   inset: 0;
@@ -51,57 +28,36 @@ body {
   background: #f5f5f5;
 }
 
-/* Header fixed */
 .appHeader {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px;
-  background: #ffffff;
+  background: #fff;
   border-bottom: 1px solid #eee;
 }
 
-.appHeader img {
-  height: 28px;
-}
-
-/* Main content fixed (no scroll) */
-
-
 .appMain {
   flex: 1 1 auto;
-  overflow: auto;       /* NO SCROLL as requested */
+  overflow: auto; /* no scroll */
   padding: 12px;
 }
 
-/* If you ever need internal scroll later, change overflow:auto above */
-
-/* ---------- Splash ---------- */
-body.splash {
-  background: #000;
-}
-.splashWrap {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.splashLogo {
-  width: min(92vw, 520px);
-  height: auto;
-}
-
-/* ---------- Drawer Menu + Overlay ---------- */
+/* IMPORTANT: overlay must be above everything */
 .drawerOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.55);
+  background: rgba(0,0,0,.55);
   opacity: 0;
   pointer-events: none;
   transition: opacity .18s ease;
-  z-index: 999;
+  z-index: 9999;
+}
+
+.drawerOverlay.open {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .drawer {
@@ -115,29 +71,12 @@ body.splash {
   color: #fff;
   transform: translateX(-102%);
   transition: transform .18s ease;
-  z-index: 1000;
+  z-index: 10000;
   padding: 14px;
   box-sizing: border-box;
 }
 
 .drawer.open { transform: translateX(0); }
-.drawerOverlay.open { opacity: 1; pointer-events: auto; }
-
-.drawer a, .drawer button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  color: #fff;
-  padding: 10px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-}
-.drawer a:hover, .drawer button:hover {
-  background: rgba(255,255,255,0.08);
-}
 
 .iconBtn {
   border: 0;
@@ -146,11 +85,6 @@ body.splash {
   border-radius: 10px;
   cursor: pointer;
 }
-.iconBtn:hover { background: rgba(0,0,0,0.06); }
 
 .backBtn::before { content: "←"; font-size: 18px; }
 .menuBtn::before { content: "☰"; font-size: 18px; }
-
-/* Optional: disabled button style for anti-spam */
-.btn-saving { filter: grayscale(40%); }
-button:disabled { opacity: 0.6; }
