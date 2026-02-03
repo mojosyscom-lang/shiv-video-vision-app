@@ -1,4 +1,4 @@
-const API="https://script.google.com/macros/s/AKfycbxaSy-VKLITAJQnKC1GHjPTJV3agav3XFs5uKLP-Btw360jm5C6AZs0FRpa9P3XL_iMsg/exec";
+const API="https://script.google.com/macros/s/AKfycbwaWc2LJ2vzCRzJlbpYRiQ58b555JR7-s2TscDD9pSz6P7SyVzpz5t2MOmtf7u62pia/exec";
 
 async function api(data){
   const r=await fetch(API,{method:"POST",body:JSON.stringify(data)});
