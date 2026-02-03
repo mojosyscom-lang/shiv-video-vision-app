@@ -11,5 +11,8 @@ main{flex:1;padding:16px;overflow:auto}
 input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #ccc}
 .primary{background:var(--brand);color:#fff;border:none;padding:10px 14px;border-radius:10px}
 .btn-saving {
-  filter: grayscale(30%);
+  filter: grayscale(40%);
+}
+button:disabled {
+  opacity: 0.6;
 }
