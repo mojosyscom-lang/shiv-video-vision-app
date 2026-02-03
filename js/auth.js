@@ -21,7 +21,6 @@ function login() {
   });
 }
 
-// Optional logout button handler
 function logout() {
   localStorage.clear();
   location.href = "login.html";
