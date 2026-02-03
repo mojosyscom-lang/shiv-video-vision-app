@@ -1,4 +1,137 @@
-body.dark{background:#0f1115;color:#eee}
-body.dark header,body.dark .card{background:#1a1d24;color:#eee}
-body.dark aside{background:#0b0d12}
-body.dark input{background:#111;color:#fff;border:1px solid #333}
+/* =========================================================
+   Shiv Video Vision – Dark Theme
+   Applies when body has class="dark"
+   ========================================================= */
+
+body.dark {
+  background: #0f1115;
+  color: #eee;
+}
+
+/* ---------- App shell ---------- */
+body.dark .appShell {
+  background: #0f1115;
+}
+
+/* ---------- Header ---------- */
+body.dark header,
+body.dark .appHeader {
+  background: #1a1d24;
+  color: #eee;
+  border-bottom: 1px solid #262a34;
+}
+
+/* Header icons */
+body.dark .iconBtn {
+  color: #eee;
+}
+body.dark .iconBtn:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* ---------- Cards ---------- */
+body.dark .card {
+  background: #1a1d24;
+  color: #eee;
+  border: 1px solid #262a34;
+  box-shadow: none;
+}
+
+/* ---------- Drawer ---------- */
+body.dark .drawer {
+  background: #0b0d12;
+  color: #eee;
+}
+
+body.dark .drawer h4 {
+  color: #888;
+}
+
+body.dark .drawer button {
+  color: #eee;
+}
+
+body.dark .drawer button:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* ---------- Drawer Overlay ---------- */
+body.dark .drawerOverlay {
+  background: rgba(0,0,0,0.7);
+}
+
+/* ---------- Inputs & Select ---------- */
+body.dark input,
+body.dark select,
+body.dark textarea {
+  background: #111;
+  color: #fff;
+  border: 1px solid #333;
+}
+
+body.dark input:focus,
+body.dark select:focus,
+body.dark textarea:focus {
+  border-color: #555;
+}
+
+/* Readonly fields */
+body.dark input[readonly] {
+  background: #151820;
+}
+
+/* ---------- Buttons ---------- */
+body.dark button.primary {
+  background: #2b2f3a;
+  color: #fff;
+}
+
+body.dark button.primary:hover {
+  opacity: 0.92;
+}
+
+/* Disabled / saving state */
+body.dark button:disabled {
+  opacity: 0.5;
+}
+
+body.dark .btn-saving {
+  filter: grayscale(50%);
+}
+
+/* ---------- Tables ---------- */
+body.dark table {
+  color: #eee;
+}
+
+body.dark th {
+  color: #aaa;
+  border-bottom: 1px solid #2a2f3a;
+}
+
+body.dark td {
+  border-bottom: 1px solid #1f2330;
+}
+
+/* ---------- Layout compatibility (old aside layout) ---------- */
+body.dark aside {
+  background: #0b0d12;
+  color: #eee;
+}
+
+body.dark aside button:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* ---------- Print ---------- */
+@media print {
+  body.dark {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  body.dark .card {
+    background: #fff !important;
+    color: #000 !important;
+    border: 0 !important;
+  }
+}
