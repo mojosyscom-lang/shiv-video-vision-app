@@ -1,16 +1,18 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>Invoice</title>
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Invoice - SVV</title>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
-<header>
-  <img src="assets/logo.png">
+<header style="display:flex;align-items:center;gap:12px;">
+  <img src="assets/logo.png" style="height:32px;">
   <strong>Invoice</strong>
   <div id="netStatus" style="margin-left:auto;font-size:12px"></div>
+  <div id="syncCount" style="font-size:12px"></div>
 </header>
 
 <div class="card">
@@ -21,22 +23,47 @@
   <input type="date" id="invDate">
 
   <label>Client</label>
-  <input id="client">
+  <input id="client" placeholder="Client name / company">
+
+  <hr style="border:none;border-top:1px solid #eee;margin:14px 0;">
+
+  <h3 style="margin:0 0 10px;">Items</h3>
+  <table id="itemsTable" style="width:100%;border-collapse:collapse;">
+    <tr>
+      <th align="left">Description</th>
+      <th align="left" style="width:90px;">Qty</th>
+      <th align="left" style="width:110px;">Rate</th>
+      <th align="right" style="width:110px;">Amount</th>
+    </tr>
+  </table>
+
+  <button class="primary" id="btn_add_item" type="button" style="margin-top:10px;">
+    ➕ Add Item
+  </button>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:14px 0;">
 
   <label>Total</label>
-  <input id="total">
+  <input id="total" readonly>
 
-  <button class="primary" onclick="window.print()">Download PDF</button>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+    <button class="primary" id="btn_save_invoice" type="button">✅ Save Invoice</button>
+    <button class="primary" id="btn_print" type="button">📄 Download PDF</button>
+    <button class="primary" id="btn_whatsapp" type="button">📲 Send WhatsApp</button>
+  </div>
 </div>
 
-<script>
-invDate.value=new Date().toISOString().slice(0,10);
-</script>
-<button class="primary" onclick="exportInvoice()">📄 Download PDF</button>
-<button class="primary" onclick="sendWhatsApp()">📲 Send WhatsApp</button>
 <script src="js/api.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/invoice.js"></script>
+
+<script>
+  // Wire buttons (keeps HTML clean)
+  document.getElementById("btn_add_item").addEventListener("click", addItemRow);
+  document.getElementById("btn_save_invoice").addEventListener("click", saveInvoice);
+  document.getElementById("btn_print").addEventListener("click", exportInvoice);
+  document.getElementById("btn_whatsapp").addEventListener("click", sendWhatsApp);
+</script>
 
 </body>
 </html>
