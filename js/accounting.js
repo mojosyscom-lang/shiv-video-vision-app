@@ -8,7 +8,6 @@ document.addEventListener("DOMContentLoaded", () => {
         <h2>Dashboard</h2>
         <p>Logged in as: <strong>${escapeHtml(localStorage.getItem("username") || "")}</strong> (${escapeHtml(role)})</p>
         <p>Company: <strong>${escapeHtml(localStorage.getItem("company") || "")}</strong></p>
-        <p>Select a menu on the left.</p>
       </div>
     `;
   }
@@ -20,12 +19,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (type === "upad") {
+      const meta = await api({ action: "getUpadMeta" });
       content.innerHTML = `
         <div class="card">
           <h2>Upad</h2>
-          <input id="upad_worker" placeholder="Worker name"><br><br>
+          <input id="upad_worker" list="workerList" placeholder="Worker name">
+          <datalist id="workerList">
+            ${(meta.workers || []).map(w => `<option value="${escapeAttr(w)}"></option>`).join("")}
+          </datalist>
+          <br><br>
+
           <input id="upad_amount" type="number" placeholder="Amount"><br><br>
-          <input id="upad_month" placeholder="Month (e.g. Feb-2026)"><br><br>
+
+          <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)">
+          <datalist id="monthList">
+            ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}"></option>`).join("")}
+          </datalist>
+          <br><br>
+
           <button class="primary" id="btn_upad">Add Upad</button>
         </div>
       `;
@@ -55,6 +66,57 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    if (type === "salary") {
+      const meta = await api({ action: "getUpadMeta" });
+
+      content.innerHTML = `
+        <div class="card">
+          <h2>Salary</h2>
+
+          <label>Month</label>
+          <select id="sal_month">
+            <option value="">All</option>
+            ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+          </select>
+          <br><br>
+
+          <button class="primary" id="btn_sal_load">Load Summary</button>
+        </div>
+
+        <div class="card" id="sal_result">
+          <p>Select a month and click Load Summary.</p>
+        </div>
+
+        <div class="card">
+          <h3>Add Salary Payment</h3>
+
+          <label>Worker</label>
+          <select id="sal_worker">
+            ${(meta.workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+          </select>
+          <br><br>
+
+          <label>Amount</label>
+          <input id="sal_amount" type="number" placeholder="Amount"><br><br>
+
+          <label>Month</label>
+          <select id="sal_pay_month">
+            ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+          </select>
+          <br><br>
+
+          <button class="primary" id="btn_sal_pay">Add Payment</button>
+          <p style="color:#777;font-size:12px;margin-top:10px;">
+            Payments are saved in <b>salary_payments</b> and deducted from Upad total.
+          </p>
+        </div>
+      `;
+
+      document.getElementById("btn_sal_load").addEventListener("click", loadSalarySummary);
+      document.getElementById("btn_sal_pay").addEventListener("click", addSalaryPayment);
+      return;
+    }
+
     if (type === "userMgmt") {
       if (role !== "superadmin") {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
@@ -72,9 +134,10 @@ document.addEventListener("DOMContentLoaded", () => {
               Company: ${escapeHtml(u.company)}<br>
               Status: <strong>${escapeHtml(u.status)}</strong><br>
               Last login: ${u.last_login || "Never"}<br><br>
+
               <button class="primary"
-                data-user="${escapeAttr(u.username)}"
-                data-status="${escapeAttr(u.status === "ACTIVE" ? "DISABLED" : "ACTIVE")}">
+                data-target="${escapeAttr(u.username)}"
+                data-next="${escapeAttr(u.status === "ACTIVE" ? "DISABLED" : "ACTIVE")}">
                 ${u.status === "ACTIVE" ? "Disable" : "Enable"}
               </button>
             </div>
@@ -82,15 +145,14 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      content.querySelectorAll("button[data-user]").forEach(btn => {
+      content.querySelectorAll("button[data-target]").forEach(btn => {
         btn.addEventListener("click", async () => {
-          await toggleUser(btn.dataset.user, btn.dataset.status);
+          await toggleUser(btn.dataset.target, btn.dataset.next);
         });
       });
       return;
     }
 
-    // fallback
     content.innerHTML = `<div class="card">Section not found: ${escapeHtml(type)}</div>`;
   }
 
@@ -99,10 +161,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const amount = Number(document.getElementById("upad_amount").value || 0);
     const month = document.getElementById("upad_month").value.trim() || "Current";
 
-    if (!worker || !amount) {
-      alert("Please enter worker and amount");
-      return;
-    }
+    if (!worker || !amount) return alert("Enter worker and amount");
 
     await api({
       action: "addUpad",
@@ -122,10 +181,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const desc = document.getElementById("exp_desc").value.trim();
     const amount = Number(document.getElementById("exp_amount").value || 0);
 
-    if (!desc || !amount) {
-      alert("Please enter description and amount");
-      return;
-    }
+    if (!desc || !amount) return alert("Enter description and amount");
 
     await api({
       action: "addExpense",
@@ -140,28 +196,79 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("exp_amount").value = "";
   }
 
-  async function toggleUser(username, status) {
+  async function loadSalarySummary() {
+    const month = document.getElementById("sal_month").value.trim();
+    const rows = await api({ action: "getSalarySummary", month });
+
+    const box = document.getElementById("sal_result");
+    if (!rows || rows.length === 0) {
+      box.innerHTML = `<p>No salary data found.</p>`;
+      return;
+    }
+
+    box.innerHTML = `
+      <h3>Summary ${month ? "(" + escapeHtml(month) + ")" : ""}</h3>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th align="left">Worker</th>
+          <th align="right">Upad</th>
+          <th align="right">Paid</th>
+          <th align="right">Balance</th>
+        </tr>
+        ${rows.map(r => `
+          <tr style="border-top:1px solid #eee;">
+            <td>${escapeHtml(r.worker)}</td>
+            <td align="right">₹${Number(r.upad_total).toFixed(0)}</td>
+            <td align="right">₹${Number(r.paid_total).toFixed(0)}</td>
+            <td align="right"><strong>₹${Number(r.balance).toFixed(0)}</strong></td>
+          </tr>
+        `).join("")}
+      </table>
+    `;
+  }
+
+  async function addSalaryPayment() {
+    const worker = document.getElementById("sal_worker").value.trim();
+    const amount = Number(document.getElementById("sal_amount").value || 0);
+    const month = document.getElementById("sal_pay_month").value.trim() || "Current";
+
+    if (!worker || !amount) return alert("Enter worker and amount");
+
     await api({
+      action: "addSalaryPayment",
+      date: new Date().toISOString().slice(0, 10),
+      worker,
+      amount,
+      month
+    });
+
+    alert("Payment added");
+    document.getElementById("sal_amount").value = "";
+    // refresh summary optionally
+  }
+
+  async function toggleUser(targetUsername, status) {
+    const r = await api({
       action: "updateUserStatus",
-      username,
+      target_username: targetUsername,
       status
     });
-    alert(`Updated: ${username} → ${status}`);
+
+    if (r && r.error) return; // api() will handle forced logout if needed
+    alert(`Updated: ${targetUsername} → ${status}`);
     loadSection("userMgmt");
   }
 
-  // Hide superadmin menu items if not superadmin
+  // Hide superadmin-only menu items
   if (role !== "superadmin") {
     document.querySelectorAll(".superadminOnly").forEach(el => el.style.display = "none");
   }
 
-  // Expose functions for onclick handlers in app.html
   window.showDashboard = showDashboard;
   window.loadSection = loadSection;
 
   showDashboard();
 });
 
-// basic escaping helpers
 function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
