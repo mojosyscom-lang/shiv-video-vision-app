@@ -1,17 +1,18 @@
 html, body {
   height: 100%;
   margin: 0;
-  overscroll-behavior: none; /* stop pull-to-refresh / bounce on many browsers */
+  overscroll-behavior: none; /* stop bounce/pull refresh in many browsers */
 }
 
+/* Full app: prevent page scroll */
 .no-scroll {
   overflow: hidden !important;
   height: 100dvh;
   width: 100vw;
-  touch-action: none; /* prevents scroll gestures from trying to scroll */
+  touch-action: none; /* prevents scroll gestures affecting body */
 }
 
-/* Optional: safe areas for iPhone */
+/* iPhone notch safe areas */
 .safe {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
@@ -38,13 +39,15 @@ html, body {
   border-bottom: 1px solid #eee;
 }
 
+/* CHANGE REQUESTED: allow content to scroll inside app only */
 .appMain {
   flex: 1 1 auto;
-  overflow: auto; /* no scroll */
+  overflow: auto; /* was hidden */
+  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
   padding: 12px;
 }
 
-/* IMPORTANT: overlay must be above everything */
+/* Overlay must cover everything */
 .drawerOverlay {
   position: fixed;
   inset: 0;
@@ -52,7 +55,7 @@ html, body {
   opacity: 0;
   pointer-events: none;
   transition: opacity .18s ease;
-  z-index: 9999;
+  z-index: 9999; /* increased so it always covers all content */
 }
 
 .drawerOverlay.open {
@@ -71,12 +74,14 @@ html, body {
   color: #fff;
   transform: translateX(-102%);
   transition: transform .18s ease;
-  z-index: 10000;
+  z-index: 10000; /* above overlay */
   padding: 14px;
   box-sizing: border-box;
 }
 
-.drawer.open { transform: translateX(0); }
+.drawer.open {
+  transform: translateX(0);
+}
 
 .iconBtn {
   border: 0;
@@ -86,5 +91,20 @@ html, body {
   cursor: pointer;
 }
 
-.backBtn::before { content: "←"; font-size: 18px; }
-.menuBtn::before { content: "☰"; font-size: 18px; }
+.iconBtn:hover {
+  background: rgba(0,0,0,0.06);
+}
+
+.backBtn::before {
+  content: "←";
+  font-size: 18px;
+}
+
+.menuBtn::before {
+  content: "☰";
+  font-size: 18px;
+}
+
+/* Optional but recommended: anti-spam submit visual */
+.btn-saving { filter: grayscale(40%); }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
