@@ -67,9 +67,11 @@ body {
 }
 
 /* Main content fixed (no scroll) */
+
+
 .appMain {
   flex: 1 1 auto;
-  overflow: hidden;       /* NO SCROLL as requested */
+  overflow: auto;       /* NO SCROLL as requested */
   padding: 12px;
 }
 
