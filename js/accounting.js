@@ -163,15 +163,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!worker || !amount) return alert("Enter worker and amount");
 
-    await apiSafe({
+    const r = await apiSafe({
       action: "addUpad",
       date: new Date().toISOString().slice(0, 10),
       worker,
       amount,
       month
     });
+    if (r && r.queued) alert("Saved offline. Will sync when online.");
+else alert("Upad added");
 
-    alert("Upad added");
     document.getElementById("upad_worker").value = "";
     document.getElementById("upad_amount").value = "";
   }
@@ -183,15 +184,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!desc || !amount) return alert("Enter description and amount");
 
-    await apiSafe({
+    const r = await apiSafe({
       action: "addExpense",
       date: new Date().toISOString().slice(0, 10),
       category,
       desc,
       amount
     });
-
-    alert("Expense added");
+if (r && r.queued) alert("Saved offline. Will sync when online.");
+else alert("Expense added");
     document.getElementById("exp_desc").value = "";
     document.getElementById("exp_amount").value = "";
   }
@@ -234,15 +235,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!worker || !amount) return alert("Enter worker and amount");
 
-    await apiSafe({
+    const r = await apiSafe({
       action: "addSalaryPayment",
       date: new Date().toISOString().slice(0, 10),
       worker,
       amount,
       month
     });
-
-    alert("Payment added");
+if (r && r.queued) alert("Payment saved offline. Will sync when online.");
+else alert("Payment added");
+    
     document.getElementById("sal_amount").value = "";
     // refresh summary optionally
   }
