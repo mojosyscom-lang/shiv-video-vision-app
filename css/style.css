@@ -16,3 +16,139 @@ input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid 
 button:disabled {
   opacity: 0.6;
 }
+/* ---------- Fullscreen, No Scroll App ---------- */
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+.no-scroll {
+  overflow: hidden !important;
+  height: 100dvh;           /* modern mobile */
+  width: 100vw;
+}
+
+body {
+  background: #0b0b0b;      /* you can keep your existing background too */
+  color: #111;
+}
+
+/* Safe area padding (iPhone notch) */
+.safe {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* App container fixed fullscreen */
+.appShell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+  background: #f5f5f5;
+}
+
+/* Header fixed */
+.appHeader {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #ffffff;
+  border-bottom: 1px solid #eee;
+}
+
+.appHeader img {
+  height: 28px;
+}
+
+/* Main content fixed (no scroll) */
+.appMain {
+  flex: 1 1 auto;
+  overflow: hidden;       /* NO SCROLL as requested */
+  padding: 12px;
+}
+
+/* If you ever need internal scroll later, change overflow:auto above */
+
+/* ---------- Splash ---------- */
+body.splash {
+  background: #000;
+}
+.splashWrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.splashLogo {
+  width: min(92vw, 520px);
+  height: auto;
+}
+
+/* ---------- Drawer Menu + Overlay ---------- */
+.drawerOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease;
+  z-index: 999;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100dvh;
+  width: 280px;
+  max-width: 82vw;
+  background: #111;
+  color: #fff;
+  transform: translateX(-102%);
+  transition: transform .18s ease;
+  z-index: 1000;
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+.drawer.open { transform: translateX(0); }
+.drawerOverlay.open { opacity: 1; pointer-events: auto; }
+
+.drawer a, .drawer button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  padding: 10px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.drawer a:hover, .drawer button:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.iconBtn {
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.iconBtn:hover { background: rgba(0,0,0,0.06); }
+
+.backBtn::before { content: "←"; font-size: 18px; }
+.menuBtn::before { content: "☰"; font-size: 18px; }
+
+/* Optional: disabled button style for anti-spam */
+.btn-saving { filter: grayscale(40%); }
+button:disabled { opacity: 0.6; }
