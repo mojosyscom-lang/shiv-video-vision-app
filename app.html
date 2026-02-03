@@ -21,12 +21,21 @@
 <div class="layout">
 <aside>
   <button onclick="showDashboard()">🏠 Dashboard</button>
+
+  <h4 style="padding:10px;color:#aaa;">ACCOUNTING</h4>
   <button onclick="loadSection('upad')">👷 Upad</button>
   <button onclick="loadSection('expenses')">📒 Expenses</button>
   <button onclick="loadSection('salary')">💰 Salary</button>
-  <button onclick="loadSection('invoice')">🧾 Invoice</button>
+
+  <h4 style="padding:10px;color:#aaa;">INVOICE</h4>
+  <button onclick="loadSection('invoice')">🧾 Create Invoice</button>
+  <button class="ownerOnly" onclick="loadSection('export')">📤 Export</button>
+
+  <h4 style="padding:10px;color:#aaa;">ADMIN</h4>
+  <button class="ownerOnly" onclick="loadSection('approval')">✅ Approvals</button>
   <button class="ownerOnly" onclick="loadSection('gst')">📊 GST</button>
 </aside>
+
 
 <main id="content"></main>
 </div>
