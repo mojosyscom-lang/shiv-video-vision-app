@@ -1,15 +1,22 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport"
         content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <title>Shiv Video Vision</title>
 
-  <!-- iPhone status bar / safe area -->
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json?v=14">
   <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
+  <!-- Icons -->
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+
+  <!-- Styles -->
   <link rel="stylesheet" href="css/style.css?v=14">
   <link rel="stylesheet" href="css/dark.css?v=14">
 
@@ -21,7 +28,6 @@
       background: #ffffff;
     }
 
-    /* Full-screen splash */
     .splash {
       position: fixed;
       inset: 0;
@@ -37,7 +43,6 @@
       z-index: 9999;
     }
 
-    /* Center stack */
     .logoWrap {
       position: relative;
       display: flex;
@@ -47,7 +52,6 @@
       will-change: transform, opacity, filter;
     }
 
-    /* Logo */
     .logoWrap img {
       width: min(78vw, 320px);
       height: auto;
@@ -56,17 +60,15 @@
       animation: logoIn 1.4s ease-out forwards;
     }
 
-    /* Brand text */
     .brand {
       margin-top: 14px;
       font-size: 14px;
       color: #666;
       letter-spacing: .08em;
       opacity: 0;
-      animation: fadeIn .9s ease-out .25s forwards;
+      animation: fadeIn .9s ease-out .35s forwards;
     }
 
-    /* Soft glow behind logo */
     .glow {
       position: absolute;
       width: min(90vw, 380px);
@@ -75,7 +77,6 @@
       filter: blur(18px);
       opacity: 0;
       transform: scale(.65);
-      /* multi-color glow */
       background:
         radial-gradient(circle at 30% 30%, rgba(255, 0, 128, .35), transparent 55%),
         radial-gradient(circle at 70% 35%, rgba(255, 200, 0, .30), transparent 55%),
@@ -86,7 +87,6 @@
       z-index: -1;
     }
 
-    /* Burst ring */
     .ring {
       position: absolute;
       width: min(72vw, 300px);
@@ -101,20 +101,14 @@
       z-index: -1;
     }
 
-    /* The final burst-out of whole group (longer duration) */
+    /* Longer final burst */
     .burst {
-  animation: burstOut 3.8s cubic-bezier(.16,.84,.44,1) forwards;
-  animation-delay: 3.4s;
-}
-
-    @keyframes logoIn {
-      0%   { opacity: 0; transform: scale(.92); }
-      100% { opacity: 1; transform: scale(1); }
+      animation: burstOut 3.8s cubic-bezier(.16,.84,.44,1) forwards;
+      animation-delay: 3.4s;
     }
 
-    @keyframes fadeIn {
-      to { opacity: 1; }
-    }
+    @keyframes logoIn { to { opacity: 1; transform: scale(1); } }
+    @keyframes fadeIn { to { opacity: 1; } }
 
     @keyframes glowPulse {
       0%   { opacity: 0; transform: scale(.65); }
@@ -137,7 +131,6 @@
       100% { transform: scale(2.9); opacity: 0; filter: saturate(1.25); }
     }
 
-    /* Dark mode for splash */
     body.dark, body.dark .splash { background: #0f1115; }
     body.dark .brand { color: #aaa; }
     body.dark .ring { border-color: rgba(140, 200, 255, 0.18); }
@@ -150,12 +143,12 @@
       <div class="glow"></div>
       <div class="ring"></div>
       <img src="assets/logo.png" alt="Shiv Video Vision">
-      <div class="brand"></div>
+      <div class="brand">SHIV VIDEO VISION</div>
     </div>
   </div>
 
   <script>
-    // Apply saved theme instantly (prevents white flash)
+    // Apply saved theme instantly (prevents flash)
     try {
       const t = localStorage.getItem("theme") || "light";
       document.body.classList.toggle("dark", t === "dark");
@@ -163,16 +156,19 @@
       if (meta) meta.setAttribute("content", t === "dark" ? "#0f1115" : "#ffffff");
     } catch(e){}
 
-    // Longer effect: redirect after animations
+    // Register Service Worker (if your repo has sw.js at root)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(console.warn);
+      });
+    }
+
+    // Redirect after the longer burst animation
     setTimeout(() => {
       const u = localStorage.getItem("username");
       const l = localStorage.getItem("last_login");
       location.replace((u && l) ? "app.html" : "login.html");
     }, 8000);
   </script>
-  
-    <script src="js/nozoom.js?v=101"></script>
 </body>
 </html>
-
-
