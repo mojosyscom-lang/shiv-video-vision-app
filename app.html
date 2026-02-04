@@ -5,25 +5,26 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Shiv Video Vision</title>
 
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/dark.css">
+  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/dark.css?v=12">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    /* App layout mode switching (only in app.html) */
+    /* Default: hide both until JS sets mode (prevents double menus flash) */
     .desktopOnly { display: none; }
-    .mobileOnly  { display: block; }
+    .mobileOnly  { display: none; }
 
-    /* Desktop = Windows / big screens */
-    @media (min-width: 900px) {
-      .desktopOnly { display: block; }
-      .mobileOnly  { display: none; }
-    }
+    /* JS will set one of these body classes */
+    body.is-desktop .desktopOnly { display: block !important; }
+    body.is-desktop .mobileOnly  { display: none !important; }
+
+    body.is-mobile .desktopOnly  { display: none !important; }
+    body.is-mobile .mobileOnly   { display: block !important; }
 
     /* Desktop layout container */
     .desktopLayout {
       display: flex;
-      height: calc(100dvh - 56px); /* header height approx */
+      height: calc(100dvh - 56px);
       overflow: hidden;
     }
     .desktopSidebar {
@@ -56,55 +57,56 @@
     }
     .desktopMainHost {
       flex: 1;
-      overflow: auto;              /* desktop can scroll inside main */
+      overflow: auto;
       -webkit-overflow-scrolling: touch;
       padding: 12px;
     }
 
-    /* Make sure mobile host uses appMain rules */
     .mobileMainHost {
       height: 100%;
     }
+
+    /* Smaller header logo */
+    .appHeader img { height: 22px !important; width: auto !important; }
+    .appHeader strong { font-size: 16px; line-height: 1; }
   </style>
 </head>
 
 <body class="no-scroll">
   <div class="appShell safe">
 
-    <!-- ===================== MOBILE ONLY: Drawer + Overlay ===================== -->
-    <div class="mobileOnly">
-      <div id="drawerOverlay" class="drawerOverlay"></div>
+    <!-- MOBILE ONLY: Overlay + Drawer (NOT wrapped inside extra div) -->
+    <div id="drawerOverlay" class="drawerOverlay mobileOnly"></div>
 
-      <aside id="drawer" class="drawer">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-          <img src="assets/logo.png" style="height:26px;">
-          <strong>Menu</strong>
-        </div>
+    <aside id="drawer" class="drawer mobileOnly">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <img src="assets/logo.png" style="height:22px;width:auto;">
+        <strong>Menu</strong>
+      </div>
 
-        <button onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
+      <button onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
 
-        <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ACCOUNTING</h4>
-        <button onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
-        <button onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
-        <button onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
+      <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ACCOUNTING</h4>
+      <button onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
+      <button onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
+      <button onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
 
-        <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">INVOICE</h4>
-        <button onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
+      <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">INVOICE</h4>
+      <button onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
 
-        <div class="superadminOnly">
-          <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ADMIN</h4>
-          <button onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
-          <button onclick="navTo('gst'); closeDrawer()">📊 GST</button>
-          <button onclick="navTo('export'); closeDrawer()">📤 Export</button>
-        </div>
+      <div class="superadminOnly">
+        <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ADMIN</h4>
+        <button onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
+        <button onclick="navTo('gst'); closeDrawer()">📊 GST</button>
+        <button onclick="navTo('export'); closeDrawer()">📤 Export</button>
+      </div>
 
-        <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.12);padding-top:10px;">
-          <button onclick="logout()">🚪 Logout</button>
-        </div>
-      </aside>
-    </div>
+      <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.12);padding-top:10px;">
+        <button onclick="logout()">🚪 Logout</button>
+      </div>
+    </aside>
 
-    <!-- ===================== HEADER (shared) ===================== -->
+    <!-- HEADER (shared) -->
     <header class="appHeader">
       <!-- Mobile back/menu -->
       <button class="iconBtn backBtn mobileOnly" id="btnBack" title="Back"></button>
@@ -116,11 +118,11 @@
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
         <span id="netStatus" style="font-size:12px;"></span>
         <span id="syncCount" style="font-size:12px;"></span>
-        <button class="iconBtn" onclick="toggleTheme()" title="Theme">🌙</button>
+
+        <!-- Use ID + JS listener; also keep onclick fallback -->
+        <button class="iconBtn" id="btnTheme" title="Theme" onclick="toggleTheme()">🌙</button>
       </div>
     </header>
-
-    <!-- ===================== CONTENT HOSTS ===================== -->
 
     <!-- Desktop host (old look) -->
     <div class="desktopOnly desktopLayout">
@@ -145,44 +147,69 @@
         <button onclick="logout()" style="margin-top:20px;">🚪 Logout</button>
       </aside>
 
-      <main id="desktopHost" class="desktopMainHost">
-        <!-- #content will be moved here on desktop -->
-      </main>
+      <main id="desktopHost" class="desktopMainHost"></main>
     </div>
 
     <!-- Mobile host (drawer mode) -->
-    <main id="mobileHost" class="appMain mobileOnly mobileMainHost">
-      <!-- #content will be moved here on mobile -->
-    </main>
+    <main id="mobileHost" class="appMain mobileOnly mobileMainHost"></main>
 
-    <!-- The single content node (moved into correct host by JS) -->
+    <!-- Single content node used by accounting.js -->
     <div id="content"></div>
 
   </div>
 
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/sync.js"></script>
-  <script src="js/accounting.js"></script>
+  <!-- cache-bust JS too (important for iPhone PWA) -->
+  <script src="js/api.js?v=12"></script>
+  <script src="js/auth.js?v=12"></script>
+  <script src="js/sync.js?v=12"></script>
+  <script src="js/accounting.js?v=12"></script>
 
   <script>
-    // -------- Move #content into correct host (desktop vs mobile) --------
+  document.addEventListener("DOMContentLoaded", () => {
+
+    /* ---------- MODE DETECTION (fix desktopOnly/mobileOnly) ---------- */
+    function setMode() {
+      // treat anything under 900px as mobile (iPhone/Android)
+      const isDesktop = window.matchMedia("(min-width: 900px)").matches;
+      document.body.classList.toggle("is-desktop", isDesktop);
+      document.body.classList.toggle("is-mobile", !isDesktop);
+      placeContent();
+      closeDrawer();
+    }
+
     function placeContent() {
       const content = document.getElementById("content");
       const desktopHost = document.getElementById("desktopHost");
       const mobileHost = document.getElementById("mobileHost");
-      const isDesktop = window.matchMedia("(min-width: 900px)").matches;
+      const isDesktop = document.body.classList.contains("is-desktop");
 
-      if (isDesktop) {
-        desktopHost.appendChild(content);
-      } else {
-        mobileHost.appendChild(content);
-      }
+      if (isDesktop && desktopHost) desktopHost.appendChild(content);
+      if (!isDesktop && mobileHost) mobileHost.appendChild(content);
     }
-    window.addEventListener("resize", placeContent);
-    placeContent();
 
-    // -------- Mobile drawer controls (only used on mobile) --------
+    window.addEventListener("resize", setMode);
+    setMode();
+
+    /* ---------- THEME (ensure function exists) ---------- */
+    function applyTheme() {
+      const t = localStorage.getItem("theme") || "light";
+      document.body.classList.toggle("dark", t === "dark");
+    }
+
+    function toggleTheme() {
+      const nowDark = !document.body.classList.contains("dark");
+      localStorage.setItem("theme", nowDark ? "dark" : "light");
+      applyTheme();
+    }
+
+    // expose for onclick fallback
+    window.toggleTheme = toggleTheme;
+
+    const btnTheme = document.getElementById("btnTheme");
+    if (btnTheme) btnTheme.addEventListener("click", toggleTheme);
+    applyTheme();
+
+    /* ---------- DRAWER ---------- */
     const drawer = document.getElementById("drawer");
     const overlay = document.getElementById("drawerOverlay");
 
@@ -196,13 +223,16 @@
       drawer.classList.remove("open");
       overlay.classList.remove("open");
     }
+
+    // expose so menu buttons can call closeDrawer()
     window.closeDrawer = closeDrawer;
+    window.openDrawer = openDrawer;
 
     const btnMenu = document.getElementById("btnMenu");
     if (btnMenu) btnMenu.addEventListener("click", openDrawer);
     if (overlay) overlay.addEventListener("click", closeDrawer);
 
-    // -------- Mobile back stack navigation --------
+    /* ---------- MOBILE BACK STACK ---------- */
     window.__navStack = window.__navStack || ["dashboard"];
 
     window.navTo = async function(section) {
@@ -229,6 +259,8 @@
 
     const btnBack = document.getElementById("btnBack");
     if (btnBack) btnBack.addEventListener("click", goBack);
+
+  });
   </script>
 </body>
 </html>
