@@ -1,23 +1,271 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Login - SVV</title>
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+  <title>Login - Shiv Video Vision</title>
+
+  <!-- Fix iPhone top safe-area color -->
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <link rel="stylesheet" href="css/style.css?v=14">
+  <link rel="stylesheet" href="css/dark.css?v=14">
+
+  <style>
+    /* Page layout */
+    body {
+      background: #ffffff;
+    }
+
+    .loginPage {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        calc(env(safe-area-inset-top) + 24px)
+        16px
+        calc(env(safe-area-inset-bottom) + 24px);
+      background: inherit;
+      overflow: hidden;
+    }
+
+    /* Soft background glow */
+    .loginBg {
+      position: absolute;
+      inset: -40px;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(255,0,140,.10), transparent 45%),
+        radial-gradient(circle at 85% 25%, rgba(255,190,0,.10), transparent 45%),
+        radial-gradient(circle at 50% 85%, rgba(0,170,255,.10), transparent 55%);
+      filter: blur(0px);
+      pointer-events: none;
+    }
+
+    .loginCard {
+      position: relative;
+      width: min(420px, 92vw);
+      background: #ffffff;
+      border: 1px solid #eee;
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 18px 60px rgba(0,0,0,.10);
+    }
+
+    .loginTop {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .loginTop img {
+      height: 38px;
+      width: auto;
+    }
+
+    .loginTitle {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+
+    .loginTitle strong {
+      font-size: 16px;
+      letter-spacing: .02em;
+    }
+
+    .loginTitle span {
+      font-size: 12px;
+      color: #666;
+      margin-top: 2px;
+    }
+
+    .field {
+      margin-top: 12px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .field input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px 12px;
+      border-radius: 12px;
+      border: 1px solid #e6e6e6;
+      font-size: 15px;
+      outline: none;
+      background: #fff;
+    }
+
+    .field input:focus {
+      border-color: #cfcfcf;
+    }
+
+    .loginActions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 16px;
+    }
+
+    .loginBtn {
+      width: 100%;
+      padding: 12px 14px;
+      border: 0;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 15px;
+      background: #111;
+      color: #fff;
+    }
+
+    .loginBtn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    .hintRow {
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .netMini {
+      font-size: 12px;
+      color: #777;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    /* Dark mode support (uses your existing body.dark) */
+    body.dark {
+      background: #0f1115;
+    }
+    body.dark .loginCard {
+      background: #1a1d24;
+      border: 1px solid #262a34;
+      box-shadow: none;
+    }
+    body.dark .loginTitle span,
+    body.dark .field label,
+    body.dark .hintRow,
+    body.dark .netMini {
+      color: #aaa;
+    }
+    body.dark .field input {
+      background: #111;
+      color: #fff;
+      border: 1px solid #333;
+    }
+    body.dark .loginBtn {
+      background: #2b2f3a;
+    }
+  </style>
 </head>
 
 <body class="no-scroll">
+  <div class="loginPage">
+    <div class="loginBg"></div>
 
-<div class="card" style="max-width:360px;margin:100px auto">
-  <h2>Login</h2>
-  <input id="user" placeholder="Username"><br><br>
-  <input id="pass" type="password" placeholder="Password"><br><br>
-  <button class="primary" onclick="login()">Login</button>
-</div>
+    <div class="loginCard">
+      <div class="loginTop">
+        <img src="assets/logo.png" alt="Shiv Video Vision">
+        <div class="loginTitle">
+          <strong>Shiv Video Vision</strong>
+          <span>Sign in to continue</span>
+        </div>
+      </div>
 
-<script src="js/api.js"></script>
-<script src="js/auth.js"></script>
+      <div class="field">
+        <label for="user">Username</label>
+        <input id="user" autocomplete="username" placeholder="Enter username">
+      </div>
 
+      <div class="field">
+        <label for="pass">Password</label>
+        <input id="pass" type="password" autocomplete="current-password" placeholder="Enter password">
+      </div>
+
+      <div class="loginActions">
+        <button class="loginBtn" id="btnLogin" onclick="login()">Login</button>
+      </div>
+
+      <div class="hintRow">
+        <span id="roleHint">Owner/Staff login</span>
+        <span id="capsHint" style="display:none;">Caps Lock is ON</span>
+      </div>
+
+      <div class="netMini" id="netStatusLogin"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js?v=14"></script>
+  <script src="js/auth.js?v=14"></script>
+
+  <script>
+    // Apply saved theme instantly
+    (function(){
+      try{
+        const t = localStorage.getItem("theme") || "light";
+        document.body.classList.toggle("dark", t === "dark");
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", t === "dark" ? "#0f1115" : "#ffffff");
+      }catch(e){}
+    })();
+
+    // Enter key submits
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") login();
+    });
+
+    // Simple online indicator
+    function updateNetLogin(){
+      const el = document.getElementById("netStatusLogin");
+      if (!el) return;
+      el.textContent = navigator.onLine ? "🟢 Online" : "🔴 Offline (login requires internet)";
+    }
+    window.addEventListener("online", updateNetLogin);
+    window.addEventListener("offline", updateNetLogin);
+    updateNetLogin();
+
+    // Caps lock hint
+    document.addEventListener("keyup", (e) => {
+      const caps = e.getModifierState && e.getModifierState("CapsLock");
+      const hint = document.getElementById("capsHint");
+      if (hint) hint.style.display = caps ? "inline" : "none";
+    });
+
+    // Prevent spam clicks (button locks during login)
+    const _oldLogin = window.login;
+    window.login = function(){
+      const btn = document.getElementById("btnLogin");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Signing in...";
+      }
+      Promise.resolve(_oldLogin && _oldLogin()).finally(() => {
+        // If login success, page redirects. If fails, re-enable after a moment.
+        setTimeout(() => {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Login";
+          }
+        }, 800);
+      });
+    };
+  </script>
+  <script src="js/nozoom.js"></script>
 </body>
 </html>
