@@ -115,6 +115,26 @@ html, body {
   font-size: 18px;
 }
 
+/* Prevent text selection + callout */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Allow typing inside inputs */
+input, textarea, select {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Stop double-tap zoom / gestures (works well on iOS/Android) */
+html, body {
+  touch-action: manipulation; /* allow taps, block double tap zoom */
+}
+
+
+
 /* Optional but recommended: anti-spam submit visual */
 .btn-saving { filter: grayscale(40%); }
 button:disabled { opacity: 0.6; cursor: not-allowed; }
