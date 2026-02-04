@@ -53,7 +53,7 @@
       height: auto;
       transform: scale(.92);
       opacity: 0;
-      animation: logoIn .8s ease-out forwards;
+      animation: logoIn 1.4s ease-out forwards;
     }
 
     /* Brand text */
@@ -81,7 +81,7 @@
         radial-gradient(circle at 70% 35%, rgba(255, 200, 0, .30), transparent 55%),
         radial-gradient(circle at 45% 75%, rgba(0, 180, 255, .28), transparent 60%),
         radial-gradient(circle at 75% 75%, rgba(50, 255, 120, .22), transparent 60%);
-      animation: glowPulse 2.8s ease-in-out .2s forwards;
+      animation: glowPulse 4.5s ease-in-out .4s forwards;
       pointer-events: none;
       z-index: -1;
     }
@@ -96,16 +96,16 @@
       opacity: 0;
       transform: scale(.6);
       filter: blur(.2px);
-      animation: ringBurst 3.2s ease-in-out .9s forwards;
+      animation: ringBurst 4.8s ease-in-out 1.2s forwards;
       pointer-events: none;
       z-index: -1;
     }
 
     /* The final burst-out of whole group (longer duration) */
     .burst {
-      animation: burstOut 2.2s ease-in-out forwards;
-      animation-delay: 2.4s; /* wait so glow is seen */
-    }
+  animation: burstOut 3.8s cubic-bezier(.16,.84,.44,1) forwards;
+  animation-delay: 3.4s;
+}
 
     @keyframes logoIn {
       0%   { opacity: 0; transform: scale(.92); }
@@ -168,10 +168,10 @@
       const u = localStorage.getItem("username");
       const l = localStorage.getItem("last_login");
       location.replace((u && l) ? "app.html" : "login.html");
-    }, 4700);
+    }, 8000);
   </script>
   
-    <script src="js/nozoom.js?v=1"></script>
+    <script src="js/nozoom.js?v=101"></script>
 </body>
 </html>
 
