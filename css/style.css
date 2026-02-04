@@ -2,6 +2,7 @@ html, body {
   height: 100%;
   margin: 0;
   overscroll-behavior: none; /* stop bounce/pull refresh in many browsers */
+ background: #ffffff !important;
 }
 
 /* Full app: prevent page scroll */
@@ -26,7 +27,7 @@ html, body {
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
-  background: #f5f5f5;
+  background: #ffffff !important;
 }
 
 .appHeader {
@@ -35,7 +36,7 @@ html, body {
   align-items: center;
   gap: 10px;
   padding: 12px;
-  background: #fff;
+  background: #ffffff !important;
   border-bottom: 1px solid #eee;
 }
 
@@ -132,7 +133,13 @@ input, textarea, select {
 html, body {
   touch-action: manipulation; /* allow taps, block double tap zoom */
 }
-
+/* iOS safe-area padding (prevents black strip) */
+.appShell.safe {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  }
 
 
 /* Optional but recommended: anti-spam submit visual */
