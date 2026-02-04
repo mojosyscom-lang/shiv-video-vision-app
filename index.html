@@ -1,39 +1,129 @@
+
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-    <meta name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+
   <title>Shiv Video Vision</title>
-  <link rel="stylesheet" href="css/style.css">
-  <meta name="theme-color" content="#000000">
-  <!-- PWA -->
-<link rel="manifest" href="manifest.json">
 
-<!-- iOS PWA SUPPORT -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Shiv Video">
-<link rel="apple-touch-icon" href="assets/icon-192.png">
+  <!-- Status bar / safe area -->
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
+  <link rel="stylesheet" href="css/style.css?v=13">
+  <link rel="stylesheet" href="css/dark.css?v=13">
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+      z-index: 9999;
+    }
+
+    .logoWrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: burstOut 1.25s ease-in-out forwards;
+      animation-delay: .4s;
+    }
+
+    .logoWrap img {
+      width: min(78vw, 320px);
+      height: auto;
+      transform: scale(.92);
+      opacity: 0;
+      animation: logoIn .5s ease-out forwards;
+    }
+
+    .brand {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #666;
+      letter-spacing: .04em;
+      opacity: 0;
+      animation: fadeIn .5s ease-out .25s forwards;
+    }
+
+    @keyframes logoIn {
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    /* The burst */
+    @keyframes burstOut {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      60% {
+        transform: scale(1.08);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(2.8);
+        opacity: 0;
+      }
+    }
+
+    /* Dark mode support */
+    body.dark,
+    body.dark .splash {
+      background: #0f1115;
+    }
+    body.dark .brand {
+      color: #aaa;
+    }
+  </style>
 </head>
-<body class="no-scroll splash">
-  <div class="splashWrap">
-    <img src="assets/logo.png" width="150px" height="150px" class="splashLogo" alt="Shiv Video Vision">
+
+<body class="no-scroll">
+  <div class="splash">
+    <div class="logoWrap">
+      <img src="assets/logo.png" alt="Shiv Video Vision">
+      <div class="brand">SHIV VIDEO VISION</div>
+    </div>
   </div>
 
   <script>
-    // If already logged in, go to app; else login
+    // Apply saved theme instantly (prevents flash)
+    try {
+      const t = localStorage.getItem("theme") || "light";
+      document.body.classList.toggle("dark", t === "dark");
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta && t === "dark") meta.setAttribute("content", "#0f1115");
+    } catch(e){}
+
+    // Redirect after burst animation
     setTimeout(() => {
       const u = localStorage.getItem("username");
       const l = localStorage.getItem("last_login");
-      location.href = (u && l) ? "app.html" : "login.html";
-    }, 2000);
+      location.replace((u && l) ? "app.html" : "login.html");
+    }, 1350);
   </script>
   
   <script src="js/nozoom.js?v=1"></script>
 </body>
 </html>
-
-
 
