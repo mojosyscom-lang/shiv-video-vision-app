@@ -107,8 +107,10 @@
     <!-- Header (shared) -->
     <header class="appHeader">
       <!-- Mobile back/menu only -->
-      <button class="iconBtn backBtn mobileOnly" id="btnBack" title="Back"></button>
-      <button class="iconBtn menuBtn mobileOnly" id="btnMenu" title="Menu"></button>
+  
+      
+      <button class="iconBtn menuBtn mobileOnly" id="btnMenu" title="Menu" onclick="openDrawer()"></button>
+
 
       <img src="assets/logo.png" alt="SVV">
       <strong>Shiv Video Vision</strong>
@@ -116,7 +118,7 @@
       <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
         <span id="netStatus" style="font-size:12px;"></span>
         <span id="syncCount" style="font-size:12px;"></span>
-        <button class="iconBtn" id="btnTheme" title="Theme">🌙</button>
+       <button class="iconBtn" id="btnTheme" title="Theme" onclick="toggleTheme()">🌙</button>
       </div>
     </header>
 
@@ -195,7 +197,7 @@
       localStorage.setItem("theme", nowDark ? "dark" : "light");
       applyTheme();
     }
-
+window.openDrawer = openDrawer;
     // Expose so any old onclick toggleTheme() still works
     window.toggleTheme = toggleTheme;
 
@@ -217,6 +219,7 @@
       drawer.classList.remove("open");
       overlay.classList.remove("open");
     }
+
 
     // Expose for inline buttons closeDrawer()
     window.closeDrawer = closeDrawer;
