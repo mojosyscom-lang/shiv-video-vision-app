@@ -1,24 +1,45 @@
+/* =====================================================
+   GLOBAL RESET & SAFETY
+===================================================== */
 html, body {
   height: 100%;
   margin: 0;
-  overscroll-behavior: none; /* stop bounce/pull refresh in many browsers */
- background: #ffffff !important;
+  overscroll-behavior: none;
+  background: #ffffff !important;
+  touch-action: manipulation;
 }
 
-/* Full app: prevent page scroll */
+/* Prevent full-page scrolling */
 .no-scroll {
   overflow: hidden !important;
   height: 100dvh;
   width: 100vw;
-  touch-action: manipulation; /* prevents scroll gestures affecting body */
 }
 
-/* iPhone notch safe areas */
+/* Prevent text selection except inputs */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, select {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* =====================================================
+   SAFE AREA (iPhone notch fix)
+===================================================== */
 .safe {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
+/* =====================================================
+   APP SHELL
+===================================================== */
 .appShell {
   position: fixed;
   inset: 0;
@@ -30,12 +51,18 @@ html, body {
   background: #ffffff !important;
 }
 
+/* =====================================================
+   HEADER
+===================================================== */
 .appHeader {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
+  padding:
+    calc(env(safe-area-inset-top) + 10px)
+    12px
+    10px;
   background: #ffffff !important;
   border-bottom: 1px solid #eee;
 }
@@ -50,30 +77,38 @@ html, body {
   line-height: 1;
 }
 
-/* CHANGE REQUESTED: allow content to scroll inside app only */
+/* =====================================================
+   MAIN CONTENT (SCROLLABLE AREA)
+===================================================== */
 .appMain {
   flex: 1 1 auto;
-  overflow: auto; /* was hidden */
-  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 12px;
 }
 
-/* Overlay must cover everything */
+/* =====================================================
+   DRAWER OVERLAY (GLASS BACKDROP)
+===================================================== */
 .drawerOverlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity .18s ease;
-  z-index: 9999; /* increased so it always covers all content */
+  transition: opacity .25s ease;
+  z-index: 9999;
 }
-
 .drawerOverlay.open {
   opacity: 1;
   pointer-events: auto;
 }
 
+/* =====================================================
+   DRAWER (VARIANT A – DARK GLASS)
+===================================================== */
 .drawer {
   position: fixed;
   top: 0;
@@ -81,19 +116,52 @@ html, body {
   height: 100dvh;
   width: 280px;
   max-width: 82vw;
-  background: #111;
+
+  padding:
+    calc(env(safe-area-inset-top) + 16px)
+    14px
+    calc(env(safe-area-inset-bottom) + 16px);
+
+  background: rgba(18,18,22,.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
   color: #fff;
-  transform: translateX(-102%);
-  transition: transform .18s ease;
-  z-index: 10000; /* above overlay */
-  padding: 14px;
+  transform: translateX(-105%);
+  transition: transform .25s ease;
+  z-index: 10000;
   box-sizing: border-box;
 }
-
 .drawer.open {
   transform: translateX(0);
 }
 
+.drawer h4 {
+  margin: 14px 0 6px;
+  padding: 8px 6px;
+  color: #aaa;
+  font-size: 12px;
+  letter-spacing: .08em;
+}
+
+.drawer button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  padding: 12px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.drawer button:hover {
+  background: rgba(255,255,255,.12);
+}
+
+/* =====================================================
+   ICON BUTTONS
+===================================================== */
 .iconBtn {
   border: 0;
   background: transparent;
@@ -101,47 +169,27 @@ html, body {
   border-radius: 10px;
   cursor: pointer;
 }
-
 .iconBtn:hover {
   background: rgba(0,0,0,0.06);
 }
 
+/* Back & Menu icons */
 .backBtn::before {
   content: "←";
   font-size: 18px;
 }
-
 .menuBtn::before {
   content: "☰";
   font-size: 18px;
 }
 
-/* Prevent text selection + callout */
-* {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
+/* =====================================================
+   BUTTON STATES
+===================================================== */
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
-
-/* Allow typing inside inputs */
-input, textarea, select {
-  -webkit-user-select: text;
-  user-select: text;
+.btn-saving {
+  filter: grayscale(40%);
 }
-
-/* Stop double-tap zoom / gestures (works well on iOS/Android) */
-html, body {
-  touch-action: manipulation; /* allow taps, block double tap zoom */
-}
-/* iOS safe-area padding (prevents black strip) */
-.appShell.safe {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
-  }
-
-
-/* Optional but recommended: anti-spam submit visual */
-.btn-saving { filter: grayscale(40%); }
-button:disabled { opacity: 0.6; cursor: not-allowed; }
