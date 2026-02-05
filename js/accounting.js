@@ -39,6 +39,24 @@ document.addEventListener("DOMContentLoaded", () => {
     return year * 100 + mm;
   }
 
+  // ✅ NEW: show date clean (fixes "T18:30:00.000Z" in table)
+  function prettyISODate(v){
+    if (!v) return "";
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return String(v);
+    return d.toISOString().slice(0,10);
+  }
+
+  // ✅ NEW: show month clean (fixes month column becoming date in Sheets)
+  function prettyMonth(v){
+    if (!v) return "";
+    const s = String(v);
+    if (s.includes("T") && s.includes("Z")) {
+      return monthLabelFromISO(prettyISODate(s));
+    }
+    return String(v);
+  }
+
   async function getActiveWorkers() {
     // Uses new backend action listWorkers
     const rows = await api({ action: "listWorkers" });
@@ -59,7 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ✅ NEW: get months from holidays too (so month dropdown works even if only holidays exist)
   async function getMonthsFromHolidays() {
     const rows = await api({ action: "listHolidays", month: "" }); // fetch all
-    const months = (rows || []).map(r => normMonthLabel(r.month));
+    const months = (rows || []).map(r => normMonthLabel(prettyMonth(r.month)));
     return months.filter(Boolean);
   }
 
@@ -185,10 +203,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /* ==========================================================
-       ✅ NEW: Holidays (Option A)
+       ✅ NEW: Holidays (Option A)  ✅ UPDATED: month dropdown + clean display
        ========================================================== */
     if (type === "holidays") {
       const workers = await getActiveWorkers();
+      const months = await getMonthOptionsMerged(); // ✅ for dropdown
 
       content.innerHTML = `
         <div class="card">
@@ -218,7 +237,11 @@ document.addEventListener("DOMContentLoaded", () => {
             <h3 style="margin-top:0;">View Holidays</h3>
 
             <label>Month (optional)</label>
-            <input id="hol_month" placeholder="e.g. Feb-2026" value="${monthLabelFromISO(todayISO())}">
+            <select id="hol_month">
+              <option value="">All</option>
+              ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+            </select>
+
             <div style="display:flex;gap:10px;margin-top:12px;">
               <button class="primary" id="btn_hol_load">Load</button>
             </div>
@@ -227,6 +250,13 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
         </div>
       `;
+
+      // default current month if available
+      const cur = monthLabelNow();
+      const holSel = document.getElementById("hol_month");
+      if (holSel && months.map(normMonthLabel).includes(normMonthLabel(cur))) {
+        holSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(cur)) || "";
+      }
 
       document.getElementById("btn_hol_add").addEventListener("click", addHoliday);
       document.getElementById("btn_hol_load").addEventListener("click", loadHolidays);
@@ -348,7 +378,6 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      // default month select current label if exists
       const salMonth = document.getElementById("sal_month");
       if (salMonth && hasCurrent) salMonth.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
 
@@ -557,7 +586,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // ✅ Updated table for Option A output
       box.innerHTML = `
         <h3>Summary ${month ? "(" + escapeHtml(month) + ")" : ""}</h3>
         <table style="width:100%;border-collapse:collapse;">
@@ -763,9 +791,9 @@ document.addEventListener("DOMContentLoaded", () => {
           </tr>
           ${rows.map(r => `
             <tr style="border-top:1px solid #eee;">
-              <td>${escapeHtml(r.date || "")}</td>
+              <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
               <td>${escapeHtml(r.worker || "")}</td>
-              <td>${escapeHtml(r.month || "")}</td>
+              <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
               <td>${escapeHtml(r.reason || "")}</td>
             </tr>
           `).join("")}
