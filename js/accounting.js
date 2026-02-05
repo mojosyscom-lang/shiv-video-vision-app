@@ -167,7 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const upadMap = (dash && dash.upad_by_worker) ? dash.upad_by_worker : {};
     const upadLabels = Object.keys(upadMap);
     const upadValues = upadLabels.map(k => Number(upadMap[k] || 0));
-    const upadTotal = upadValues.reduce((a,b)=>a+b,0);
+    const upadTotal = Object.values(upadMap).reduce((a,b)=>a+Number(b||0),0);
 
     content.innerHTML = `
       <div class="dashHeader">
@@ -182,32 +182,24 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
 
       <div class="dashGrid">
-        <div class="dashStat">
+        <div class="dashStat dashBlue">
           <div class="dashStatLabel">Total Workers</div>
           <div class="dashStatValue">${Number(dash.total_workers || 0)}</div>
         </div>
 
-        <div class="dashStat">
+        <div class="dashStat dashGreen">
           <div class="dashStatLabel">Monthly Salary</div>
           <div class="dashStatValue">₹${Number(dash.monthly_salary_total || 0).toFixed(0)}</div>
         </div>
 
-        <div class="dashStat">
+        <div class="dashStat dashOrange">
           <div class="dashStatLabel">Monthly Expense</div>
           <div class="dashStatValue">₹${Number(dash.monthly_expense_total || 0).toFixed(0)}</div>
         </div>
 
-        <div class="dashCard">
-          <div class="dashCardTitle">Donut Upad Chart</div>
-          <div class="dashDonutWrap">
-            <canvas id="upadDonut" width="220" height="220"></canvas>
-            <div class="dashDonutMeta">
-              <div><b>Total Upad</b></div>
-              <div style="font-size:22px;">₹${upadTotal.toFixed(0)}</div>
-              <div class="dashSmall">${escapeHtml(dash.month || month)}</div>
-            </div>
-          </div>
-          <div class="dashLegend" id="upadLegend"></div>
+        <div class="dashStat dashPurple">
+          <div class="dashStatLabel">Total Upad (Month)</div>
+          <div class="dashStatValue">₹${Number(upadTotal || 0).toFixed(0)}</div>
         </div>
       </div>
 
@@ -216,25 +208,6 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="dashActivity" id="dashActivity"></div>
       </div>
     `;
-
-    // ✅ Donut render
-    renderDonut("upadDonut", upadLabels, upadValues);
-
-    // ✅ Legend
-    const legend = document.getElementById("upadLegend");
-    if (legend) {
-      if (!upadLabels.length) {
-        legend.innerHTML = `<div class="dashSmall">No Upad entries for this month.</div>`;
-      } else {
-        legend.innerHTML = upadLabels.map((name, i) => `
-          <div class="dashLegendRow">
-            <span class="dashDot" data-i="${i}"></span>
-            <span class="dashLegendName">${escapeHtml(name)}</span>
-            <span class="dashLegendVal">₹${Number(upadValues[i] || 0).toFixed(0)}</span>
-          </div>
-        `).join("");
-      }
-    }
 
     // ✅ Activity list
     const box = document.getElementById("dashActivity");
@@ -254,57 +227,11 @@ document.addEventListener("DOMContentLoaded", () => {
         `).join("");
       }
     }
-  }
 
-  // ✅ Donut chart (simple canvas)
-  function renderDonut(canvasId, labels, values) {
-    const c = document.getElementById(canvasId);
-    if (!c) return;
-    const ctx = c.getContext("2d");
-    if (!ctx) return;
 
-    const total = values.reduce((a,b)=>a+b,0);
-    ctx.clearRect(0,0,c.width,c.height);
 
-    const cx = c.width/2, cy = c.height/2;
-    const r = Math.min(cx,cy) - 6;
-    const inner = r * 0.62;
 
-    if (!total) {
-      // empty ring
-      ctx.beginPath();
-      ctx.arc(cx,cy,r,0,Math.PI*2);
-      ctx.arc(cx,cy,inner,0,Math.PI*2,true);
-      ctx.fillStyle = "#eee";
-      ctx.fill();
-      return;
-    }
 
-    let start = -Math.PI/2;
-    for (let i=0;i<values.length;i++){
-      const v = values[i] || 0;
-      const ang = (v/total) * Math.PI*2;
-      const end = start + ang;
-
-      ctx.beginPath();
-      ctx.moveTo(cx,cy);
-      ctx.arc(cx,cy,r,start,end);
-      ctx.closePath();
-
-      // color by index (no CSS needed)
-      ctx.fillStyle = `hsl(${(i*55)%360} 70% 55%)`;
-      ctx.fill();
-
-      start = end;
-    }
-
-    // punch hole
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.beginPath();
-    ctx.arc(cx,cy,inner,0,Math.PI*2);
-    ctx.fill();
-    ctx.globalCompositeOperation = "source-over";
-  }
 
 
   async function loadSection(type) {
