@@ -233,29 +233,28 @@ document.addEventListener("DOMContentLoaded", () => {
             </p>
           </div>
 
-          <div class="card" style="margin-top:12px;">
-            <h3 style="margin-top:0;">View Holidays</h3>
+        <div class="card" style="margin-top:12px;">
+  <h3 style="margin-top:0;">View Holidays</h3>
 
-            <label>Month</label>
-            <select id="hol_month">
-              <option value="">All</option>
-              ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
-            </select>
+  <label>Month</label>
+  <select id="hol_month">
+    <option value="">All</option>
+  </select>
 
-            <label style="margin-top:10px;">Worker</label>
-            <select id="hol_worker_filter">
-              <option value="">All</option>
-              ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
-            </select>
+  <label style="margin-top:10px;">Worker</label>
+  <select id="hol_worker_filter">
+    <option value="">All</option>
+    ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+  </select>
 
-            <div style="display:flex;gap:10px;margin-top:12px;">
-              <button class="primary" id="btn_hol_load">Load</button>
-            </div>
+  <div style="display:flex;gap:10px;margin-top:12px;">
+    <button class="primary" id="btn_hol_load">Load</button>
+  </div>
 
-            <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
-            <div id="hol_list" style="margin-top:12px;"></div>
-          </div>
-        </div>
+  <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+  <div id="hol_list" style="margin-top:12px;"></div>
+</div>
+
       `;
 
       // default current month if available
@@ -778,59 +777,61 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadHolidays() {
-    const btn = document.getElementById("btn_hol_load");
-    const unlock = lockButton(btn, "Loading...");
+  const btn = document.getElementById("btn_hol_load");
+  const unlock = lockButton(btn, "Loading...");
 
-    try {
-      const month = (document.getElementById("hol_month")?.value || "").trim();
-      const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
+  try {
+    const month = (document.getElementById("hol_month")?.value || "").trim();
+    const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
 
-      const rows = await api({ action: "listHolidays", month });
+    const rows = await api({ action: "listHolidays", month });
 
-      const box = document.getElementById("hol_list");
-      const totalBox = document.getElementById("hol_total");
-      if (!box) return;
+    const box = document.getElementById("hol_list");
+    const totalBox = document.getElementById("hol_total");
+    if (!box) return;
 
-      const filtered = (rows || []).filter(r => {
-        if (!workerFilter) return true;
-        return String(r.worker || "").trim() === workerFilter;
-      });
+    // Filter on client-side by worker
+    const filtered = (rows || []).filter(r => {
+      if (!workerFilter) return true;
+      return String(r.worker || "").trim() === workerFilter;
+    });
 
-      if (!filtered || filtered.length === 0) {
-        box.innerHTML = `<p>No holidays found.</p>`;
-        if (totalBox) totalBox.textContent = "";
-        return;
-      }
-
-      if (totalBox) {
-        totalBox.textContent =
-          `Total holidays: ${filtered.length} day(s)` +
-          (month ? ` • Month: ${month}` : "") +
-          (workerFilter ? ` • Worker: ${workerFilter}` : "");
-      }
-
-      box.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;">
-          <tr>
-            <th align="left">Date</th>
-            <th align="left">Worker</th>
-            <th align="left">Month</th>
-            <th align="left">Reason</th>
-          </tr>
-          ${filtered.map(r => `
-            <tr style="border-top:1px solid #eee;">
-              <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
-              <td>${escapeHtml(r.worker || "")}</td>
-              <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
-              <td>${escapeHtml(r.reason || "")}</td>
-            </tr>
-          `).join("")}
-        </table>
-      `;
-    } finally {
-      setTimeout(unlock, 400);
+    if (!filtered.length) {
+      box.innerHTML = `<p>No holidays found.</p>`;
+      if (totalBox) totalBox.textContent = "";
+      return;
     }
+
+    // Total days = number of rows
+    if (totalBox) {
+      totalBox.textContent = `Total holidays: ${filtered.length} day(s)` +
+        (month ? ` • Month: ${month}` : "") +
+        (workerFilter ? ` • Worker: ${workerFilter}` : "");
+    }
+
+    box.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th align="left">Date</th>
+          <th align="left">Worker</th>
+          <th align="left">Month</th>
+          <th align="left">Reason</th>
+        </tr>
+        ${filtered.map(r => `
+          <tr style="border-top:1px solid #eee;">
+            <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
+            <td>${escapeHtml(r.worker || "")}</td>
+            <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
+            <td>${escapeHtml(r.reason || "")}</td>
+          </tr>
+        `).join("")}
+      </table>
+    `;
+  } finally {
+    setTimeout(unlock, 400);
   }
+}
+
 
   /* ==========================================================
      ✅ ADDED: Superadmin functions (no changes to existing logic)
