@@ -7,7 +7,13 @@
   <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Shiv Video Vision</title>
+<link rel="manifest" href="manifest.json">
 
+<link rel="icon" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Shiv Video">
   <link rel="stylesheet" href="css/style.css?v=30">
   <link rel="stylesheet" href="css/dark.css?v=30">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -55,27 +61,7 @@
       pointer-events:auto;
     }
 
-    .drawer{
-      position:fixed;
-      top:0;
-      left:0;
-      height:100dvh;
-      width:280px;
-      max-width:82vw;
-      padding:
-        calc(env(safe-area-inset-top) + 16px)
-        14px
-        calc(env(safe-area-inset-bottom) + 16px);
-      background:rgba(18,18,22,.82);
-      backdrop-filter:blur(18px);
-      -webkit-backdrop-filter:blur(18px);
-      color:#fff;
-      transform:translateX(-105%);
-      transition:transform .25s ease;
-      z-index:1000;
-    }
-    .drawer.open{ transform:translateX(0); }
-
+ 
     .drawerHeader{
       display:flex;
       align-items:center;
@@ -259,6 +245,14 @@
     window.__navStack.push(section);
     section==="dashboard"?showDashboard():loadSection(section);
   };
+</script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(console.error);
+    });
+  }
 </script>
 
 </body>
