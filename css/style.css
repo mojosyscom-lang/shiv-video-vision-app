@@ -90,32 +90,34 @@ input, textarea, select {
 /* =====================================================
    DRAWER OVERLAY (GLASS BACKDROP)
 ===================================================== */
-.drawerOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.55);
+.drawerOverlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .25s ease;
-  z-index: 9999;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .25s ease;
+  z-index:9999;
 }
-.drawerOverlay.open {
-  opacity: 1;
-  pointer-events: auto;
+.drawerOverlay.open{
+  opacity:1;
+  pointer-events:auto;
 }
+
+
 
 /* =====================================================
    DRAWER (VARIANT A – DARK GLASS)
 ===================================================== */
-.drawer {
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100dvh;
-  width: 280px;
-  max-width: 82vw;
+.drawer{
+  position:fixed;
+  top:0;
+  left:0;
+  height:100dvh;
+  width:280px;
+  max-width:82vw;
 
   padding:
     calc(env(safe-area-inset-top) + 16px)
@@ -126,37 +128,23 @@ input, textarea, select {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 
-  color: #fff;
-  transform: translateX(-105%);
+  color:#fff;
+  box-sizing:border-box;
+
+  /* IMPORTANT: force hidden state */
+  transform: translate3d(-110%,0,0) !important;
+  will-change: transform;
   transition: transform .25s ease;
-  z-index: 10000;
-  box-sizing: border-box;
-}
-.drawer.open {
-  transform: translateX(0);
+
+  z-index:10000;
+
+  /* prevents accidental taps when hidden */
+  pointer-events:none;
 }
 
-.drawer h4 {
-  margin: 14px 0 6px;
-  padding: 8px 6px;
-  color: #aaa;
-  font-size: 12px;
-  letter-spacing: .08em;
-}
-
-.drawer button {
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  color: #fff;
-  padding: 12px 10px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 15px;
-}
-.drawer button:hover {
-  background: rgba(255,255,255,.12);
+.drawer.open{
+  transform: translate3d(0,0,0) !important;
+  pointer-events:auto;
 }
 
 /* =====================================================
