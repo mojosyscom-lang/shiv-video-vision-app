@@ -203,7 +203,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /* ==========================================================
-       ✅ NEW: Holidays (Option A)  ✅ UPDATED: month dropdown + clean display
+       ✅ NEW: Holidays (Option A)  ✅ UPDATED: month dropdown + worker filter + total + auto reload
        ========================================================== */
     if (type === "holidays") {
       const workers = await getActiveWorkers();
@@ -236,16 +236,23 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="card" style="margin-top:12px;">
             <h3 style="margin-top:0;">View Holidays</h3>
 
-            <label>Month (optional)</label>
+            <label>Month</label>
             <select id="hol_month">
               <option value="">All</option>
               ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+            </select>
+
+            <label style="margin-top:10px;">Worker</label>
+            <select id="hol_worker_filter">
+              <option value="">All</option>
+              ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
             </select>
 
             <div style="display:flex;gap:10px;margin-top:12px;">
               <button class="primary" id="btn_hol_load">Load</button>
             </div>
 
+            <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
             <div id="hol_list" style="margin-top:12px;"></div>
           </div>
         </div>
@@ -260,6 +267,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       document.getElementById("btn_hol_add").addEventListener("click", addHoliday);
       document.getElementById("btn_hol_load").addEventListener("click", loadHolidays);
+
+      // ✅ AUTO-RELOAD (requested)
+      document.getElementById("hol_month")?.addEventListener("change", loadHolidays);
+      document.getElementById("hol_worker_filter")?.addEventListener("change", loadHolidays);
+
       loadHolidays();
       return;
     }
@@ -771,14 +783,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const month = (document.getElementById("hol_month")?.value || "").trim();
+      const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
+
       const rows = await api({ action: "listHolidays", month });
 
       const box = document.getElementById("hol_list");
+      const totalBox = document.getElementById("hol_total");
       if (!box) return;
 
-      if (!rows || rows.length === 0) {
+      const filtered = (rows || []).filter(r => {
+        if (!workerFilter) return true;
+        return String(r.worker || "").trim() === workerFilter;
+      });
+
+      if (!filtered || filtered.length === 0) {
         box.innerHTML = `<p>No holidays found.</p>`;
+        if (totalBox) totalBox.textContent = "";
         return;
+      }
+
+      if (totalBox) {
+        totalBox.textContent =
+          `Total holidays: ${filtered.length} day(s)` +
+          (month ? ` • Month: ${month}` : "") +
+          (workerFilter ? ` • Worker: ${workerFilter}` : "");
       }
 
       box.innerHTML = `
@@ -789,7 +817,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <th align="left">Month</th>
             <th align="left">Reason</th>
           </tr>
-          ${rows.map(r => `
+          ${filtered.map(r => `
             <tr style="border-top:1px solid #eee;">
               <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
               <td>${escapeHtml(r.worker || "")}</td>
