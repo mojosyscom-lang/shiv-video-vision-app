@@ -164,6 +164,80 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    /* ==========================================================
+       ✅ ADDED: Superadmin - Add New User section
+       ========================================================== */
+    if (type === "userAdd") {
+      if (role !== "superadmin") {
+        content.innerHTML = `<div class="card">Unauthorized</div>`;
+        return;
+      }
+
+      content.innerHTML = `
+        <div class="card">
+          <h2>Add New User</h2>
+
+          <label>Username</label>
+          <input id="new_username" placeholder="e.g. staff1">
+
+          <label style="margin-top:10px;">Password</label>
+          <input id="new_password" type="password" placeholder="Set password">
+
+          <label style="margin-top:10px;">Role</label>
+          <select id="new_role">
+            <option value="staff">staff</option>
+            <option value="owner">owner</option>
+            <option value="superadmin">superadmin</option>
+          </select>
+
+          <label style="margin-top:10px;">Company</label>
+          <input id="new_company" placeholder="e.g. Shiv Video Vision">
+
+          <button class="primary" id="btn_add_user" style="margin-top:14px;">➕ Create User</button>
+
+          <p style="font-size:12px;color:#777;margin-top:10px;">
+            Username must be unique.
+          </p>
+        </div>
+      `;
+
+      document.getElementById("btn_add_user").addEventListener("click", addNewUser);
+      return;
+    }
+
+    /* ==========================================================
+       ✅ ADDED: Superadmin - Edit Password section
+       ========================================================== */
+    if (type === "userPw") {
+      if (role !== "superadmin") {
+        content.innerHTML = `<div class="card">Unauthorized</div>`;
+        return;
+      }
+
+      const users = await api({ action: "getUsers" });
+
+      content.innerHTML = `
+        <div class="card">
+          <h2>Edit Password</h2>
+
+          <label>Select User</label>
+          <select id="pw_user">
+            ${(users || []).map(u => `
+              <option value="${escapeAttr(u.username)}">${escapeHtml(u.username)} (${escapeHtml(u.role)})</option>
+            `).join("")}
+          </select>
+
+          <label style="margin-top:10px;">New Password</label>
+          <input id="pw_new" type="password" placeholder="Enter new password">
+
+          <button class="primary" id="btn_pw_update" style="margin-top:14px;">🔑 Update Password</button>
+        </div>
+      `;
+
+      document.getElementById("btn_pw_update").addEventListener("click", updateUserPassword);
+      return;
+    }
+
     content.innerHTML = `<div class="card">Section not found: ${escapeHtml(type)}</div>`;
   }
 
@@ -301,6 +375,70 @@ document.addEventListener("DOMContentLoaded", () => {
     if (r && r.error) return;
     alert(`Updated: ${targetUsername} → ${status}`);
     loadSection("userMgmt");
+  }
+
+  /* ==========================================================
+     ✅ ADDED: Superadmin functions (no changes to existing logic)
+     ========================================================== */
+
+  async function addNewUser() {
+    const btn = document.getElementById("btn_add_user");
+    const unlock = lockButton(btn, "Creating...");
+
+    try {
+      const username = document.getElementById("new_username").value.trim();
+      const password = document.getElementById("new_password").value.trim();
+      const roleVal  = document.getElementById("new_role").value.trim();
+      const company  = document.getElementById("new_company").value.trim();
+
+      if (!username || !password || !roleVal || !company) {
+        alert("Please fill all fields");
+        return;
+      }
+
+      const r = await api({
+        action: "addUser",
+        username,
+        password,
+        role: roleVal,
+        company
+      });
+
+      if (r && r.error) return;
+
+      alert("User created");
+      loadSection("userMgmt");
+    } finally {
+      setTimeout(unlock, 700);
+    }
+  }
+
+  async function updateUserPassword() {
+    const btn = document.getElementById("btn_pw_update");
+    const unlock = lockButton(btn, "Updating...");
+
+    try {
+      const target_username = document.getElementById("pw_user").value.trim();
+      const new_password = document.getElementById("pw_new").value.trim();
+
+      if (!target_username || !new_password) {
+        alert("Select user and enter new password");
+        return;
+      }
+
+      const r = await api({
+        action: "updateUserPassword",
+        target_username,
+        new_password
+      });
+
+      if (r && r.error) return;
+
+      alert("Password updated");
+      document.getElementById("pw_new").value = "";
+    } finally {
+      setTimeout(unlock, 700);
+    }
   }
 
   // Hide superadmin-only menu items
