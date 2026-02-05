@@ -91,33 +91,31 @@ input, textarea, select {
    DRAWER OVERLAY (GLASS BACKDROP)
 ===================================================== */
 .drawerOverlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.55);
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
-  opacity:0;
-  pointer-events:none;
-  transition:opacity .25s ease;
-  z-index:9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease;
+  z-index: 99999; /* cover everything */
 }
 .drawerOverlay.open{
-  opacity:1;
-  pointer-events:auto;
+  opacity: 1;
+  pointer-events: auto;
 }
-
-
 
 /* =====================================================
    DRAWER (VARIANT A – DARK GLASS)
 ===================================================== */
 .drawer{
-  position:fixed;
-  top:0;
-  left:0;
-  height:100dvh;
-  width:280px;
-  max-width:82vw;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100dvh;
+  width: 280px;
+  max-width: 82vw;
 
   padding:
     calc(env(safe-area-inset-top) + 16px)
@@ -128,23 +126,95 @@ input, textarea, select {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 
-  color:#fff;
-  box-sizing:border-box;
+  color: #fff;
+  box-sizing: border-box;
 
-  /* IMPORTANT: force hidden state */
+  /* IMPORTANT: always hidden unless .open */
   transform: translate3d(-110%,0,0) !important;
   will-change: transform;
   transition: transform .25s ease;
 
-  z-index:10000;
+  z-index: 100000; /* above overlay */
+  pointer-events: none; /* no clicks while hidden */
 
-  /* prevents accidental taps when hidden */
-  pointer-events:none;
+  box-shadow: 18px 0 60px rgba(0,0,0,.35);
 }
 
 .drawer.open{
   transform: translate3d(0,0,0) !important;
-  pointer-events:auto;
+  pointer-events: auto;
+}
+
+/* Drawer header */
+.drawerHeader{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom: 14px;
+}
+.drawerHeader img{
+  height: 28px;
+  width: auto;
+}
+
+/* Section titles */
+.drawer h4{
+  margin: 14px 0 6px;
+  padding: 8px 8px;
+  color: rgba(255,255,255,.55);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+/* Drawer buttons */
+.drawer button{
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  padding: 12px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 15px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  transition: background .18s ease, transform .05s ease;
+}
+.drawer button:hover{
+  background: rgba(255,255,255,.12);
+}
+.drawer button:active{
+  transform: scale(0.99);
+}
+
+/* ===== ACTIVE MENU HIGHLIGHT =====
+   JS will add .active to the selected drawer button
+*/
+.drawer button.active{
+  background: linear-gradient(90deg, rgba(255,106,0,.25), rgba(255,255,255,.10));
+  outline: 1px solid rgba(255,106,0,.35);
+  box-shadow: inset 0 0 0 1px rgba(255,106,0,.12);
+}
+
+/* Optional small left indicator for active item */
+.drawer button.active::before{
+  content:"";
+  width:6px;
+  height:18px;
+  border-radius:999px;
+  background:#ff6a00;
+  margin-left:-4px;
+  margin-right:6px;
+}
+
+/* Divider line (use <div class="drawerDivider"></div> if you want) */
+.drawerDivider{
+  height:1px;
+  background: rgba(255,255,255,.10);
+  margin: 12px 0;
 }
 
 /* =====================================================
@@ -161,13 +231,15 @@ input, textarea, select {
   background: rgba(0,0,0,0.06);
 }
 
-/* Back & Menu icons */
-.backBtn::before {
-  content: "←";
-  font-size: 18px;
-}
+/* Menu icon */
 .menuBtn::before {
   content: "☰";
+  font-size: 18px;
+}
+
+/* Optional back icon if you add later */
+.backBtn::before {
+  content: "←";
   font-size: 18px;
 }
 
@@ -180,4 +252,18 @@ button:disabled {
 }
 .btn-saving {
   filter: grayscale(40%);
+}
+
+/* =====================================================
+   OPTIONAL: swipe zone (for JS gesture)
+   Add <div id="edgeSwipeZone"></div> if you want swipe-open
+===================================================== */
+#edgeSwipeZone{
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100dvh;
+  width: 16px;      /* small invisible strip */
+  z-index: 5;
+  background: transparent;
 }
