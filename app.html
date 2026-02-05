@@ -92,6 +92,9 @@
 <body class="no-scroll">
 <div class="appShell safe">
 
+  <!-- Optional swipe zone (CSS already supports it) -->
+  <div id="edgeSwipeZone"></div>
+
   <!-- Overlay + Drawer (used on ALL devices now) -->
   <div id="drawerOverlay" class="drawerOverlay"></div>
 
@@ -101,24 +104,24 @@
       <strong>Menu</strong>
     </div>
 
-    <button onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
+    <button data-nav="dashboard" onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
 
     <h4>ACCOUNTING</h4>
-    <button onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
-    <button onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
-    <button onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
+    <button data-nav="upad" onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
+    <button data-nav="expenses" onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
+    <button data-nav="salary" onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
 
     <h4>INVOICE</h4>
-    <button onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
+    <button data-nav="invoice" onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
 
     <div class="superadminOnly">
       <h4>ADMIN</h4>
-      <button onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
-      <button onclick="navTo('gst'); closeDrawer()">📊 GST</button>
-      <button onclick="navTo('export'); closeDrawer()">📤 Export</button>
+      <button data-nav="userMgmt" onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
+      <button data-nav="gst" onclick="navTo('gst'); closeDrawer()">📊 GST</button>
+      <button data-nav="export" onclick="navTo('export'); closeDrawer()">📤 Export</button>
     </div>
 
-    <button onclick="logout()" style="margin-top:18px;">🚪 Logout</button>
+    <button data-nav="logout" onclick="logout()" style="margin-top:18px;">🚪 Logout</button>
   </aside>
 
   <!-- Header -->
@@ -151,6 +154,8 @@
   /* Drawer controls */
   const drawer = document.getElementById("drawer");
   const overlay = document.getElementById("drawerOverlay");
+  const btnMenu = document.getElementById("btnMenu");
+  const edgeZone = document.getElementById("edgeSwipeZone");
 
   function openDrawer(){
     drawer.classList.add("open");
@@ -164,16 +169,80 @@
   // force closed at load
   closeDrawer();
 
-  document.getElementById("btnMenu")?.addEventListener("click", openDrawer);
+  btnMenu?.addEventListener("click", openDrawer);
   overlay?.addEventListener("click", closeDrawer);
+
+  /* ---------- ACTIVE MENU HIGHLIGHT ---------- */
+  function setActiveNav(section){
+    document.querySelectorAll(".drawer button[data-nav]").forEach(b => {
+      b.classList.toggle("active", b.getAttribute("data-nav") === section);
+    });
+  }
 
   /* NAV STACK */
   window.__navStack = window.__navStack || ["dashboard"];
 
   window.navTo = async function(section){
     window.__navStack.push(section);
+    setActiveNav(section);
     section === "dashboard" ? showDashboard() : loadSection(section);
   };
+
+  // default highlight
+  setActiveNav("dashboard");
+
+  /* ---------- SWIPE-TO-OPEN (iPhone/Android safe) ----------
+     - swipe from left edge to open
+     - swipe left inside drawer to close
+     - does not break vertical scrolling
+  */
+  (function enableSwipe(){
+    let startX = 0, startY = 0, tracking = false, fromEdge = false;
+
+    function onStart(e){
+      const t = e.touches ? e.touches[0] : e;
+      startX = t.clientX;
+      startY = t.clientY;
+      tracking = true;
+
+      // edge swipe zone: only start if within 24px of left edge OR touching edgeZone
+      fromEdge = startX <= 24 || (edgeZone && (e.target === edgeZone));
+    }
+
+    function onMove(e){
+      if (!tracking) return;
+      const t = e.touches ? e.touches[0] : e;
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+
+      // allow vertical scroll; only react if horizontal intent
+      if (Math.abs(dx) < 20 || Math.abs(dx) < Math.abs(dy)) return;
+
+      // open: swipe right from edge
+      if (fromEdge && dx > 45){
+        openDrawer();
+        tracking = false;
+      }
+
+      // close: swipe left inside open drawer
+      if (drawer.classList.contains("open") && dx < -45){
+        closeDrawer();
+        tracking = false;
+      }
+    }
+
+    function onEnd(){ tracking = false; fromEdge = false; }
+
+    // touch listeners
+    document.addEventListener("touchstart", onStart, { passive: true });
+    document.addEventListener("touchmove", onMove, { passive: true });
+    document.addEventListener("touchend", onEnd, { passive: true });
+
+    // also allow swipe-close if user drags on drawer itself
+    drawer.addEventListener("touchstart", onStart, { passive: true });
+    drawer.addEventListener("touchmove", onMove, { passive: true });
+    drawer.addEventListener("touchend", onEnd, { passive: true });
+  })();
 </script>
 
 <script>
