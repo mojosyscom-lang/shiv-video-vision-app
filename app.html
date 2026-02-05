@@ -2,121 +2,263 @@
 <html>
 <head>
   <meta charset="utf-8">
-    <meta name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-    <meta name="theme-color" content="#ffffff">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Shiv Video Vision</title>
 
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/dark.css">
+  <link rel="stylesheet" href="css/style.css?v=30">
+  <link rel="stylesheet" href="css/dark.css?v=30">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* ---------- LAYOUT MODE ---------- */
+    .desktopOnly { display:none; }
+    .mobileOnly { display:block; }
+
+    @media (min-width:900px){
+      .desktopOnly { display:block; }
+      .mobileOnly { display:none; }
+    }
+
+    /* ---------- HEADER ---------- */
+    .appHeader{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:
+        calc(env(safe-area-inset-top) + 10px)
+        12px
+        10px;
+      background:#ffffff;
+      border-bottom:1px solid #eee;
+    }
+    body.dark .appHeader{
+      background:#0f1115;
+      border-bottom:1px solid #222;
+    }
+
+    /* ---------- MOBILE GLASS MENU (VARIANT A) ---------- */
+    .drawerOverlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.55);
+      backdrop-filter:blur(2px);
+      opacity:0;
+      pointer-events:none;
+      transition:.25s;
+      z-index:999;
+    }
+    .drawerOverlay.open{
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    .drawer{
+      position:fixed;
+      top:0;
+      left:0;
+      height:100dvh;
+      width:280px;
+      max-width:82vw;
+      padding:
+        calc(env(safe-area-inset-top) + 16px)
+        14px
+        calc(env(safe-area-inset-bottom) + 16px);
+      background:rgba(18,18,22,.82);
+      backdrop-filter:blur(18px);
+      -webkit-backdrop-filter:blur(18px);
+      color:#fff;
+      transform:translateX(-105%);
+      transition:transform .25s ease;
+      z-index:1000;
+    }
+    .drawer.open{ transform:translateX(0); }
+
+    .drawerHeader{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:16px;
+    }
+    .drawerHeader img{ height:28px; }
+
+    .drawer h4{
+      margin:14px 0 6px;
+      padding:8px 6px;
+      color:#aaa;
+      font-size:12px;
+      letter-spacing:.08em;
+    }
+
+    .drawer button{
+      width:100%;
+      text-align:left;
+      background:transparent;
+      border:0;
+      color:#fff;
+      padding:12px 10px;
+      border-radius:12px;
+      cursor:pointer;
+      font-size:15px;
+    }
+    .drawer button:hover{
+      background:rgba(255,255,255,.12);
+    }
+
+    /* ---------- DESKTOP SIDEBAR ---------- */
+    .desktopLayout{
+      display:flex;
+      height:calc(100dvh - 56px);
+      overflow:hidden;
+    }
+    .desktopSidebar{
+      width:260px;
+      background:#111;
+      color:#fff;
+      padding:12px;
+    }
+    .desktopSidebar h4{
+      margin:12px 0 6px;
+      padding:10px 8px;
+      color:#aaa;
+      font-size:12px;
+      letter-spacing:.04em;
+    }
+    .desktopSidebar button{
+      width:100%;
+      text-align:left;
+      background:transparent;
+      border:0;
+      color:#fff;
+      padding:10px 8px;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:14px;
+    }
+    .desktopSidebar button:hover{
+      background:rgba(255,255,255,.08);
+    }
+    .desktopMainHost{
+      flex:1;
+      overflow:auto;
+      padding:12px;
+      -webkit-overflow-scrolling:touch;
+    }
+  </style>
 </head>
 
 <body class="no-scroll">
-  <div class="appShell safe">
+<div class="appShell safe">
 
-    <!-- Fullscreen overlay -->
-    <div id="drawerOverlay" class="drawerOverlay"></div>
+  <!-- MOBILE OVERLAY + DRAWER -->
+  <div id="drawerOverlay" class="drawerOverlay mobileOnly"></div>
 
-    <!-- Slide-out drawer -->
-    <aside id="drawer" class="drawer">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <img src="assets/logo.png" style="height:26px;">
-        <strong>Menu</strong>
-      </div>
+  <aside id="drawer" class="drawer mobileOnly">
+    <div class="drawerHeader">
+      <img src="assets/logo.png">
+      <strong>Menu</strong>
+    </div>
 
-      <button onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
+    <button onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
 
-      <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ACCOUNTING</h4>
-      <button onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
-      <button onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
-      <button onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
+    <h4>ACCOUNTING</h4>
+    <button onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
+    <button onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
+    <button onclick="navTo('salary'); closeDrawer()">💰 Salary</button>
 
-      <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">INVOICE</h4>
-      <button onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
+    <h4>INVOICE</h4>
+    <button onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
+
+    <div class="superadminOnly">
+      <h4>ADMIN</h4>
+      <button onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
+      <button onclick="navTo('gst'); closeDrawer()">📊 GST</button>
+      <button onclick="navTo('export'); closeDrawer()">📤 Export</button>
+    </div>
+
+    <button onclick="logout()" style="margin-top:18px;">🚪 Logout</button>
+  </aside>
+
+  <!-- HEADER -->
+  <header class="appHeader">
+    <img src="assets/logo.png" height="30" alt="SVV">
+    <strong>Shiv Video Vision</strong>
+
+    <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
+      <span id="netStatus" style="font-size:12px;"></span>
+      <span id="syncCount" style="font-size:12px;"></span>
+      <button class="iconBtn" onclick="toggleTheme()">🌙</button>
+      <button class="iconBtn menuBtn mobileOnly" id="btnMenu"></button>
+    </div>
+  </header>
+
+  <!-- DESKTOP -->
+  <div class="desktopOnly desktopLayout">
+    <aside class="desktopSidebar">
+      <button onclick="showDashboard()">🏠 Dashboard</button>
+
+      <h4>ACCOUNTING</h4>
+      <button onclick="loadSection('upad')">👷 Upad</button>
+      <button onclick="loadSection('expenses')">📒 Expenses</button>
+      <button onclick="loadSection('salary')">💰 Salary</button>
+
+      <h4>INVOICE</h4>
+      <button onclick="loadSection('invoice')">🧾 Create Invoice</button>
 
       <div class="superadminOnly">
-        <h4 style="padding:10px 8px;color:#aaa;margin:8px 0 0;">ADMIN</h4>
-        <button onclick="navTo('userMgmt'); closeDrawer()">🛡 User Management</button>
-        <button onclick="navTo('gst'); closeDrawer()">📊 GST</button>
-        <button onclick="navTo('export'); closeDrawer()">📤 Export</button>
+        <h4>ADMIN</h4>
+        <button onclick="loadSection('userMgmt')">🛡 User Management</button>
+        <button onclick="loadSection('gst')">📊 GST</button>
+        <button onclick="loadSection('export')">📤 Export</button>
       </div>
 
-      <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.12);padding-top:10px;">
-        <button onclick="logout()">🚪 Logout</button>
-      </div>
+      <button onclick="logout()" style="margin-top:20px;">🚪 Logout</button>
     </aside>
 
-    <!-- Header -->
-    <header class="appHeader">
-     <img src="assets/logo.png" alt="SVV">
-      <strong>Shiv Video Vision</strong>
-
-      <div style="margin-left:auto;display:flex;gap:10px;align-items:center;">
-        <span id="netStatus" style="font-size:12px;"></span>
-        <span id="syncCount" style="font-size:12px;"></span>
-        <button class="iconBtn" onclick="toggleTheme()" title="Theme">🌙</button>
-      <button class="iconBtn menuBtn" id="btnMenu" title="Menu"></button>
-
-     
-      </div>
-    </header>
-
-    <!-- Main fixed content (no scroll) -->
-    <main class="appMain" id="content"></main>
-
+    <main id="desktopHost" class="desktopMainHost"></main>
   </div>
 
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/sync.js"></script>
-  <script src="js/accounting.js"></script>
+  <!-- MOBILE CONTENT -->
+  <main class="appMain mobileOnly" id="mobileHost"></main>
+  <div id="content"></div>
 
-  <script>
-    // Drawer controls
-    const drawer = document.getElementById("drawer");
-    const overlay = document.getElementById("drawerOverlay");
+</div>
 
-    function openDrawer() {
-      drawer.classList.add("open");
-      overlay.classList.add("open");
-    }
-    function closeDrawer() {
-      drawer.classList.remove("open");
-      overlay.classList.remove("open");
-    }
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/accounting.js"></script>
+<script src="js/nozoom.js?v=1"></script>
 
-    document.getElementById("btnMenu").addEventListener("click", openDrawer);
-    overlay.addEventListener("click", closeDrawer);
+<script>
+  /* CONTENT PLACEMENT */
+  function placeContent(){
+    const c=document.getElementById("content");
+    const d=document.getElementById("desktopHost");
+    const m=document.getElementById("mobileHost");
+    if(window.matchMedia("(min-width:900px)").matches) d.appendChild(c);
+    else m.appendChild(c);
+  }
+  window.addEventListener("resize",placeContent);
+  placeContent();
 
-    // Navigation helper to build a back stack
-    window.__navStack = window.__navStack || ["dashboard"];
+  /* DRAWER */
+  const drawer=document.getElementById("drawer");
+  const overlay=document.getElementById("drawerOverlay");
+  function openDrawer(){ drawer.classList.add("open"); overlay.classList.add("open"); }
+  function closeDrawer(){ drawer.classList.remove("open"); overlay.classList.remove("open"); }
+  document.getElementById("btnMenu")?.addEventListener("click",openDrawer);
+  overlay?.addEventListener("click",closeDrawer);
 
-    window.navTo = async function(section) {
-      if (section === "dashboard") {
-        window.__navStack.push("dashboard");
-        showDashboard();
-        return;
-      }
-      window.__navStack.push(section);
-      await loadSection(section);
-    };
-
-    function goBack() {
-      if (!window.__navStack || window.__navStack.length <= 1) {
-        showDashboard();
-        window.__navStack = ["dashboard"];
-        return;
-      }
-      window.__navStack.pop();
-      const prev = window.__navStack[window.__navStack.length - 1] || "dashboard";
-      if (prev === "dashboard") showDashboard();
-      else loadSection(prev);
-    }
-
-    document.getElementById("btnBack").addEventListener("click", goBack);
-  </script>
-  <script src="js/nozoom.js?v=1"></script>
+  /* NAV STACK */
+  window.__navStack=window.__navStack||["dashboard"];
+  window.navTo=async function(section){
+    window.__navStack.push(section);
+    section==="dashboard"?showDashboard():loadSection(section);
+  };
+</script>
+<script src="js/nozoom.js"></script>
 </body>
 </html>
