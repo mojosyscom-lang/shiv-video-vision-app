@@ -267,3 +267,55 @@ button:disabled {
   z-index: 5;
   background: transparent;
 }
+
+/* ================================
+   User Management: Enable/Disable
+   (LOOK ONLY - no logic changes)
+================================ */
+
+/* Make the toggle button look like a pill */
+.userMgmtBtn{
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform .05s ease, background .18s ease, border-color .18s ease;
+}
+
+/* Hover/press */
+.userMgmtBtn:hover{
+  background: rgba(255,255,255,.10);
+}
+.userMgmtBtn:active{
+  transform: scale(0.99);
+}
+
+/* Enable style (green) */
+.userMgmtBtn.isEnable{
+  border-color: rgba(16,185,129,.45);
+  background: rgba(16,185,129,.14);
+}
+
+/* Disable style (red) */
+.userMgmtBtn.isDisable{
+  border-color: rgba(220,38,38,.45);
+  background: rgba(220,38,38,.14);
+}
+
+/* Dark mode tweaks */
+body.dark .userMgmtBtn{
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+}
+body.dark .userMgmtBtn.isEnable{
+  border-color: rgba(16,185,129,.50);
+  background: rgba(16,185,129,.12);
+}
+body.dark .userMgmtBtn.isDisable{
+  border-color: rgba(220,38,38,.50);
+  background: rgba(220,38,38,.12);
+}
