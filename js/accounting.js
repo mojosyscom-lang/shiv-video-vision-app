@@ -239,6 +239,7 @@ document.addEventListener("DOMContentLoaded", () => {
   <label>Month</label>
   <select id="hol_month">
     <option value="">All</option>
+     ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
   </select>
 
   <label style="margin-top:10px;">Worker</label>
