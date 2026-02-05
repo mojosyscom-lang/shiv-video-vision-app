@@ -244,85 +244,111 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    /* ==========================================================
-       ✅ NEW: Holidays (Option A)  ✅ UPDATED: month dropdown + worker filter + total + auto reload
-       ========================================================== */
-    if (type === "holidays") {
-      // ✅ fast paint
-      content.innerHTML = `<div class="card"><h2>Holidays</h2><p>Loading…</p></div>`;
+   /* ==========================================================
+   ✅ NEW: Holidays (Option A)  ✅ UPDATED: month dropdown + worker filter + total
+   ✅ CHANGE: Stop auto-load until user selects month/worker or clicks Load
+   ========================================================== */
+if (type === "holidays") {
+  // ✅ fast paint
+  content.innerHTML = `<div class="card"><h2>Holidays</h2><p>Loading…</p></div>`;
 
-      // ✅ parallel
-      const [workers, months] = await Promise.all([
-        getActiveWorkers(),
-        getMonthOptionsMerged()
-      ]);
+  // ✅ parallel
+  const [workers, months] = await Promise.all([
+    getActiveWorkers(),
+    getMonthOptionsMerged()
+  ]);
 
-      content.innerHTML = `
-        <div class="card">
-          <h2>Holidays</h2>
+  content.innerHTML = `
+    <div class="card">
+      <h2>Holidays</h2>
 
-          <div class="card" style="margin-top:12px;">
-            <h3 style="margin-top:0;">Add Holiday</h3>
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Add Holiday</h3>
 
-            <label>Worker</label>
-            <select id="hol_worker">
-              ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
-            </select>
+        <label>Worker</label>
+        <select id="hol_worker">
+          ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+        </select>
 
-            <label style="margin-top:10px;">Holiday Date</label>
-            <input id="hol_date" type="date" value="${todayISO()}">
+        <label style="margin-top:10px;">Holiday Date</label>
+        <input id="hol_date" type="date" value="${todayISO()}">
 
-            <label style="margin-top:10px;">Reason (optional)</label>
-            <input id="hol_reason" placeholder="Optional">
+        <label style="margin-top:10px;">Reason (optional)</label>
+        <input id="hol_reason" placeholder="Optional">
 
-            <button class="primary" id="btn_hol_add" style="margin-top:14px;">➕ Save Holiday</button>
-            <p style="font-size:12px;color:#777;margin-top:10px;">
-              Month will auto-save as <b>Feb-2026</b> format.
-            </p>
-          </div>
+        <button class="primary" id="btn_hol_add" style="margin-top:14px;">➕ Save Holiday</button>
+        <p style="font-size:12px;color:#777;margin-top:10px;">
+          Month will auto-save as <b>Feb-2026</b> format.
+        </p>
+      </div>
 
-          <div class="card" style="margin-top:12px;">
-            <h3 style="margin-top:0;">View Holidays</h3>
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">View Holidays</h3>
 
-            <label>Month</label>
-            <select id="hol_month">
-              <option value="">All</option>
-              ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
-            </select>
+        <label>Month</label>
+        <select id="hol_month">
+          <option value="">All</option>
+          ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+        </select>
 
-            <label style="margin-top:10px;">Worker</label>
-            <select id="hol_worker_filter">
-              <option value="">All</option>
-              ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
-            </select>
+        <label style="margin-top:10px;">Worker</label>
+        <select id="hol_worker_filter">
+          <option value="">All</option>
+          ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+        </select>
 
-            <div style="display:flex;gap:10px;margin-top:12px;">
-              <button class="primary" id="btn_hol_load">Load</button>
-            </div>
-
-            <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
-            <div id="hol_list" style="margin-top:12px;"></div>
-          </div>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="primary" id="btn_hol_load">Load</button>
         </div>
-      `;
 
-      // default current month if available
-      const cur = monthLabelNow();
-      const holSel = document.getElementById("hol_month");
-      if (holSel && months.map(normMonthLabel).includes(normMonthLabel(cur))) {
-        holSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(cur)) || "";
-      }
+        <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+        <div id="hol_list" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  `;
 
-      document.getElementById("btn_hol_add").addEventListener("click", addHoliday);
-      document.getElementById("btn_hol_load").addEventListener("click", loadHolidays);
+  // default current month if available (selection only, NO auto-load)
+  const cur = monthLabelNow();
+  const holSel = document.getElementById("hol_month");
+  if (holSel && months.map(normMonthLabel).includes(normMonthLabel(cur))) {
+    holSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(cur)) || "";
+  }
 
-      // ✅ AUTO-RELOAD (requested)
-      document.getElementById("hol_month")?.addEventListener("change", loadHolidays);
-      document.getElementById("hol_worker_filter")?.addEventListener("change", loadHolidays);
+  // ✅ start empty for faster page load
+  const box = document.getElementById("hol_list");
+  const totalBox = document.getElementById("hol_total");
+  if (box) box.innerHTML = "";
+  if (totalBox) totalBox.textContent = "";
 
-      loadHolidays();
+  // ✅ helper: only load when month OR worker filter selected
+  function maybeLoadHolidays() {
+    const month = (document.getElementById("hol_month")?.value || "").trim();
+    const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
+
+    // If both are All => keep empty (no API call)
+    if (!month && !workerFilter) {
+      const b = document.getElementById("hol_list");
+      const t = document.getElementById("hol_total");
+      if (b) b.innerHTML = "";
+      if (t) t.textContent = "";
       return;
     }
+
+    loadHolidays();
+  }
+
+  document.getElementById("btn_hol_add").addEventListener("click", addHoliday);
+
+  // Load button triggers maybeLoad (not direct)
+  document.getElementById("btn_hol_load").addEventListener("click", maybeLoadHolidays);
+
+  // Change triggers maybeLoad (not direct)
+  document.getElementById("hol_month")?.addEventListener("change", maybeLoadHolidays);
+  document.getElementById("hol_worker_filter")?.addEventListener("change", maybeLoadHolidays);
+
+  // ❌ removed: loadHolidays();  (no auto-load)
+  return;
+}
 
     /* ==========================================================
        Existing: Upad (UPDATED to use Workers master list)
