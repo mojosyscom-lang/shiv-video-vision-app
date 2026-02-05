@@ -165,8 +165,6 @@ document.addEventListener("DOMContentLoaded", () => {
     ]);
 
     const upadMap = (dash && dash.upad_by_worker) ? dash.upad_by_worker : {};
-    const upadLabels = Object.keys(upadMap);
-    const upadValues = upadLabels.map(k => Number(upadMap[k] || 0));
     const upadTotal = Object.values(upadMap).reduce((a,b)=>a+Number(b||0),0);
 
     content.innerHTML = `
