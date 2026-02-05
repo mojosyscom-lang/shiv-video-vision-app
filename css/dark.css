@@ -138,3 +138,14 @@ body.dark aside button:hover {
     border: 0 !important;
   }
 }
+
+/* User management toggle buttons – dark mode */
+body.dark .userToggleBtn[data-status="DISABLED"] {
+  background: #2ecc91;
+  color: #000;
+}
+
+body.dark .userToggleBtn[data-status="ACTIVE"] {
+  background: #ff6b55;
+  color: #000;
+}
