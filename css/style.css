@@ -321,3 +321,47 @@ body.dark .userMgmtBtn.isDisable{
   border-color: rgba(220,38,38,.50);
   background: rgba(220,38,38,.12);
 }
+
+/* =====================================================
+   USER MANAGEMENT – ENABLE / DISABLE PILL BUTTONS
+   Variant A
+===================================================== */
+
+.userToggleBtn {
+  min-width: 96px;
+  padding: 8px 14px;
+  border-radius: 999px; /* pill */
+  border: 0;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .2s ease, opacity .2s ease;
+}
+
+/* ENABLE state */
+.userToggleBtn[data-status="DISABLED"] {
+  background: #1fa971;
+  color: #fff;
+}
+
+/* DISABLE state */
+.userToggleBtn[data-status="ACTIVE"] {
+  background: #e5533d;
+  color: #fff;
+}
+
+/* Hover */
+.userToggleBtn:hover {
+  opacity: 0.9;
+}
+
+/* Disabled / updating state */
+.userToggleBtn:disabled,
+.userToggleBtn.btn-saving {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
