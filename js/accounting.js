@@ -2,6 +2,42 @@ document.addEventListener("DOMContentLoaded", () => {
   const role = localStorage.getItem("role") || "";
   const content = document.getElementById("content");
 
+  /* =========================
+     Helpers (NEW)
+  ========================== */
+
+  function monthLabelFromISO(iso) {
+    // "2026-02-05" => "Feb-2026"
+    const d = new Date(iso + "T00:00:00Z");
+    const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()];
+    return `${m}-${d.getUTCFullYear()}`;
+  }
+
+  function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async function getActiveWorkers() {
+    // Uses new backend action listWorkers
+    const rows = await api({ action: "listWorkers" });
+    const list = (rows || [])
+      .filter(w => String(w.status || "ACTIVE").toUpperCase() === "ACTIVE")
+      .map(w => String(w.worker || "").trim())
+      .filter(Boolean)
+      .sort((a,b) => a.localeCompare(b));
+    return list;
+  }
+
+  async function getSalaryMonthsFromUpad() {
+    // Keep existing meta source for months
+    const meta = await api({ action: "getUpadMeta" });
+    return (meta.months || []).slice();
+  }
+
+  /* =========================
+     UI
+  ========================== */
+
   function showDashboard() {
     content.innerHTML = `
       <div class="card">
@@ -18,20 +54,159 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    /* ==========================================================
+       ✅ NEW: Workers (Option A)
+       ========================================================== */
+    if (type === "workers") {
+      if (!(role === "superadmin" || role === "owner")) {
+        content.innerHTML = `<div class="card">Unauthorized</div>`;
+        return;
+      }
+
+      const workers = await api({ action: "listWorkers" });
+
+      content.innerHTML = `
+        <div class="card">
+          <h2>Workers</h2>
+
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">Add / Edit Worker</h3>
+
+            <label>Worker Name</label>
+            <input id="wk_name" placeholder="e.g. Raju">
+
+            <label style="margin-top:10px;">Monthly Salary</label>
+            <input id="wk_salary" type="number" placeholder="e.g. 15000">
+
+            <label style="margin-top:10px;">Start Date</label>
+            <input id="wk_start" type="date" value="${todayISO()}">
+
+            <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+              <button class="primary" id="btn_wk_add">➕ Save Worker</button>
+              <button class="primary" id="btn_wk_update">✏️ Update Worker</button>
+            </div>
+
+            <p style="font-size:12px;color:#777;margin-top:10px;">
+              Tip: To edit, type the same worker name and press Update Worker.
+            </p>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">Worker List</h3>
+
+            ${(workers || []).length ? `
+              ${(workers || []).map(w => `
+                <div style="padding:10px 0;border-top:1px solid #eee;">
+                  <strong>${escapeHtml(w.worker)}</strong><br>
+                  Salary: ₹${Number(w.monthly_salary || 0).toFixed(0)}<br>
+                  Start: ${escapeHtml(w.start_date || "")}<br>
+                  Status: <strong>${escapeHtml(w.status || "ACTIVE")}</strong><br>
+                  <span style="font-size:12px;color:#777;">Added by: ${escapeHtml(w.added_by || "")}</span><br><br>
+
+                  <button class="userToggleBtn"
+                    data-worker="${escapeAttr(w.worker)}"
+                    data-next="${escapeAttr(String(w.status || "ACTIVE").toUpperCase() === "ACTIVE" ? "INACTIVE" : "ACTIVE")}">
+                    ${String(w.status || "ACTIVE").toUpperCase() === "ACTIVE" ? "Set Inactive" : "Set Active"}
+                  </button>
+                </div>
+              `).join("")}
+            ` : `<p>No workers found. Add your first worker above.</p>`}
+          </div>
+        </div>
+      `;
+
+      // Add worker
+      document.getElementById("btn_wk_add").addEventListener("click", addWorker);
+
+      // Update worker
+      document.getElementById("btn_wk_update").addEventListener("click", updateWorker);
+
+      // Toggle worker status (lock per-button)
+      content.querySelectorAll("button[data-worker]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const unlock = lockButton(btn, "Updating...");
+          try {
+            await updateWorkerStatus(btn.dataset.worker, btn.dataset.next);
+          } finally {
+            setTimeout(unlock, 600);
+          }
+        });
+      });
+
+      return;
+    }
+
+    /* ==========================================================
+       ✅ NEW: Holidays (Option A)
+       ========================================================== */
+    if (type === "holidays") {
+      const workers = await getActiveWorkers();
+
+      content.innerHTML = `
+        <div class="card">
+          <h2>Holidays</h2>
+
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">Add Holiday</h3>
+
+            <label>Worker</label>
+            <select id="hol_worker">
+              ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+            </select>
+
+            <label style="margin-top:10px;">Holiday Date</label>
+            <input id="hol_date" type="date" value="${todayISO()}">
+
+            <label style="margin-top:10px;">Reason (optional)</label>
+            <input id="hol_reason" placeholder="Optional">
+
+            <button class="primary" id="btn_hol_add" style="margin-top:14px;">➕ Save Holiday</button>
+            <p style="font-size:12px;color:#777;margin-top:10px;">
+              Month will auto-save as <b>Feb-2026</b> format.
+            </p>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">View Holidays</h3>
+
+            <label>Month (optional)</label>
+            <input id="hol_month" placeholder="e.g. Feb-2026" value="${monthLabelFromISO(todayISO())}">
+            <div style="display:flex;gap:10px;margin-top:12px;">
+              <button class="primary" id="btn_hol_load">Load</button>
+            </div>
+
+            <div id="hol_list" style="margin-top:12px;"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("btn_hol_add").addEventListener("click", addHoliday);
+      document.getElementById("btn_hol_load").addEventListener("click", loadHolidays);
+      // auto load current month
+      loadHolidays();
+      return;
+    }
+
+    /* ==========================================================
+       Existing: Upad (UPDATED to use Workers master list)
+       ========================================================== */
     if (type === "upad") {
       const meta = await api({ action: "getUpadMeta" });
+      const workers = await getActiveWorkers();
+
       content.innerHTML = `
         <div class="card">
           <h2>Upad</h2>
-          <input id="upad_worker" list="workerList" placeholder="Worker name">
-          <datalist id="workerList">
-            ${(meta.workers || []).map(w => `<option value="${escapeAttr(w)}"></option>`).join("")}
-          </datalist>
+
+          <label>Worker</label>
+          <select id="upad_worker">
+            ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+          </select>
           <br><br>
 
           <input id="upad_amount" type="number" placeholder="Amount"><br><br>
 
-          <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)">
+          <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)" value="${monthLabelFromISO(todayISO())}">
           <datalist id="monthList">
             ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}"></option>`).join("")}
           </datalist>
@@ -44,6 +219,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    /* ==========================================================
+       Existing: Expenses (unchanged)
+       ========================================================== */
     if (type === "expenses") {
       content.innerHTML = `
         <div class="card">
@@ -66,8 +244,12 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    /* ==========================================================
+       Existing: Salary (UPDATED view + dropdown uses workers master)
+       ========================================================== */
     if (type === "salary") {
-      const meta = await api({ action: "getUpadMeta" });
+      const months = await getSalaryMonthsFromUpad();
+      const workers = await getActiveWorkers();
 
       content.innerHTML = `
         <div class="card">
@@ -76,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <label>Month</label>
           <select id="sal_month">
             <option value="">All</option>
-            ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+            ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
           </select>
           <br><br>
 
@@ -92,7 +274,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           <label>Worker</label>
           <select id="sal_worker">
-            ${(meta.workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+            ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
           </select>
           <br><br>
 
@@ -101,22 +283,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
           <label>Month</label>
           <select id="sal_pay_month">
-            ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+            ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
           </select>
           <br><br>
 
           <button class="primary" id="btn_sal_pay">Add Payment</button>
           <p style="color:#777;font-size:12px;margin-top:10px;">
-            Payments are saved in <b>salary_payments</b> and deducted from Upad total.
+            Payments are saved in <b>salary_payments</b> and deducted from payable salary.
           </p>
         </div>
       `;
+
+      // default month select current label if exists
+      const cur = monthLabelFromISO(todayISO());
+      const salMonth = document.getElementById("sal_month");
+      if (salMonth && months.includes(cur)) salMonth.value = cur;
+
+      const payMonth = document.getElementById("sal_pay_month");
+      if (payMonth && months.includes(cur)) payMonth.value = cur;
 
       document.getElementById("btn_sal_load").addEventListener("click", loadSalarySummary);
       document.getElementById("btn_sal_pay").addEventListener("click", addSalaryPayment);
       return;
     }
 
+    /* ==========================================================
+       Existing: User Management (unchanged)
+       ========================================================== */
     if (type === "userMgmt") {
       if (role !== "superadmin") {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
@@ -135,16 +328,12 @@ document.addEventListener("DOMContentLoaded", () => {
               Status: <strong>${escapeHtml(u.status)}</strong><br>
               Last login: ${u.last_login || "Never"}<br><br>
 
-              <!-- ONLY CHANGE: button class for better look -->
-              
-
               <button class="userToggleBtn"
-  data-status="${escapeAttr(u.status)}"
-  data-target="${escapeAttr(u.username)}"
-  data-next="${escapeAttr(u.status === "ACTIVE" ? "DISABLED" : "ACTIVE")}">
-  ${u.status === "ACTIVE" ? "Disable" : "Enable"}
-</button>
-
+                data-status="${escapeAttr(u.status)}"
+                data-target="${escapeAttr(u.username)}"
+                data-next="${escapeAttr(u.status === "ACTIVE" ? "DISABLED" : "ACTIVE")}">
+                ${u.status === "ACTIVE" ? "Disable" : "Enable"}
+              </button>
             </div>
           `).join("")}
         </div>
@@ -152,7 +341,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       content.querySelectorAll("button[data-target]").forEach(btn => {
         btn.addEventListener("click", async () => {
-          // lock THIS specific button so they can’t spam clicks
           const unlock = lockButton(btn, "Updating...");
           try {
             await toggleUser(btn.dataset.target, btn.dataset.next);
@@ -241,6 +429,10 @@ document.addEventListener("DOMContentLoaded", () => {
     content.innerHTML = `<div class="card">Section not found: ${escapeHtml(type)}</div>`;
   }
 
+  /* =========================
+     Existing actions
+  ========================== */
+
   async function addUpad() {
     const btn = document.getElementById("btn_upad");
     const unlock = lockButton(btn, "Saving...");
@@ -254,7 +446,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const r = await apiSafe({
         action: "addUpad",
-        date: new Date().toISOString().slice(0, 10),
+        date: todayISO(),
         worker,
         amount,
         month
@@ -263,7 +455,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (r && r.queued) alert("Saved offline. Will sync when online.");
       else alert("Upad added");
 
-      document.getElementById("upad_worker").value = "";
       document.getElementById("upad_amount").value = "";
     } finally {
       setTimeout(unlock, 600);
@@ -283,7 +474,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const r = await apiSafe({
         action: "addExpense",
-        date: new Date().toISOString().slice(0, 10),
+        date: todayISO(),
         category,
         desc,
         amount
@@ -313,21 +504,30 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // ✅ Updated table for Option A output
       box.innerHTML = `
         <h3>Summary ${month ? "(" + escapeHtml(month) + ")" : ""}</h3>
         <table style="width:100%;border-collapse:collapse;">
           <tr>
             <th align="left">Worker</th>
+            <th align="right">Salary</th>
+            <th align="right">Prorated</th>
             <th align="right">Upad</th>
+            <th align="right">Holidays</th>
+            <th align="right">Deduction</th>
             <th align="right">Paid</th>
             <th align="right">Balance</th>
           </tr>
           ${rows.map(r => `
             <tr style="border-top:1px solid #eee;">
               <td>${escapeHtml(r.worker)}</td>
-              <td align="right">₹${Number(r.upad_total).toFixed(0)}</td>
-              <td align="right">₹${Number(r.paid_total).toFixed(0)}</td>
-              <td align="right"><strong>₹${Number(r.balance).toFixed(0)}</strong></td>
+              <td align="right">₹${Number(r.monthly_salary || 0).toFixed(0)}</td>
+              <td align="right">₹${Number(r.prorated_salary || 0).toFixed(0)}</td>
+              <td align="right">₹${Number(r.upad_total || 0).toFixed(0)}</td>
+              <td align="right">${Number(r.holiday_count || 0).toFixed(0)}</td>
+              <td align="right">₹${Number(r.holiday_deduction || 0).toFixed(0)}</td>
+              <td align="right">₹${Number(r.paid_total || 0).toFixed(0)}</td>
+              <td align="right"><strong>₹${Number(r.balance || 0).toFixed(0)}</strong></td>
             </tr>
           `).join("")}
         </table>
@@ -350,7 +550,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const r = await apiSafe({
         action: "addSalaryPayment",
-        date: new Date().toISOString().slice(0, 10),
+        date: todayISO(),
         worker,
         amount,
         month
@@ -375,6 +575,153 @@ document.addEventListener("DOMContentLoaded", () => {
     if (r && r.error) return;
     alert(`Updated: ${targetUsername} → ${status}`);
     loadSection("userMgmt");
+  }
+
+  /* ==========================================================
+     ✅ ADDED: Workers + Holidays functions (Option A)
+     ========================================================== */
+
+  async function addWorker() {
+    const btn = document.getElementById("btn_wk_add");
+    const unlock = lockButton(btn, "Saving...");
+
+    try {
+      const worker = document.getElementById("wk_name").value.trim();
+      const monthly_salary = Number(document.getElementById("wk_salary").value || 0);
+      const start_date = document.getElementById("wk_start").value;
+
+      if (!worker || !monthly_salary || !start_date) {
+        alert("Please fill worker name, salary and start date");
+        return;
+      }
+
+      const r = await api({
+        action: "addWorker",
+        worker,
+        monthly_salary,
+        start_date
+      });
+
+      if (r && r.error) return;
+
+      alert("Worker saved");
+      loadSection("workers");
+    } finally {
+      setTimeout(unlock, 700);
+    }
+  }
+
+  async function updateWorker() {
+    const btn = document.getElementById("btn_wk_update");
+    const unlock = lockButton(btn, "Updating...");
+
+    try {
+      const worker = document.getElementById("wk_name").value.trim();
+      const monthly_salary = Number(document.getElementById("wk_salary").value || 0);
+      const start_date = document.getElementById("wk_start").value;
+
+      if (!worker || !monthly_salary || !start_date) {
+        alert("Please fill worker name, salary and start date");
+        return;
+      }
+
+      const r = await api({
+        action: "updateWorker",
+        worker,
+        monthly_salary,
+        start_date
+      });
+
+      if (r && r.error) return;
+
+      alert("Worker updated");
+      loadSection("workers");
+    } finally {
+      setTimeout(unlock, 700);
+    }
+  }
+
+  async function updateWorkerStatus(worker, status) {
+    const r = await api({
+      action: "updateWorkerStatus",
+      worker,
+      status
+    });
+
+    if (r && r.error) return;
+    alert(`Updated: ${worker} → ${status}`);
+    loadSection("workers");
+  }
+
+  async function addHoliday() {
+    const btn = document.getElementById("btn_hol_add");
+    const unlock = lockButton(btn, "Saving...");
+
+    try {
+      const worker = document.getElementById("hol_worker").value.trim();
+      const date = document.getElementById("hol_date").value;
+      const reason = document.getElementById("hol_reason").value.trim();
+
+      if (!worker || !date) {
+        alert("Select worker and date");
+        return;
+      }
+
+      const r = await api({
+        action: "addHoliday",
+        worker,
+        date,
+        reason
+      });
+
+      if (r && r.error) return;
+
+      alert("Holiday saved");
+      document.getElementById("hol_reason").value = "";
+      // refresh list
+      loadHolidays();
+    } finally {
+      setTimeout(unlock, 700);
+    }
+  }
+
+  async function loadHolidays() {
+    const btn = document.getElementById("btn_hol_load");
+    const unlock = lockButton(btn, "Loading...");
+
+    try {
+      const month = (document.getElementById("hol_month")?.value || "").trim();
+      const rows = await api({ action: "listHolidays", month });
+
+      const box = document.getElementById("hol_list");
+      if (!box) return;
+
+      if (!rows || rows.length === 0) {
+        box.innerHTML = `<p>No holidays found.</p>`;
+        return;
+      }
+
+      box.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Date</th>
+            <th align="left">Worker</th>
+            <th align="left">Month</th>
+            <th align="left">Reason</th>
+          </tr>
+          ${rows.map(r => `
+            <tr style="border-top:1px solid #eee;">
+              <td>${escapeHtml(r.date || "")}</td>
+              <td>${escapeHtml(r.worker || "")}</td>
+              <td>${escapeHtml(r.month || "")}</td>
+              <td>${escapeHtml(r.reason || "")}</td>
+            </tr>
+          `).join("")}
+        </table>
+      `;
+    } finally {
+      setTimeout(unlock, 400);
+    }
   }
 
   /* ==========================================================
