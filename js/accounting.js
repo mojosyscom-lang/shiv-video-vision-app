@@ -135,7 +135,8 @@ document.addEventListener("DOMContentLoaded", () => {
               Status: <strong>${escapeHtml(u.status)}</strong><br>
               Last login: ${u.last_login || "Never"}<br><br>
 
-              <button class="primary"
+              <!-- ONLY CHANGE: button class for better look -->
+              <button class="userMgmtBtn ${u.status === "ACTIVE" ? "isDisable" : "isEnable"}"
                 data-target="${escapeAttr(u.username)}"
                 data-next="${escapeAttr(u.status === "ACTIVE" ? "DISABLED" : "ACTIVE")}">
                 ${u.status === "ACTIVE" ? "Disable" : "Enable"}
