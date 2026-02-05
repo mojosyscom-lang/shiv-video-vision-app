@@ -482,3 +482,22 @@ table tr:last-child td{
 .dashActivity { display:flex; flex-direction:column; gap:10px; }
 .dashActRow { display:flex; justify-content:space-between; gap:12px; padding-top:10px; border-top:1px solid #eee; }
 .dashActTime { color:#777; font-size:12px; white-space:nowrap; }
+.dashGrid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; margin-top:12px; }
+@media (min-width: 900px){ .dashGrid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+
+.dashStat { border-radius:14px; padding:14px; border:1px solid rgba(0,0,0,0.06); }
+.dashStatLabel { color:rgba(0,0,0,0.65); font-size:12px; }
+.dashStatValue { font-size:24px; font-weight:800; margin-top:6px; }
+
+.dashBlue   { background: linear-gradient(135deg, #e8f2ff, #ffffff); border-color:#cfe3ff; }
+.dashGreen  { background: linear-gradient(135deg, #e9fff1, #ffffff); border-color:#c9f2d7; }
+.dashOrange { background: linear-gradient(135deg, #fff2e5, #ffffff); border-color:#ffd7b0; }
+.dashPurple { background: linear-gradient(135deg, #f2edff, #ffffff); border-color:#d7c9ff; }
+
+.dashCard { background:#fff; border:1px solid #eee; border-radius:14px; padding:14px; }
+.dashCardTitle { font-weight:800; margin-bottom:10px; }
+.dashSmall { color:#777; font-size:12px; }
+
+.dashActivity { display:flex; flex-direction:column; gap:10px; }
+.dashActRow { display:flex; justify-content:space-between; gap:12px; padding-top:10px; border-top:1px solid #eee; }
+.dashActTime { color:#777; font-size:12px; white-space:nowrap; }
