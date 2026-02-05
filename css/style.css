@@ -451,3 +451,34 @@ table tr:last-child td{
   border-bottom:0;
 }
 
+.dashHeader { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; }
+.dashSub { margin-top:6px; color:#666; font-size:12px; }
+
+.dashGrid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px; margin-top:12px; }
+@media (min-width: 900px){ .dashGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.dashStat { background:#fff; border:1px solid #eee; border-radius:14px; padding:14px; }
+.dashStatLabel { color:#666; font-size:12px; }
+.dashStatValue { font-size:24px; font-weight:800; margin-top:6px; }
+
+.dashCard { background:#fff; border:1px solid #eee; border-radius:14px; padding:14px; }
+.dashCardTitle { font-weight:800; margin-bottom:10px; }
+
+.dashDonutWrap { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+.dashDonutMeta { min-width:160px; }
+.dashSmall { color:#777; font-size:12px; }
+
+.dashLegend { margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+.dashLegendRow { display:flex; align-items:center; gap:10px; }
+.dashDot { width:10px; height:10px; border-radius:999px; background:#bbb; display:inline-block; }
+.dashLegendRow .dashDot[data-i="0"] { background:hsl(0 70% 55%); }
+.dashLegendRow .dashDot[data-i="1"] { background:hsl(55 70% 55%); }
+.dashLegendRow .dashDot[data-i="2"] { background:hsl(110 70% 55%); }
+.dashLegendRow .dashDot[data-i="3"] { background:hsl(165 70% 55%); }
+.dashLegendRow .dashDot[data-i="4"] { background:hsl(220 70% 55%); }
+.dashLegendName { flex:1; }
+.dashLegendVal { font-weight:700; }
+
+.dashActivity { display:flex; flex-direction:column; gap:10px; }
+.dashActRow { display:flex; justify-content:space-between; gap:12px; padding-top:10px; border-top:1px solid #eee; }
+.dashActTime { color:#777; font-size:12px; white-space:nowrap; }
