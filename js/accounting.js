@@ -17,6 +17,28 @@ document.addEventListener("DOMContentLoaded", () => {
     return new Date().toISOString().slice(0, 10);
   }
 
+  function monthLabelNow() {
+    return monthLabelFromISO(todayISO());
+  }
+
+  function normMonthLabel(s) {
+    // normalize spaces + casing format safety
+    return String(s || "").trim().replace(/\s+/g, "");
+  }
+
+  function monthKey(label) {
+    // "Feb-2026" => 202602 (for sorting/filtering)
+    const x = normMonthLabel(label);
+    const parts = x.split("-");
+    if (parts.length !== 2) return null;
+    const monStr = parts[0];
+    const year = Number(parts[1]);
+    const idxMap = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+    const mm = idxMap[monStr];
+    if (!mm || !year) return null;
+    return year * 100 + mm;
+  }
+
   async function getActiveWorkers() {
     // Uses new backend action listWorkers
     const rows = await api({ action: "listWorkers" });
@@ -32,6 +54,36 @@ document.addEventListener("DOMContentLoaded", () => {
     // Keep existing meta source for months
     const meta = await api({ action: "getUpadMeta" });
     return (meta.months || []).slice();
+  }
+
+  // ✅ NEW: get months from holidays too (so month dropdown works even if only holidays exist)
+  async function getMonthsFromHolidays() {
+    const rows = await api({ action: "listHolidays", month: "" }); // fetch all
+    const months = (rows || []).map(r => normMonthLabel(r.month));
+    return months.filter(Boolean);
+  }
+
+  // ✅ NEW: merge + filter future + sort newest first
+  async function getMonthOptionsMerged() {
+    const upadMonths = (await getSalaryMonthsFromUpad()).map(normMonthLabel);
+    const holMonths  = await getMonthsFromHolidays();
+
+    const set = new Set([...upadMonths, ...holMonths].filter(Boolean));
+
+    const nowKey = monthKey(monthLabelNow());
+
+    const list = [...set].filter(m => {
+      const k = monthKey(m);
+      if (!k) return false;
+      // remove future months (no March if current is Feb)
+      if (nowKey && k > nowKey) return false;
+      return true;
+    });
+
+    // newest first
+    list.sort((a,b) => (monthKey(b) || 0) - (monthKey(a) || 0));
+
+    return list;
   }
 
   /* =========================
@@ -115,13 +167,9 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
-      // Add worker
       document.getElementById("btn_wk_add").addEventListener("click", addWorker);
-
-      // Update worker
       document.getElementById("btn_wk_update").addEventListener("click", updateWorker);
 
-      // Toggle worker status (lock per-button)
       content.querySelectorAll("button[data-worker]").forEach(btn => {
         btn.addEventListener("click", async () => {
           const unlock = lockButton(btn, "Updating...");
@@ -182,7 +230,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       document.getElementById("btn_hol_add").addEventListener("click", addHoliday);
       document.getElementById("btn_hol_load").addEventListener("click", loadHolidays);
-      // auto load current month
       loadHolidays();
       return;
     }
@@ -245,11 +292,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /* ==========================================================
-       Existing: Salary (UPDATED view + dropdown uses workers master)
+       Existing: Salary (UPDATED month list + current month default)
        ========================================================== */
     if (type === "salary") {
-      const months = await getSalaryMonthsFromUpad();
+      const months = await getMonthOptionsMerged();  // ✅ changed
       const workers = await getActiveWorkers();
+
+      const current = monthLabelNow();
+      const hasCurrent = months.map(normMonthLabel).includes(normMonthLabel(current));
 
       content.innerHTML = `
         <div class="card">
@@ -283,7 +333,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
           <label>Month</label>
           <select id="sal_pay_month">
-            ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+            ${
+              months.length
+                ? months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")
+                : `<option value="${escapeAttr(current)}">${escapeHtml(current)}</option>`
+            }
           </select>
           <br><br>
 
@@ -295,12 +349,11 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
 
       // default month select current label if exists
-      const cur = monthLabelFromISO(todayISO());
       const salMonth = document.getElementById("sal_month");
-      if (salMonth && months.includes(cur)) salMonth.value = cur;
+      if (salMonth && hasCurrent) salMonth.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
 
       const payMonth = document.getElementById("sal_pay_month");
-      if (payMonth && months.includes(cur)) payMonth.value = cur;
+      if (payMonth && hasCurrent) payMonth.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || payMonth.value;
 
       document.getElementById("btn_sal_load").addEventListener("click", loadSalarySummary);
       document.getElementById("btn_sal_pay").addEventListener("click", addSalaryPayment);
@@ -678,7 +731,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       alert("Holiday saved");
       document.getElementById("hol_reason").value = "";
-      // refresh list
       loadHolidays();
     } finally {
       setTimeout(unlock, 700);
