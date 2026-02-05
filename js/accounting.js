@@ -227,7 +227,7 @@ document.addEventListener("DOMContentLoaded", () => {
         `).join("");
       }
     }
-
+}
 
 
 
