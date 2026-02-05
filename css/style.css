@@ -275,7 +275,7 @@ button:disabled {
 
 /* Make the toggle button look like a pill */
 .userMgmtBtn{
-  width: 100%;
+  width: 20%;
   padding: 12px 12px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,.14);
