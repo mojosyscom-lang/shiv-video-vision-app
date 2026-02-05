@@ -37,9 +37,12 @@ body.dark .card {
   box-shadow: none;
 }
 
-/* ---------- Drawer ---------- */
+/* ---------- Drawer (Variant A – Dark Glass) ---------- */
+/* CHANGED: keep glass + blur in dark mode */
 body.dark .drawer {
-  background: #0b0d12;
+  background: rgba(11,13,18,.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   color: #eee;
 }
 
@@ -52,7 +55,7 @@ body.dark .drawer button {
 }
 
 body.dark .drawer button:hover {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.10);
 }
 
 /* ---------- Drawer Overlay ---------- */
@@ -113,7 +116,7 @@ body.dark td {
   border-bottom: 1px solid #1f2330;
 }
 
-/* ---------- Layout compatibility (old aside layout) ---------- */
+/* ---------- Desktop sidebar compatibility ---------- */
 body.dark aside {
   background: #0b0d12;
   color: #eee;
