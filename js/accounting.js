@@ -3,6 +3,38 @@ document.addEventListener("DOMContentLoaded", () => {
   const content = document.getElementById("content");
 
   /* =========================
+     SPEED CACHE (NEW)
+  ========================== */
+  const CACHE = {
+    workersRaw: { data: null, at: 0 },
+    upadMeta: { data: null, at: 0 },
+    holidaysAll: { data: null, at: 0 },
+    monthsMerged: { data: null, at: 0 },
+    workersActive: { data: null, at: 0 }
+  };
+
+  function fresh(cacheKey, ttlMs) {
+    return CACHE[cacheKey]?.data && (Date.now() - CACHE[cacheKey].at) < ttlMs;
+  }
+
+  async function cachedApi(cacheKey, ttlMs, fn) {
+    if (fresh(cacheKey, ttlMs)) return CACHE[cacheKey].data;
+    const data = await fn();
+    CACHE[cacheKey].data = data;
+    CACHE[cacheKey].at = Date.now();
+    return data;
+  }
+
+  function invalidateCache(keys) {
+    (keys || []).forEach(k => {
+      if (CACHE[k]) {
+        CACHE[k].data = null;
+        CACHE[k].at = 0;
+      }
+    });
+  }
+
+  /* =========================
      Helpers (NEW)
   ========================== */
 
@@ -58,50 +90,57 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function getActiveWorkers() {
-    // Uses new backend action listWorkers
-    const rows = await api({ action: "listWorkers" });
+    // ✅ cached: workers list is reused in Upad/Salary/Holidays
+    const rows = await cachedApi("workersRaw", 60000, () => api({ action: "listWorkers" }));
     const list = (rows || [])
       .filter(w => String(w.status || "ACTIVE").toUpperCase() === "ACTIVE")
       .map(w => String(w.worker || "").trim())
       .filter(Boolean)
       .sort((a,b) => a.localeCompare(b));
+    // also cache computed list
+    CACHE.workersActive.data = list;
+    CACHE.workersActive.at = Date.now();
     return list;
   }
 
   async function getSalaryMonthsFromUpad() {
-    // Keep existing meta source for months
-    const meta = await api({ action: "getUpadMeta" });
+    // ✅ cached
+    const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
     return (meta.months || []).slice();
   }
 
-  // ✅ NEW: get months from holidays too (so month dropdown works even if only holidays exist)
+  // ✅ cached: get all holidays once (used for month options)
   async function getMonthsFromHolidays() {
-    const rows = await api({ action: "listHolidays", month: "" }); // fetch all
+    const rows = await cachedApi("holidaysAll", 60000, () => api({ action: "listHolidays", month: "" })); // fetch all
     const months = (rows || []).map(r => normMonthLabel(prettyMonth(r.month)));
     return months.filter(Boolean);
   }
 
-  // ✅ NEW: merge + filter future + sort newest first
+  // ✅ cached + parallel: merge + filter future + sort newest first
   async function getMonthOptionsMerged() {
-    const upadMonths = (await getSalaryMonthsFromUpad()).map(normMonthLabel);
-    const holMonths  = await getMonthsFromHolidays();
+    return cachedApi("monthsMerged", 60000, async () => {
+      const [upadMonthsRaw, holMonths] = await Promise.all([
+        getSalaryMonthsFromUpad(),
+        getMonthsFromHolidays()
+      ]);
 
-    const set = new Set([...upadMonths, ...holMonths].filter(Boolean));
+      const upadMonths = (upadMonthsRaw || []).map(normMonthLabel);
+      const set = new Set([...upadMonths, ...holMonths].filter(Boolean));
 
-    const nowKey = monthKey(monthLabelNow());
+      const nowKey = monthKey(monthLabelNow());
 
-    const list = [...set].filter(m => {
-      const k = monthKey(m);
-      if (!k) return false;
-      // remove future months (no March if current is Feb)
-      if (nowKey && k > nowKey) return false;
-      return true;
+      const list = [...set].filter(m => {
+        const k = monthKey(m);
+        if (!k) return false;
+        // remove future months (no March if current is Feb)
+        if (nowKey && k > nowKey) return false;
+        return true;
+      });
+
+      // newest first
+      list.sort((a,b) => (monthKey(b) || 0) - (monthKey(a) || 0));
+      return list;
     });
-
-    // newest first
-    list.sort((a,b) => (monthKey(b) || 0) - (monthKey(a) || 0));
-
-    return list;
   }
 
   /* =========================
@@ -133,7 +172,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const workers = await api({ action: "listWorkers" });
+      // ✅ fast paint
+      content.innerHTML = `<div class="card"><h2>Workers</h2><p>Loading…</p></div>`;
+
+      const workers = await cachedApi("workersRaw", 60000, () => api({ action: "listWorkers" }));
 
       content.innerHTML = `
         <div class="card">
@@ -206,8 +248,14 @@ document.addEventListener("DOMContentLoaded", () => {
        ✅ NEW: Holidays (Option A)  ✅ UPDATED: month dropdown + worker filter + total + auto reload
        ========================================================== */
     if (type === "holidays") {
-      const workers = await getActiveWorkers();
-      const months = await getMonthOptionsMerged(); // ✅ for dropdown
+      // ✅ fast paint
+      content.innerHTML = `<div class="card"><h2>Holidays</h2><p>Loading…</p></div>`;
+
+      // ✅ parallel
+      const [workers, months] = await Promise.all([
+        getActiveWorkers(),
+        getMonthOptionsMerged()
+      ]);
 
       content.innerHTML = `
         <div class="card">
@@ -233,29 +281,29 @@ document.addEventListener("DOMContentLoaded", () => {
             </p>
           </div>
 
-        <div class="card" style="margin-top:12px;">
-  <h3 style="margin-top:0;">View Holidays</h3>
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">View Holidays</h3>
 
-  <label>Month</label>
-  <select id="hol_month">
-    <option value="">All</option>
-     ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
-  </select>
+            <label>Month</label>
+            <select id="hol_month">
+              <option value="">All</option>
+              ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+            </select>
 
-  <label style="margin-top:10px;">Worker</label>
-  <select id="hol_worker_filter">
-    <option value="">All</option>
-    ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
-  </select>
+            <label style="margin-top:10px;">Worker</label>
+            <select id="hol_worker_filter">
+              <option value="">All</option>
+              ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+            </select>
 
-  <div style="display:flex;gap:10px;margin-top:12px;">
-    <button class="primary" id="btn_hol_load">Load</button>
-  </div>
+            <div style="display:flex;gap:10px;margin-top:12px;">
+              <button class="primary" id="btn_hol_load">Load</button>
+            </div>
 
-  <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
-  <div id="hol_list" style="margin-top:12px;"></div>
-</div>
-
+            <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+            <div id="hol_list" style="margin-top:12px;"></div>
+          </div>
+        </div>
       `;
 
       // default current month if available
@@ -280,8 +328,14 @@ document.addEventListener("DOMContentLoaded", () => {
        Existing: Upad (UPDATED to use Workers master list)
        ========================================================== */
     if (type === "upad") {
-      const meta = await api({ action: "getUpadMeta" });
-      const workers = await getActiveWorkers();
+      // ✅ fast paint
+      content.innerHTML = `<div class="card"><h2>Upad</h2><p>Loading…</p></div>`;
+
+      // ✅ parallel + cached meta/workers
+      const [meta, workers] = await Promise.all([
+        cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" })),
+        getActiveWorkers()
+      ]);
 
       content.innerHTML = `
         <div class="card">
@@ -337,8 +391,14 @@ document.addEventListener("DOMContentLoaded", () => {
        Existing: Salary (UPDATED month list + current month default)
        ========================================================== */
     if (type === "salary") {
-      const months = await getMonthOptionsMerged();  // ✅ changed
-      const workers = await getActiveWorkers();
+      // ✅ fast paint
+      content.innerHTML = `<div class="card"><h2>Salary</h2><p>Loading…</p></div>`;
+
+      // ✅ parallel + cached
+      const [months, workers] = await Promise.all([
+        getMonthOptionsMerged(),
+        getActiveWorkers()
+      ]);
 
       const current = monthLabelNow();
       const hasCurrent = months.map(normMonthLabel).includes(normMonthLabel(current));
@@ -409,6 +469,8 @@ document.addEventListener("DOMContentLoaded", () => {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
         return;
       }
+
+      content.innerHTML = `<div class="card"><h2>User Management</h2><p>Loading…</p></div>`;
 
       const users = await api({ action: "getUsers" });
 
@@ -496,6 +558,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      content.innerHTML = `<div class="card"><h2>Edit Password</h2><p>Loading…</p></div>`;
+
       const users = await api({ action: "getUsers" });
 
       content.innerHTML = `
@@ -550,6 +614,9 @@ document.addEventListener("DOMContentLoaded", () => {
       else alert("Upad added");
 
       document.getElementById("upad_amount").value = "";
+
+      // ✅ refresh cached months
+      invalidateCache(["upadMeta", "monthsMerged"]);
     } finally {
       setTimeout(unlock, 600);
     }
@@ -698,6 +765,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (r && r.error) return;
 
       alert("Worker saved");
+
+      // ✅ refresh cached workers
+      invalidateCache(["workersRaw", "workersActive"]);
+
       loadSection("workers");
     } finally {
       setTimeout(unlock, 700);
@@ -728,6 +799,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (r && r.error) return;
 
       alert("Worker updated");
+
+      // ✅ refresh cached workers
+      invalidateCache(["workersRaw", "workersActive"]);
+
       loadSection("workers");
     } finally {
       setTimeout(unlock, 700);
@@ -743,6 +818,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (r && r.error) return;
     alert(`Updated: ${worker} → ${status}`);
+
+    // ✅ refresh cached workers
+    invalidateCache(["workersRaw", "workersActive"]);
+
     loadSection("workers");
   }
 
@@ -771,6 +850,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       alert("Holiday saved");
       document.getElementById("hol_reason").value = "";
+
+      // ✅ refresh cached holidays + month options
+      invalidateCache(["holidaysAll", "monthsMerged"]);
+
       loadHolidays();
     } finally {
       setTimeout(unlock, 700);
@@ -778,61 +861,60 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadHolidays() {
-  const btn = document.getElementById("btn_hol_load");
-  const unlock = lockButton(btn, "Loading...");
+    const btn = document.getElementById("btn_hol_load");
+    const unlock = lockButton(btn, "Loading...");
 
-  try {
-    const month = (document.getElementById("hol_month")?.value || "").trim();
-    const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
+    try {
+      const month = (document.getElementById("hol_month")?.value || "").trim();
+      const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
 
-    const rows = await api({ action: "listHolidays", month });
+      const rows = await api({ action: "listHolidays", month });
 
-    const box = document.getElementById("hol_list");
-    const totalBox = document.getElementById("hol_total");
-    if (!box) return;
+      const box = document.getElementById("hol_list");
+      const totalBox = document.getElementById("hol_total");
+      if (!box) return;
 
-    // Filter on client-side by worker
-    const filtered = (rows || []).filter(r => {
-      if (!workerFilter) return true;
-      return String(r.worker || "").trim() === workerFilter;
-    });
+      // Filter on client-side by worker
+      const filtered = (rows || []).filter(r => {
+        if (!workerFilter) return true;
+        return String(r.worker || "").trim() === workerFilter;
+      });
 
-    if (!filtered.length) {
-      box.innerHTML = `<p>No holidays found.</p>`;
-      if (totalBox) totalBox.textContent = "";
-      return;
-    }
+      if (!filtered.length) {
+        box.innerHTML = `<p>No holidays found.</p>`;
+        if (totalBox) totalBox.textContent = "";
+        return;
+      }
 
-    // Total days = number of rows
-    if (totalBox) {
-      totalBox.textContent = `Total holidays: ${filtered.length} day(s)` +
-        (month ? ` • Month: ${month}` : "") +
-        (workerFilter ? ` • Worker: ${workerFilter}` : "");
-    }
+      // Total days = number of rows
+      if (totalBox) {
+        totalBox.textContent = `Total holidays: ${filtered.length} day(s)` +
+          (month ? ` • Month: ${month}` : "") +
+          (workerFilter ? ` • Worker: ${workerFilter}` : "");
+      }
 
-    box.innerHTML = `
-      <table style="width:100%;border-collapse:collapse;">
-        <tr>
-          <th align="left">Date</th>
-          <th align="left">Worker</th>
-          <th align="left">Month</th>
-          <th align="left">Reason</th>
-        </tr>
-        ${filtered.map(r => `
-          <tr style="border-top:1px solid #eee;">
-            <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
-            <td>${escapeHtml(r.worker || "")}</td>
-            <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
-            <td>${escapeHtml(r.reason || "")}</td>
+      box.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Date</th>
+            <th align="left">Worker</th>
+            <th align="left">Month</th>
+            <th align="left">Reason</th>
           </tr>
-        `).join("")}
-      </table>
-    `;
-  } finally {
-    setTimeout(unlock, 400);
+          ${filtered.map(r => `
+            <tr style="border-top:1px solid #eee;">
+              <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
+              <td>${escapeHtml(r.worker || "")}</td>
+              <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
+              <td>${escapeHtml(r.reason || "")}</td>
+            </tr>
+          `).join("")}
+        </table>
+      `;
+    } finally {
+      setTimeout(unlock, 400);
+    }
   }
-}
-
 
   /* ==========================================================
      ✅ ADDED: Superadmin functions (no changes to existing logic)
