@@ -1,4 +1,4 @@
-const API = "https://script.google.com/macros/s/AKfycbwbvf0x6EJpxLZ9hNtnMgPFQhpJgfeM4L3f0XLGeEE0BvOKbBTcbDjGKVdL10Ma_fmQ/exec";
+const API = "https://script.google.com/macros/s/AKfycbyPanrx7W6P08ibNmZU2AQN8S0rTik9QS0Ckfb4VYNgnjM0IHfEW70B6cXBtkr2OnK9/exec";
 
 let _redirectingToLogin = false;
 
