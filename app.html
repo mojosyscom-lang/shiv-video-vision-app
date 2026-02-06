@@ -166,11 +166,7 @@ function toggleTheme() {
     document.body.classList.contains("dark") ? "dark" : "light"
   );
 }
-document.addEventListener("DOMContentLoaded", () => {
-  if (localStorage.getItem("theme") === "dark") {
-    document.body.classList.add("dark");
-  }
-});
+
   
   /* Drawer controls */
   const drawer = document.getElementById("drawer");
