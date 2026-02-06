@@ -35,18 +35,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* =========================
-     Helpers (NEW)
+     Helpers (UPDATED)
   ========================== */
 
-  function monthLabelFromISO(iso) {
-    // "2026-02-05" => "Feb-2026"
-    const d = new Date(iso + "T00:00:00Z");
-    const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()];
-    return `${m}-${d.getUTCFullYear()}`;
+  // ✅ IMPORTANT: Local date ISO (prevents month shift in India time)
+  function todayISO() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
 
-  function todayISO() {
-    return new Date().toISOString().slice(0, 10);
+  function monthLabelFromISO(iso) {
+    // "2026-02-05" => "Feb-2026" (LOCAL, no UTC shift)
+    const d = new Date(iso + "T00:00:00");
+    const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+    return `${m}-${d.getFullYear()}`;
   }
 
   function monthLabelNow() {
@@ -54,12 +59,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function normMonthLabel(s) {
-    // normalize spaces + casing format safety
     return String(s || "").trim().replace(/\s+/g, "");
   }
 
   function monthKey(label) {
-    // "Feb-2026" => 202602 (for sorting/filtering)
     const x = normMonthLabel(label);
     const parts = x.split("-");
     if (parts.length !== 2) return null;
@@ -71,7 +74,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return year * 100 + mm;
   }
 
-  // ✅ NEW: show date clean (fixes "T18:30:00.000Z" in table)
   function prettyISODate(v){
     if (!v) return "";
     const d = new Date(v);
@@ -79,7 +81,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return d.toISOString().slice(0,10);
   }
 
-  // ✅ NEW: show month clean (fixes month column becoming date in Sheets)
   function prettyMonth(v){
     if (!v) return "";
     const s = String(v);
@@ -89,34 +90,57 @@ document.addEventListener("DOMContentLoaded", () => {
     return String(v);
   }
 
+  // ✅ NEW: Dashboard Upad total fallback (handles different backend response shapes)
+  function getUpadTotalFromDash(dash) {
+    if (!dash) return 0;
+
+    // direct fields (common)
+    const direct =
+      Number(dash.upad_total) ||
+      Number(dash.monthly_upad_total) ||
+      Number(dash.total_upad) ||
+      Number(dash.upadTotal) ||
+      0;
+
+    if (direct) return direct;
+
+    // map fields (your current logic expects this)
+    const map =
+      dash.upad_by_worker ||
+      dash.upadByWorker ||
+      dash.upad_map ||
+      null;
+
+    if (map && typeof map === "object") {
+      return Object.values(map).reduce((a,b)=>a + Number(b || 0), 0);
+    }
+
+    return 0;
+  }
+
   async function getActiveWorkers() {
-    // ✅ cached: workers list is reused in Upad/Salary/Holidays
     const rows = await cachedApi("workersRaw", 60000, () => api({ action: "listWorkers" }));
     const list = (rows || [])
       .filter(w => String(w.status || "ACTIVE").toUpperCase() === "ACTIVE")
       .map(w => String(w.worker || "").trim())
       .filter(Boolean)
       .sort((a,b) => a.localeCompare(b));
-    // also cache computed list
     CACHE.workersActive.data = list;
     CACHE.workersActive.at = Date.now();
     return list;
   }
 
   async function getSalaryMonthsFromUpad() {
-    // ✅ cached
     const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
     return (meta.months || []).slice();
   }
 
-  // ✅ cached: get all holidays once (used for month options)
   async function getMonthsFromHolidays() {
-    const rows = await cachedApi("holidaysAll", 60000, () => api({ action: "listHolidays", month: "" })); // fetch all
+    const rows = await cachedApi("holidaysAll", 60000, () => api({ action: "listHolidays", month: "" }));
     const months = (rows || []).map(r => normMonthLabel(prettyMonth(r.month)));
     return months.filter(Boolean);
   }
 
-  // ✅ cached + parallel: merge + filter future + sort newest first
   async function getMonthOptionsMerged() {
     return cachedApi("monthsMerged", 60000, async () => {
       const [upadMonthsRaw, holMonths] = await Promise.all([
@@ -132,12 +156,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const list = [...set].filter(m => {
         const k = monthKey(m);
         if (!k) return false;
-        // remove future months (no March if current is Feb)
-        if (nowKey && k > nowKey) return false;
+        if (nowKey && k > nowKey) return false; // remove future months
         return true;
       });
 
-      // newest first
       list.sort((a,b) => (monthKey(b) || 0) - (monthKey(a) || 0));
       return list;
     });
@@ -147,8 +169,7 @@ document.addEventListener("DOMContentLoaded", () => {
      UI
   ========================== */
 
-  
-    async function showDashboard() {
+  async function showDashboard() {
     content.innerHTML = `
       <div class="card">
         <h2>Dashboard</h2>
@@ -158,15 +179,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const month = monthLabelNow();
 
-    // ✅ parallel calls
     const [dash, activity] = await Promise.all([
       api({ action: "getDashboard", month }),
       api({ action: "getRecentActivity", limit: 10 })
     ]);
 
-    const upadMap = (dash && dash.upad_by_worker) ? dash.upad_by_worker : {};
-    const upadTotal = Object.values(upadMap).reduce((a,b)=>a+Number(b||0),0);
-console.log("DASH RESPONSE:", dash);
+    console.log("DASH RESPONSE:", dash);
+
+    const upadTotal = getUpadTotalFromDash(dash);
 
     content.innerHTML = `
       <div class="dashHeader">
@@ -175,7 +195,7 @@ console.log("DASH RESPONSE:", dash);
           <div class="dashSub">
             Logged in as: <b>${escapeHtml(localStorage.getItem("username") || "")}</b> (${escapeHtml(role)}) • 
             Company: <b>${escapeHtml(localStorage.getItem("company") || "")}</b> • 
-            Month: <b>${escapeHtml(dash.month || month)}</b>
+            Month: <b>${escapeHtml((dash && dash.month) || month)}</b>
           </div>
         </div>
       </div>
@@ -183,17 +203,17 @@ console.log("DASH RESPONSE:", dash);
       <div class="dashGrid">
         <div class="dashStat dashBlue">
           <div class="dashStatLabel">Total Workers</div>
-          <div class="dashStatValue">${Number(dash.total_workers || 0)}</div>
+          <div class="dashStatValue">${Number(dash?.total_workers || 0)}</div>
         </div>
 
         <div class="dashStat dashGreen">
           <div class="dashStatLabel">Monthly Salary</div>
-          <div class="dashStatValue">₹${Number(dash.monthly_salary_total || 0).toFixed(0)}</div>
+          <div class="dashStatValue">₹${Number(dash?.monthly_salary_total || 0).toFixed(0)}</div>
         </div>
 
         <div class="dashStat dashOrange">
           <div class="dashStatLabel">Monthly Expense</div>
-          <div class="dashStatValue">₹${Number(dash.monthly_expense_total || 0).toFixed(0)}</div>
+          <div class="dashStatValue">₹${Number(dash?.monthly_expense_total || 0).toFixed(0)}</div>
         </div>
 
         <div class="dashStat dashPurple">
@@ -208,7 +228,6 @@ console.log("DASH RESPONSE:", dash);
       </div>
     `;
 
-    // ✅ Activity list
     const box = document.getElementById("dashActivity");
     if (box) {
       const rows = Array.isArray(activity) ? activity : [];
@@ -226,12 +245,7 @@ console.log("DASH RESPONSE:", dash);
         `).join("");
       }
     }
-}
-
-
-
-
-
+  }
 
   async function loadSection(type) {
     if (type === "invoice") {
@@ -239,18 +253,13 @@ console.log("DASH RESPONSE:", dash);
       return;
     }
 
-    /* ==========================================================
-       ✅ NEW: Workers (Option A)
-       ========================================================== */
     if (type === "workers") {
       if (!(role === "superadmin" || role === "owner")) {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
         return;
       }
 
-      // ✅ fast paint
       content.innerHTML = `<div class="card"><h2>Workers</h2><p>Loading…</p></div>`;
-
       const workers = await cachedApi("workersRaw", 60000, () => api({ action: "listWorkers" }));
 
       content.innerHTML = `
@@ -320,120 +329,98 @@ console.log("DASH RESPONSE:", dash);
       return;
     }
 
-   /* ==========================================================
-   ✅ NEW: Holidays (Option A)  ✅ UPDATED: month dropdown + worker filter + total
-   ✅ CHANGE: Stop auto-load until user selects month/worker or clicks Load
-   ========================================================== */
-if (type === "holidays") {
-  // ✅ fast paint
-  content.innerHTML = `<div class="card"><h2>Holidays</h2><p>Loading…</p></div>`;
+    if (type === "holidays") {
+      content.innerHTML = `<div class="card"><h2>Holidays</h2><p>Loading…</p></div>`;
 
-  // ✅ parallel
-  const [workers, months] = await Promise.all([
-    getActiveWorkers(),
-    getMonthOptionsMerged()
-  ]);
+      const [workers, months] = await Promise.all([
+        getActiveWorkers(),
+        getMonthOptionsMerged()
+      ]);
 
-  content.innerHTML = `
-    <div class="card">
-      <h2>Holidays</h2>
+      content.innerHTML = `
+        <div class="card">
+          <h2>Holidays</h2>
 
-      <div class="card" style="margin-top:12px;">
-        <h3 style="margin-top:0;">Add Holiday</h3>
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">Add Holiday</h3>
 
-        <label>Worker</label>
-        <select id="hol_worker">
-          ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
-        </select>
+            <label>Worker</label>
+            <select id="hol_worker">
+              ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+            </select>
 
-        <label style="margin-top:10px;">Holiday Date</label>
-        <input id="hol_date" type="date" value="${todayISO()}">
+            <label style="margin-top:10px;">Holiday Date</label>
+            <input id="hol_date" type="date" value="${todayISO()}">
 
-        <label style="margin-top:10px;">Reason (optional)</label>
-        <input id="hol_reason" placeholder="Optional">
+            <label style="margin-top:10px;">Reason (optional)</label>
+            <input id="hol_reason" placeholder="Optional">
 
-        <button class="primary" id="btn_hol_add" style="margin-top:14px;">➕ Save Holiday</button>
-        <p style="font-size:12px;color:#777;margin-top:10px;">
-          Month will auto-save as <b>Feb-2026</b> format.
-        </p>
-      </div>
+            <button class="primary" id="btn_hol_add" style="margin-top:14px;">➕ Save Holiday</button>
+            <p style="font-size:12px;color:#777;margin-top:10px;">
+              Month will auto-save as <b>${escapeHtml(monthLabelNow())}</b> format.
+            </p>
+          </div>
 
-      <div class="card" style="margin-top:12px;">
-        <h3 style="margin-top:0;">View Holidays</h3>
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">View Holidays</h3>
 
-        <label>Month</label>
-        <select id="hol_month">
-          <option value="">All</option>
-          ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
-        </select>
+            <label>Month</label>
+            <select id="hol_month">
+              <option value="">All</option>
+              ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+            </select>
 
-        <label style="margin-top:10px;">Worker</label>
-        <select id="hol_worker_filter">
-          <option value="">All</option>
-          ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
-        </select>
+            <label style="margin-top:10px;">Worker</label>
+            <select id="hol_worker_filter">
+              <option value="">All</option>
+              ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
+            </select>
 
-        <div style="display:flex;gap:10px;margin-top:12px;">
-          <button class="primary" id="btn_hol_load">Load</button>
+            <div style="display:flex;gap:10px;margin-top:12px;">
+              <button class="primary" id="btn_hol_load">Load</button>
+            </div>
+
+            <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+            <div id="hol_list" style="margin-top:12px;"></div>
+          </div>
         </div>
+      `;
 
-        <p id="hol_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
-        <div id="hol_list" style="margin-top:12px;"></div>
-      </div>
-    </div>
-  `;
+      const cur = monthLabelNow();
+      const holSel = document.getElementById("hol_month");
+      if (holSel && months.map(normMonthLabel).includes(normMonthLabel(cur))) {
+        holSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(cur)) || "";
+      }
 
-  // default current month if available (selection only, NO auto-load)
-  const cur = monthLabelNow();
-  const holSel = document.getElementById("hol_month");
-  if (holSel && months.map(normMonthLabel).includes(normMonthLabel(cur))) {
-    holSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(cur)) || "";
-  }
+      const box = document.getElementById("hol_list");
+      const totalBox = document.getElementById("hol_total");
+      if (box) box.innerHTML = "";
+      if (totalBox) totalBox.textContent = "";
 
-  // ✅ start empty for faster page load
-  const box = document.getElementById("hol_list");
-  const totalBox = document.getElementById("hol_total");
-  if (box) box.innerHTML = "";
-  if (totalBox) totalBox.textContent = "";
+      function maybeLoadHolidays() {
+        const month = (document.getElementById("hol_month")?.value || "").trim();
+        const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
 
-  // ✅ helper: only load when month OR worker filter selected
-  function maybeLoadHolidays() {
-    const month = (document.getElementById("hol_month")?.value || "").trim();
-    const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
+        if (!month && !workerFilter) {
+          const b = document.getElementById("hol_list");
+          const t = document.getElementById("hol_total");
+          if (b) b.innerHTML = "";
+          if (t) t.textContent = "";
+          return;
+        }
+        loadHolidays();
+      }
 
-    // If both are All => keep empty (no API call)
-    if (!month && !workerFilter) {
-      const b = document.getElementById("hol_list");
-      const t = document.getElementById("hol_total");
-      if (b) b.innerHTML = "";
-      if (t) t.textContent = "";
+      document.getElementById("btn_hol_add").addEventListener("click", addHoliday);
+      document.getElementById("btn_hol_load").addEventListener("click", maybeLoadHolidays);
+      document.getElementById("hol_month")?.addEventListener("change", maybeLoadHolidays);
+      document.getElementById("hol_worker_filter")?.addEventListener("change", maybeLoadHolidays);
       return;
     }
 
-    loadHolidays();
-  }
-
-  document.getElementById("btn_hol_add").addEventListener("click", addHoliday);
-
-  // Load button triggers maybeLoad (not direct)
-  document.getElementById("btn_hol_load").addEventListener("click", maybeLoadHolidays);
-
-  // Change triggers maybeLoad (not direct)
-  document.getElementById("hol_month")?.addEventListener("change", maybeLoadHolidays);
-  document.getElementById("hol_worker_filter")?.addEventListener("change", maybeLoadHolidays);
-
-  // ❌ removed: loadHolidays();  (no auto-load)
-  return;
-}
-
-    /* ==========================================================
-       Existing: Upad (UPDATED to use Workers master list)
-       ========================================================== */
     if (type === "upad") {
-      // ✅ fast paint
       content.innerHTML = `<div class="card"><h2>Upad</h2><p>Loading…</p></div>`;
 
-      // ✅ parallel + cached meta/workers
       const [meta, workers] = await Promise.all([
         cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" })),
         getActiveWorkers()
@@ -451,7 +438,7 @@ if (type === "holidays") {
 
           <input id="upad_amount" type="number" placeholder="Amount"><br><br>
 
-          <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)" value="${monthLabelFromISO(todayISO())}">
+          <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)" value="${monthLabelNow()}">
           <datalist id="monthList">
             ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}"></option>`).join("")}
           </datalist>
@@ -464,9 +451,6 @@ if (type === "holidays") {
       return;
     }
 
-    /* ==========================================================
-       Existing: Expenses (unchanged)
-       ========================================================== */
     if (type === "expenses") {
       content.innerHTML = `
         <div class="card">
@@ -489,14 +473,9 @@ if (type === "holidays") {
       return;
     }
 
-    /* ==========================================================
-       Existing: Salary (UPDATED month list + current month default)
-       ========================================================== */
     if (type === "salary") {
-      // ✅ fast paint
       content.innerHTML = `<div class="card"><h2>Salary</h2><p>Loading…</p></div>`;
 
-      // ✅ parallel + cached
       const [months, workers] = await Promise.all([
         getMonthOptionsMerged(),
         getActiveWorkers()
@@ -563,9 +542,6 @@ if (type === "holidays") {
       return;
     }
 
-    /* ==========================================================
-       Existing: User Management (unchanged)
-       ========================================================== */
     if (type === "userMgmt") {
       if (role !== "superadmin") {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
@@ -573,7 +549,6 @@ if (type === "holidays") {
       }
 
       content.innerHTML = `<div class="card"><h2>User Management</h2><p>Loading…</p></div>`;
-
       const users = await api({ action: "getUsers" });
 
       content.innerHTML = `
@@ -610,9 +585,6 @@ if (type === "holidays") {
       return;
     }
 
-    /* ==========================================================
-       ✅ ADDED: Superadmin - Add New User section
-       ========================================================== */
     if (type === "userAdd") {
       if (role !== "superadmin") {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
@@ -640,10 +612,6 @@ if (type === "holidays") {
           <input id="new_company" placeholder="e.g. Shiv Video Vision">
 
           <button class="primary" id="btn_add_user" style="margin-top:14px;">➕ Create User</button>
-
-          <p style="font-size:12px;color:#777;margin-top:10px;">
-            Username must be unique.
-          </p>
         </div>
       `;
 
@@ -651,9 +619,6 @@ if (type === "holidays") {
       return;
     }
 
-    /* ==========================================================
-       ✅ ADDED: Superadmin - Edit Password section
-       ========================================================== */
     if (type === "userPw") {
       if (role !== "superadmin") {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
@@ -661,7 +626,6 @@ if (type === "holidays") {
       }
 
       content.innerHTML = `<div class="card"><h2>Edit Password</h2><p>Loading…</p></div>`;
-
       const users = await api({ action: "getUsers" });
 
       content.innerHTML = `
@@ -690,7 +654,7 @@ if (type === "holidays") {
   }
 
   /* =========================
-     Existing actions
+     Actions
   ========================== */
 
   async function addUpad() {
@@ -700,7 +664,7 @@ if (type === "holidays") {
     try {
       const worker = document.getElementById("upad_worker").value.trim();
       const amount = Number(document.getElementById("upad_amount").value || 0);
-      const month = document.getElementById("upad_month").value.trim() || "Current";
+      const month = document.getElementById("upad_month").value.trim() || monthLabelNow();
 
       if (!worker || !amount) return alert("Enter worker and amount");
 
@@ -716,8 +680,6 @@ if (type === "holidays") {
       else alert("Upad added");
 
       document.getElementById("upad_amount").value = "";
-
-      // ✅ refresh cached months
       invalidateCache(["upadMeta", "monthsMerged"]);
     } finally {
       setTimeout(unlock, 600);
@@ -780,18 +742,28 @@ if (type === "holidays") {
             <th align="right">Paid</th>
             <th align="right">Balance</th>
           </tr>
-          ${rows.map(r => `
-            <tr style="border-top:1px solid #eee;">
-              <td>${escapeHtml(r.worker)}</td>
-              <td align="right">₹${Number(r.monthly_salary || 0).toFixed(0)}</td>
-              <td align="right">₹${Number(r.prorated_salary || 0).toFixed(0)}</td>
-              <td align="right">₹${Number(r.upad_total || 0).toFixed(0)}</td>
-              <td align="right">${Number(r.holiday_count || 0).toFixed(0)}</td>
-              <td align="right">₹${Number(r.holiday_deduction || 0).toFixed(0)}</td>
-              <td align="right">₹${Number(r.paid_total || 0).toFixed(0)}</td>
-              <td align="right"><strong>₹${Number(r.balance || 0).toFixed(0)}</strong></td>
-            </tr>
-          `).join("")}
+          ${rows.map(r => {
+            const upadVal = Number(
+              r.upad_total ??
+              r.upadTotal ??
+              r.upad ??
+              r.advance_total ??
+              0
+            );
+
+            return `
+              <tr style="border-top:1px solid #eee;">
+                <td>${escapeHtml(r.worker)}</td>
+                <td align="right">₹${Number(r.monthly_salary || 0).toFixed(0)}</td>
+                <td align="right">₹${Number(r.prorated_salary || 0).toFixed(0)}</td>
+                <td align="right">₹${upadVal.toFixed(0)}</td>
+                <td align="right">${Number(r.holiday_count || 0).toFixed(0)}</td>
+                <td align="right">₹${Number(r.holiday_deduction || 0).toFixed(0)}</td>
+                <td align="right">₹${Number(r.paid_total || 0).toFixed(0)}</td>
+                <td align="right"><strong>₹${Number(r.balance || 0).toFixed(0)}</strong></td>
+              </tr>
+            `;
+          }).join("")}
         </table>
       `;
     } finally {
@@ -806,7 +778,7 @@ if (type === "holidays") {
     try {
       const worker = document.getElementById("sal_worker").value.trim();
       const amount = Number(document.getElementById("sal_amount").value || 0);
-      const month = document.getElementById("sal_pay_month").value.trim() || "Current";
+      const month = document.getElementById("sal_pay_month").value.trim() || monthLabelNow();
 
       if (!worker || !amount) return alert("Enter worker and amount");
 
@@ -839,10 +811,6 @@ if (type === "holidays") {
     loadSection("userMgmt");
   }
 
-  /* ==========================================================
-     ✅ ADDED: Workers + Holidays functions (Option A)
-     ========================================================== */
-
   async function addWorker() {
     const btn = document.getElementById("btn_wk_add");
     const unlock = lockButton(btn, "Saving...");
@@ -867,10 +835,7 @@ if (type === "holidays") {
       if (r && r.error) return;
 
       alert("Worker saved");
-
-      // ✅ refresh cached workers
       invalidateCache(["workersRaw", "workersActive"]);
-
       loadSection("workers");
     } finally {
       setTimeout(unlock, 700);
@@ -901,10 +866,7 @@ if (type === "holidays") {
       if (r && r.error) return;
 
       alert("Worker updated");
-
-      // ✅ refresh cached workers
       invalidateCache(["workersRaw", "workersActive"]);
-
       loadSection("workers");
     } finally {
       setTimeout(unlock, 700);
@@ -920,10 +882,7 @@ if (type === "holidays") {
 
     if (r && r.error) return;
     alert(`Updated: ${worker} → ${status}`);
-
-    // ✅ refresh cached workers
     invalidateCache(["workersRaw", "workersActive"]);
-
     loadSection("workers");
   }
 
@@ -952,10 +911,7 @@ if (type === "holidays") {
 
       alert("Holiday saved");
       document.getElementById("hol_reason").value = "";
-
-      // ✅ refresh cached holidays + month options
       invalidateCache(["holidaysAll", "monthsMerged"]);
-
       loadHolidays();
     } finally {
       setTimeout(unlock, 700);
@@ -976,7 +932,6 @@ if (type === "holidays") {
       const totalBox = document.getElementById("hol_total");
       if (!box) return;
 
-      // Filter on client-side by worker
       const filtered = (rows || []).filter(r => {
         if (!workerFilter) return true;
         return String(r.worker || "").trim() === workerFilter;
@@ -988,7 +943,6 @@ if (type === "holidays") {
         return;
       }
 
-      // Total days = number of rows
       if (totalBox) {
         totalBox.textContent = `Total holidays: ${filtered.length} day(s)` +
           (month ? ` • Month: ${month}` : "") +
@@ -1017,10 +971,6 @@ if (type === "holidays") {
       setTimeout(unlock, 400);
     }
   }
-
-  /* ==========================================================
-     ✅ ADDED: Superadmin functions (no changes to existing logic)
-     ========================================================== */
 
   async function addNewUser() {
     const btn = document.getElementById("btn_add_user");
@@ -1082,7 +1032,6 @@ if (type === "holidays") {
     }
   }
 
-  // Hide superadmin-only menu items
   if (role !== "superadmin") {
     document.querySelectorAll(".superadminOnly").forEach(el => el.style.display = "none");
   }
@@ -1119,5 +1068,9 @@ function lockButton(btn, savingText = "Saving...") {
   };
 }
 
-function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
+function escapeHtml(s){
+  return String(s||"").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+}
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
