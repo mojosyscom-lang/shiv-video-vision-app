@@ -166,6 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const upadMap = (dash && dash.upad_by_worker) ? dash.upad_by_worker : {};
     const upadTotal = Object.values(upadMap).reduce((a,b)=>a+Number(b||0),0);
+console.log("DASH RESPONSE:", dash);
 
     content.innerHTML = `
       <div class="dashHeader">
