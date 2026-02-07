@@ -790,21 +790,51 @@ const r = await api({
  if (type === "expenses") {
   content.innerHTML = `<div class="card"><h2>Expenses</h2><p>Loading…</p></div>`;
 
-  /* =========================
-     LOAD MONTHS + TYPES (SAFE)
-  ========================== */
   const [months, typesRes] = await Promise.all([
     getMonthOptionsMerged(),
     api({ action: "listExpenseTypes" })
   ]);
 
-  const types = Array.isArray(typesRes)
-    ? typesRes
-    : Array.isArray(typesRes?.types)
-      ? typesRes.types
-      : Array.isArray(typesRes?.data)
-        ? typesRes.data
-        : [];
+  /* =========================
+     NORMALIZE TYPES RESPONSE
+     Supports:
+     1) ["fuel","hotel"]
+     2) { types: ["fuel"] }
+     3) { types: [{type:"fuel", status:"ACTIVE"}] }
+  ========================== */
+  function normalizeTypes(resp) {
+    const raw =
+      Array.isArray(resp) ? resp
+      : Array.isArray(resp?.types) ? resp.types
+      : Array.isArray(resp?.data) ? resp.data
+      : [];
+
+    // Convert to [{type, status}]
+    const arr = raw.map(x => {
+      if (typeof x === "string") return { type: x, status: "ACTIVE" }; // old backend
+      if (x && typeof x === "object") {
+        const t = String(x.type ?? x.name ?? x.category ?? "").trim();
+        const st = String(x.status ?? "ACTIVE").trim().toUpperCase();
+        return { type: t, status: (st === "INACTIVE" ? "INACTIVE" : "ACTIVE") };
+      }
+      return { type: "", status: "ACTIVE" };
+    }).filter(x => x.type);
+
+    // Unique by type (keep first)
+    const seen = new Set();
+    const uniq = [];
+    arr.forEach(x => {
+      const k = x.type.toLowerCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      uniq.push(x);
+    });
+
+    return uniq;
+  }
+
+  const typesAll = normalizeTypes(typesRes);                       // ✅ includes inactive (for summary)
+  const typesActive = typesAll.filter(t => t.status === "ACTIVE"); // ✅ only active (for add)
 
   const current = monthLabelNow();
   const hasCurrent = months.map(normMonthLabel).includes(normMonthLabel(current));
@@ -818,8 +848,9 @@ const r = await api({
 
         <label>Type</label>
         <select id="exp_category">
-          ${types.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("")}
+          ${typesActive.map(t => `<option value="${escapeAttr(t.type)}">${escapeHtml(t.type)}</option>`).join("")}
         </select>
+        ${typesActive.length ? `` : `<p class="dashSmall">No ACTIVE types. Superadmin must add/activate a type.</p>`}
 
         <label style="margin-top:10px;">Description</label>
         <input id="exp_desc" placeholder="Description">
@@ -842,7 +873,11 @@ const r = await api({
         <label style="margin-top:10px;">Type</label>
         <select id="exp_filter_type">
           <option value="">All</option>
-          ${types.map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("")}
+          ${typesAll.map(t => `
+            <option value="${escapeAttr(t.type)}">
+              ${escapeHtml(t.type)}${t.status === "INACTIVE" ? " (Inactive)" : ""}
+            </option>
+          `).join("")}
         </select>
 
         <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
@@ -878,7 +913,7 @@ const r = await api({
 
               <div id="exp_type_list" style="margin-top:12px;"></div>
               <p class="dashSmall" style="margin-top:10px;">
-                Tip: Types are company-wise. Delete only if not needed.
+                Tip: Don’t delete types. Use <b>Inactive</b> so old expenses stay correct.
               </p>
             </div>
           `
@@ -887,13 +922,9 @@ const r = await api({
     </div>
   `;
 
-  /* =========================
-     DEFAULT SELECTION
-  ========================== */
+  // default selection (no auto-load)
   const mSel = document.getElementById("exp_filter_month");
-  if (mSel && hasCurrent) {
-    mSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
-  }
+  if (mSel && hasCurrent) mSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
 
   document.getElementById("btn_exp").addEventListener("click", addExpense);
 
@@ -903,9 +934,6 @@ const r = await api({
   let expSummaryEnabled = false;
   let lastExpenseRows = [];
 
-  /* =========================
-     LOAD SUMMARY
-  ========================== */
   async function loadExpenseSummary() {
     const btn = document.getElementById("btn_exp_load");
     const unlock = lockButton(btn, "Loading...");
@@ -917,46 +945,58 @@ const r = await api({
       const rows = await api({ action: "listExpenses", month, category });
       lastExpenseRows = Array.isArray(rows) ? rows : [];
 
+      if (!listBox) return;
+
       if (!lastExpenseRows.length) {
         listBox.innerHTML = `<p>No expenses found.</p>`;
-        totalBox.textContent = "";
+        if (totalBox) totalBox.textContent = "";
         return;
       }
 
       const total = lastExpenseRows.reduce((s, r) => s + Number(r.amount || 0), 0);
-      totalBox.textContent =
-        `Total expenses: ₹${Math.round(total)}`
-        + (month ? ` • Month: ${month}` : "")
-        + (category ? ` • Type: ${category}` : "");
 
-      const showActions = role === "superadmin";
+      if (totalBox) {
+        totalBox.textContent =
+          `Total expenses: ₹${Math.round(total)}`
+          + (month ? ` • Month: ${month}` : "")
+          + (category ? ` • Type: ${category}` : "");
+      }
+
+      const showActions = (role === "superadmin");
 
       listBox.innerHTML = `
         <table style="width:100%;border-collapse:collapse;">
           <tr>
-            <th>Date</th>
-            <th>Type</th>
-            <th>Description</th>
+            <th align="left">Date</th>
+            <th align="left">Type</th>
+            <th align="left">Description</th>
             <th align="right">Amount</th>
-            <th>Month</th>
-            <th>Added By</th>
-            ${showActions ? `<th>Actions</th>` : ``}
+            <th align="left">Month</th>
+            <th align="left">Added By</th>
+            ${showActions ? `<th align="right">Actions</th>` : ``}
           </tr>
           ${lastExpenseRows.map(r => {
+            const rowId = r.rowIndex ?? "";
+            const date = prettyISODate(r.date || "");
+            const cat = String(r.category || "");
             const desc = String(r.description ?? r.desc ?? "");
+            const amt = Number(r.amount || 0);
+            const mon = prettyMonth(r.month || "");
+            const by = String(r.added_by || "");
+
             return `
               <tr style="border-top:1px solid #eee;">
-                <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
-                <td>${escapeHtml(r.category || "")}</td>
+                <td>${escapeHtml(date)}</td>
+                <td>${escapeHtml(cat)}</td>
                 <td>${escapeHtml(desc)}</td>
-                <td align="right">₹${Number(r.amount || 0).toFixed(0)}</td>
-                <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
-                <td>${escapeHtml(r.added_by || "")}</td>
+                <td align="right">₹${amt.toFixed(0)}</td>
+                <td>${escapeHtml(mon)}</td>
+                <td>${escapeHtml(by)}</td>
                 ${
                   showActions
-                    ? `<td>
-                         <button class="userToggleBtn" data-exp-edit data-row="${escapeAttr(r.rowIndex)}">Edit</button>
-                         <button class="userToggleBtn" data-exp-del data-row="${escapeAttr(r.rowIndex)}">Delete</button>
+                    ? `<td align="right" style="white-space:nowrap;">
+                         <button class="userToggleBtn" data-exp-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
+                         <button class="userToggleBtn" data-exp-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
                        </td>`
                     : ``
                 }
@@ -966,106 +1006,212 @@ const r = await api({
         </table>
       `;
 
-      /* ===== EDIT / DELETE (SUPERADMIN) ===== */
       if (role === "superadmin") {
-        listBox.querySelectorAll("[data-exp-edit]").forEach(b => {
-          b.onclick = async () => {
-            const row = b.dataset.row;
+        listBox.querySelectorAll("button[data-exp-edit]").forEach(btn2 => {
+          btn2.addEventListener("click", async () => {
+            const row = btn2.getAttribute("data-row");
+            if (!row) return alert("Row id missing");
+
             const cur = lastExpenseRows.find(x => String(x.rowIndex) === String(row));
             if (!cur) return alert("Row not found");
 
-            const newCat = prompt("Type:", cur.category || "");
+            const keepDate = prettyISODate(cur.date || todayISO());
+
+            const newCat = prompt("Type:", String(cur.category || ""));
             if (newCat === null) return;
 
-            const newDesc = prompt("Description:", cur.description ?? cur.desc ?? "");
+            const newDesc = prompt("Description:", String(cur.description ?? cur.desc ?? ""));
             if (newDesc === null) return;
 
-            const newAmt = Number(prompt("Amount:", cur.amount || 0));
-            if (!(newAmt > 0)) return alert("Amount required");
+            const newAmountStr = prompt("Amount:", String(Number(cur.amount || 0)));
+            if (newAmountStr === null) return;
+            const newAmount = Number(newAmountStr || 0);
 
-            const newMonth = prompt("Month (e.g. Feb-2026):", prettyMonth(cur.month));
-            if (!newMonth) return;
+            const newMonth = prompt("Month (e.g. Feb-2026):", String(prettyMonth(cur.month || "")));
+            if (newMonth === null) return;
 
-            const r = await api({
-              action: "updateExpense",
-              rowIndex: Number(row),
-              date: prettyISODate(cur.date),
-              category: newCat.trim(),
-              description: newDesc.trim(),
-              desc: newDesc.trim(),
-              amount: newAmt,
-              month: newMonth.trim()
-            });
+            if (!String(newCat).trim() || !(newAmount > 0) || !String(newMonth).trim()) {
+              return alert("Type, Month and Amount (>0) required");
+            }
 
-            if (r?.error) return alert(r.error);
-            await loadExpenseSummary();
-          };
+            const unlock2 = lockButton(btn2, "Saving...");
+            try {
+              const r = await api({
+                action: "updateExpense",
+                rowIndex: Number(row),
+                date: keepDate,
+                category: String(newCat).trim(),
+                description: String(newDesc || "").trim(), // ✅ match your sheet header
+                desc: String(newDesc || "").trim(),        // ✅ keep compatibility
+                amount: newAmount,
+                month: String(newMonth).trim()
+              });
+              if (r && r.error) return alert(String(r.error));
+              alert("Expense updated");
+              await loadExpenseSummary();
+            } finally {
+              setTimeout(unlock2, 500);
+            }
+          });
         });
 
-        listBox.querySelectorAll("[data-exp-del]").forEach(b => {
-          b.onclick = async () => {
-            if (!confirm("Delete this expense?")) return;
-            const r = await api({ action: "deleteExpense", rowIndex: Number(b.dataset.row) });
-            if (r?.error) return alert(r.error);
-            await loadExpenseSummary();
-          };
+        listBox.querySelectorAll("button[data-exp-del]").forEach(btn2 => {
+          btn2.addEventListener("click", async () => {
+            const row = btn2.getAttribute("data-row");
+            if (!row) return alert("Row id missing");
+            if (!confirm("Delete this expense entry?")) return;
+
+            const unlock2 = lockButton(btn2, "Deleting...");
+            try {
+              const r = await api({ action: "deleteExpense", rowIndex: Number(row) });
+              if (r && r.error) return alert(String(r.error));
+              alert("Expense deleted");
+              await loadExpenseSummary();
+            } finally {
+              setTimeout(unlock2, 500);
+            }
+          });
         });
       }
+
     } finally {
       setTimeout(unlock, 350);
     }
   }
 
-  document.getElementById("btn_exp_load").onclick = () => {
+  function enableAndLoad() {
     expSummaryEnabled = true;
     loadExpenseSummary();
-  };
-  document.getElementById("exp_filter_month").onchange = loadExpenseSummary;
-  document.getElementById("exp_filter_type").onchange = loadExpenseSummary;
+  }
 
-  document.getElementById("btn_exp_clear").onclick = () => {
+  document.getElementById("btn_exp_load")?.addEventListener("click", enableAndLoad);
+
+  // change filters => enable + reload
+  document.getElementById("exp_filter_month")?.addEventListener("change", () => {
+    expSummaryEnabled = true;
+    loadExpenseSummary();
+  });
+  document.getElementById("exp_filter_type")?.addEventListener("change", () => {
+    expSummaryEnabled = true;
+    loadExpenseSummary();
+  });
+
+  document.getElementById("btn_exp_clear")?.addEventListener("click", () => {
     expSummaryEnabled = false;
-    listBox.innerHTML = "";
-    totalBox.textContent = "";
-    if (mSel && hasCurrent) mSel.value = current;
-    document.getElementById("exp_filter_type").value = "";
-  };
+    lastExpenseRows = [];
+    if (listBox) listBox.innerHTML = "";
+    if (totalBox) totalBox.textContent = "";
+    if (mSel) mSel.value = hasCurrent ? (months.find(x => normMonthLabel(x) === normMonthLabel(current)) || "") : "";
+    const tSel = document.getElementById("exp_filter_type");
+    if (tSel) tSel.value = "";
+  });
+
+  // export CSV (superadmin)
+  document.getElementById("btn_exp_export")?.addEventListener("click", () => {
+    if (role !== "superadmin") return;
+    if (!expSummaryEnabled || !lastExpenseRows.length) return alert("Please click Show first.");
+
+    const month = (document.getElementById("exp_filter_month")?.value || "").trim();
+    const category = (document.getElementById("exp_filter_type")?.value || "").trim();
+
+    const header = ["date","category","description","amount","month","added_by","rowIndex"];
+    const lines = [header.join(",")];
+
+    lastExpenseRows.forEach(r => {
+      const cols = [
+        prettyISODate(r.date || ""),
+        String(r.category || ""),
+        String(r.description ?? r.desc ?? ""),
+        String(Number(r.amount || 0)),
+        String(prettyMonth(r.month || "")),
+        String(r.added_by || ""),
+        String(r.rowIndex || "")
+      ].map(v => csvEscape(v));
+      lines.push(cols.join(","));
+    });
+
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+
+    const a = document.createElement("a");
+    const company = (localStorage.getItem("company") || "company").replace(/\s+/g, "_");
+    const file = `expenses_${company}_${(month || "All")}_${(category || "All")}_${todayISO()}.csv`.replace(/[^\w\-\.]/g, "_");
+    a.href = URL.createObjectURL(blob);
+    a.download = file;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
+  });
 
   /* =========================
      MANAGE TYPES (SUPERADMIN)
+     ✅ Toggle status instead of delete
   ========================== */
   if (role === "superadmin") {
     async function renderTypes() {
       const res = await api({ action: "listExpenseTypes" });
-      const list = Array.isArray(res)
-        ? res
-        : Array.isArray(res?.types)
-          ? res.types
-          : [];
+      const list = normalizeTypes(res); // [{type,status}]
 
       const box = document.getElementById("exp_type_list");
-      box.innerHTML = list.map(t =>
-        `<button class="userToggleBtn" data-type="${escapeAttr(t)}">🗑 ${escapeHtml(t)}</button>`
-      ).join("");
+      if (!box) return;
 
-      box.querySelectorAll("[data-type]").forEach(b => {
-        b.onclick = async () => {
-          if (!confirm(`Delete type "${b.dataset.type}"?`)) return;
-          await api({ action: "deleteExpenseType", type: b.dataset.type });
-          renderTypes();
-          loadSection("expenses");
-        };
+      box.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Type</th>
+            <th align="left">Status</th>
+            <th align="right">Action</th>
+          </tr>
+          ${list.map(t => `
+            <tr style="border-top:1px solid #eee;">
+              <td>${escapeHtml(t.type)}</td>
+              <td><b>${escapeHtml(t.status)}</b></td>
+              <td align="right">
+                <button class="userToggleBtn"
+                  data-type="${escapeAttr(t.type)}"
+                  data-next="${escapeAttr(t.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")}">
+                  ${t.status === "ACTIVE" ? "Set Inactive" : "Set Active"}
+                </button>
+              </td>
+            </tr>
+          `).join("")}
+        </table>
+        <p class="dashSmall" style="margin-top:10px;">
+          Inactive types remain visible in Summary and old data stays correct.
+        </p>
+      `;
+
+      box.querySelectorAll("button[data-type]").forEach(b => {
+        b.addEventListener("click", async () => {
+          const t = b.getAttribute("data-type");
+          const next = b.getAttribute("data-next");
+          if (!t || !next) return;
+
+          const unlock = lockButton(b, "Updating...");
+          try {
+            const r = await api({ action: "updateExpenseTypeStatus", type: t, status: next });
+            if (r && r.error) return alert(String(r.error));
+            await renderTypes();
+            loadSection("expenses"); // refresh dropdowns (active/inactive)
+          } finally {
+            setTimeout(unlock, 400);
+          }
+        });
       });
     }
 
-    document.getElementById("btn_exp_type_add").onclick = async () => {
-      const t = document.getElementById("exp_type_new").value.trim();
+    document.getElementById("btn_exp_type_add")?.addEventListener("click", async () => {
+      const inp = document.getElementById("exp_type_new");
+      const t = (inp?.value || "").trim();
       if (!t) return alert("Enter type");
-      await api({ action: "addExpenseType", type: t });
-      document.getElementById("exp_type_new").value = "";
-      renderTypes();
+
+      const r = await api({ action: "addExpenseType", type: t });
+      if (r && r.error) return alert(String(r.error));
+
+      inp.value = "";
+      await renderTypes();
       loadSection("expenses");
-    };
+    });
 
     renderTypes();
   }
