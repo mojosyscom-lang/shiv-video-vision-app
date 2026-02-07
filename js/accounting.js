@@ -786,29 +786,363 @@ const r = await api({
     }
 
     // ---- rest of your file unchanged below ----
+// ---- expenses section updates starts here 
+   if (type === "expenses") {
+  content.innerHTML = `<div class="card"><h2>Expenses</h2><p>Loading…</p></div>`;
 
-    if (type === "expenses") {
-      content.innerHTML = `
-        <div class="card">
-          <h2>Expenses</h2>
-          <select id="exp_category">
-            <option value="food">food</option>
-            <option value="hotel">hotel</option>
-            <option value="transport">transport</option>
-            <option value="rapido">rapido</option>
-            <option value="purchase">purchase</option>
-            <option value="other">other</option>
-            <option value="freelancer">freelancer</option>
-          </select><br><br>
-          <input id="exp_desc" placeholder="Description"><br><br>
-          <input id="exp_amount" type="number" placeholder="Amount"><br><br>
-          <button class="primary" id="btn_exp">Add Expense</button>
+  const [months, types] = await Promise.all([
+    getMonthOptionsMerged(),
+    api({ action: "listExpenseTypes" })
+  ]);
+
+  const current = monthLabelNow();
+  const hasCurrent = months.map(normMonthLabel).includes(normMonthLabel(current));
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Expenses</h2>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Add Expense</h3>
+
+        <label>Type</label>
+        <select id="exp_category">
+          ${(types || []).map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("")}
+        </select>
+
+        <label style="margin-top:10px;">Description</label>
+        <input id="exp_desc" placeholder="Description">
+
+        <label style="margin-top:10px;">Amount</label>
+        <input id="exp_amount" type="number" placeholder="Amount">
+
+        <button class="primary" id="btn_exp" style="margin-top:14px;">Add Expense</button>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Expense Summary</h3>
+
+        <label>Month</label>
+        <select id="exp_filter_month">
+          <option value="">All</option>
+          ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+        </select>
+
+        <label style="margin-top:10px;">Type</label>
+        <select id="exp_filter_type">
+          <option value="">All</option>
+          ${(types || []).map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join("")}
+        </select>
+
+        <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+          <button class="primary" id="btn_exp_load">Show</button>
+          <button class="primary" id="btn_exp_clear" style="background:#111;">Clear</button>
+          ${
+            role === "superadmin"
+              ? `<button class="primary" id="btn_exp_export" style="background:#1fa971;">Export CSV</button>`
+              : ``
+          }
         </div>
+
+        <p id="exp_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+        <div id="exp_list" style="margin-top:12px;"></div>
+
+        <p class="dashSmall" style="margin-top:10px;">
+          (Nothing will show until you click <b>Show</b> or change Month/Type.)
+        </p>
+      </div>
+
+      ${
+        role === "superadmin"
+          ? `
+            <div class="card" style="margin-top:12px;">
+              <h3 style="margin-top:0;">Manage Expense Types</h3>
+
+              <label>New type</label>
+              <input id="exp_type_new" placeholder="e.g. fuel">
+
+              <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+                <button class="primary" id="btn_exp_type_add">Add Type</button>
+              </div>
+
+              <div id="exp_type_list" style="margin-top:12px;"></div>
+              <p class="dashSmall" style="margin-top:10px;">
+                Tip: Types are company-wise. Delete only if not needed.
+              </p>
+            </div>
+          `
+          : ``
+      }
+    </div>
+  `;
+
+  // default selection (no auto-load)
+  const mSel = document.getElementById("exp_filter_month");
+  if (mSel && hasCurrent) mSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
+
+  document.getElementById("btn_exp").addEventListener("click", addExpense);
+
+  const listBox = document.getElementById("exp_list");
+  const totalBox = document.getElementById("exp_total");
+
+  let expSummaryEnabled = false;
+  let lastExpenseRows = [];
+
+  async function loadExpenseSummary() {
+    const btn = document.getElementById("btn_exp_load");
+    const unlock = lockButton(btn, "Loading...");
+
+    try {
+      const month = (document.getElementById("exp_filter_month")?.value || "").trim();
+      const category = (document.getElementById("exp_filter_type")?.value || "").trim();
+
+      const rows = await api({ action: "listExpenses", month, category });
+      lastExpenseRows = Array.isArray(rows) ? rows : [];
+
+      if (!listBox) return;
+
+      if (!lastExpenseRows.length) {
+        listBox.innerHTML = `<p>No expenses found.</p>`;
+        if (totalBox) totalBox.textContent = "";
+        return;
+      }
+
+      const total = lastExpenseRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+
+      if (totalBox) {
+        totalBox.textContent =
+          `Total expenses: ₹${Math.round(total)}`
+          + (month ? ` • Month: ${month}` : "")
+          + (category ? ` • Type: ${category}` : "");
+      }
+
+      const showActions = (role === "superadmin");
+
+      listBox.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Date</th>
+            <th align="left">Type</th>
+            <th align="left">Desc</th>
+            <th align="right">Amount</th>
+            <th align="left">Month</th>
+            <th align="left">Added By</th>
+            ${showActions ? `<th align="right">Actions</th>` : ``}
+          </tr>
+          ${lastExpenseRows.map(r => {
+            const rowId = r.rowIndex ?? "";
+            const date = prettyISODate(r.date || "");
+            const cat = String(r.category || "");
+            const desc = String(r.desc || "");
+            const amt = Number(r.amount || 0);
+            const mon = prettyMonth(r.month || "");
+            const by = String(r.added_by || "");
+
+            return `
+              <tr style="border-top:1px solid #eee;">
+                <td>${escapeHtml(date)}</td>
+                <td>${escapeHtml(cat)}</td>
+                <td>${escapeHtml(desc)}</td>
+                <td align="right">₹${amt.toFixed(0)}</td>
+                <td>${escapeHtml(mon)}</td>
+                <td>${escapeHtml(by)}</td>
+                ${
+                  showActions
+                    ? `<td align="right" style="white-space:nowrap;">
+                         <button class="userToggleBtn" data-exp-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
+                         <button class="userToggleBtn" data-exp-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
+                       </td>`
+                    : ``
+                }
+              </tr>
+            `;
+          }).join("")}
+        </table>
       `;
-      document.getElementById("btn_exp").addEventListener("click", addExpense);
-      return;
+
+      if (role === "superadmin") {
+        listBox.querySelectorAll("button[data-exp-edit]").forEach(btn2 => {
+          btn2.addEventListener("click", async () => {
+            const row = btn2.getAttribute("data-row");
+            if (!row) return alert("Row id missing");
+
+            const cur = lastExpenseRows.find(x => String(x.rowIndex) === String(row));
+            if (!cur) return alert("Row not found");
+
+            const keepDate = prettyISODate(cur.date || todayISO());
+
+            const newCat = prompt("Type:", String(cur.category || ""));
+            if (newCat === null) return;
+
+            const newDesc = prompt("Description:", String(cur.desc || ""));
+            if (newDesc === null) return;
+
+            const newAmountStr = prompt("Amount:", String(Number(cur.amount || 0)));
+            if (newAmountStr === null) return;
+            const newAmount = Number(newAmountStr || 0);
+
+            const newMonth = prompt("Month (e.g. Feb-2026):", String(prettyMonth(cur.month || "")));
+            if (newMonth === null) return;
+
+            if (!String(newCat).trim() || !(newAmount > 0) || !String(newMonth).trim()) {
+              return alert("Type, Month and Amount (>0) required");
+            }
+
+            const unlock2 = lockButton(btn2, "Saving...");
+            try {
+              const r = await api({
+                action: "updateExpense",
+                rowIndex: Number(row),
+                date: keepDate,                // ✅ required by backend
+                category: String(newCat).trim(),
+                desc: String(newDesc || "").trim(),
+                amount: newAmount,
+                month: String(newMonth).trim()
+              });
+              if (r && r.error) return alert(String(r.error));
+              alert("Expense updated");
+              await loadExpenseSummary();
+            } finally {
+              setTimeout(unlock2, 500);
+            }
+          });
+        });
+
+        listBox.querySelectorAll("button[data-exp-del]").forEach(btn2 => {
+          btn2.addEventListener("click", async () => {
+            const row = btn2.getAttribute("data-row");
+            if (!row) return alert("Row id missing");
+            if (!confirm("Delete this expense entry?")) return;
+
+            const unlock2 = lockButton(btn2, "Deleting...");
+            try {
+              const r = await api({ action: "deleteExpense", rowIndex: Number(row) });
+              if (r && r.error) return alert(String(r.error));
+              alert("Expense deleted");
+              await loadExpenseSummary();
+            } finally {
+              setTimeout(unlock2, 500);
+            }
+          });
+        });
+      }
+    } finally {
+      setTimeout(unlock, 350);
+    }
+  }
+
+  function enableAndLoad() {
+    expSummaryEnabled = true;
+    loadExpenseSummary();
+  }
+
+  document.getElementById("btn_exp_load")?.addEventListener("click", enableAndLoad);
+
+  // change filters => enable + reload
+  document.getElementById("exp_filter_month")?.addEventListener("change", () => {
+    expSummaryEnabled = true;
+    loadExpenseSummary();
+  });
+  document.getElementById("exp_filter_type")?.addEventListener("change", () => {
+    expSummaryEnabled = true;
+    loadExpenseSummary();
+  });
+
+  document.getElementById("btn_exp_clear")?.addEventListener("click", () => {
+    expSummaryEnabled = false;
+    lastExpenseRows = [];
+    if (listBox) listBox.innerHTML = "";
+    if (totalBox) totalBox.textContent = "";
+    if (mSel) mSel.value = hasCurrent ? (months.find(x => normMonthLabel(x) === normMonthLabel(current)) || "") : "";
+    const tSel = document.getElementById("exp_filter_type");
+    if (tSel) tSel.value = "";
+  });
+
+  // export CSV (superadmin)
+  document.getElementById("btn_exp_export")?.addEventListener("click", () => {
+    if (role !== "superadmin") return;
+    if (!expSummaryEnabled || !lastExpenseRows.length) return alert("Please click Show first.");
+
+    const month = (document.getElementById("exp_filter_month")?.value || "").trim();
+    const category = (document.getElementById("exp_filter_type")?.value || "").trim();
+
+    const header = ["date","category","desc","amount","month","added_by","rowIndex"];
+    const lines = [header.join(",")];
+
+    lastExpenseRows.forEach(r => {
+      const cols = [
+        prettyISODate(r.date || ""),
+        String(r.category || ""),
+        String(r.desc || ""),
+        String(Number(r.amount || 0)),
+        String(prettyMonth(r.month || "")),
+        String(r.added_by || ""),
+        String(r.rowIndex || "")
+      ].map(v => csvEscape(v));
+      lines.push(cols.join(","));
+    });
+
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+
+    const a = document.createElement("a");
+    const company = (localStorage.getItem("company") || "company").replace(/\s+/g, "_");
+    const file = `expenses_${company}_${(month || "All")}_${(category || "All")}_${todayISO()}.csv`.replace(/[^\w\-\.]/g, "_");
+    a.href = URL.createObjectURL(blob);
+    a.download = file;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
+  });
+
+  // manage types (superadmin)
+  if (role === "superadmin") {
+    async function renderTypes() {
+      const list = await api({ action: "listExpenseTypes" });
+      const box = document.getElementById("exp_type_list");
+      if (!box) return;
+
+      box.innerHTML = `
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          ${(list || []).map(t => `
+            <button class="userToggleBtn" data-type="${escapeAttr(t)}">🗑 ${escapeHtml(t)}</button>
+          `).join("")}
+        </div>
+        <p class="dashSmall" style="margin-top:10px;">Click a type to delete it.</p>
+      `;
+
+      box.querySelectorAll("button[data-type]").forEach(b => {
+        b.addEventListener("click", async () => {
+          const t = b.getAttribute("data-type");
+          if (!t) return;
+          if (!confirm(`Delete expense type "${t}"?`)) return;
+          const r = await api({ action: "deleteExpenseType", type: t });
+          if (r && r.error) return alert(String(r.error));
+          await renderTypes();
+          // reload section so dropdown updates
+          loadSection("expenses");
+        });
+      });
     }
 
+    document.getElementById("btn_exp_type_add")?.addEventListener("click", async () => {
+      const inp = document.getElementById("exp_type_new");
+      const t = (inp?.value || "").trim();
+      if (!t) return alert("Enter type");
+      const r = await api({ action: "addExpenseType", type: t });
+      if (r && r.error) return alert(String(r.error));
+      inp.value = "";
+      await renderTypes();
+      loadSection("expenses"); // refresh dropdown
+    });
+
+    renderTypes();
+  }
+
+  return;
+}
+
+// ---- expenses updates end here 
     if (type === "salary") {
       content.innerHTML = `<div class="card"><h2>Salary</h2><p>Loading…</p></div>`;
 
