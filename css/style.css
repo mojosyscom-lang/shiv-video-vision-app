@@ -501,3 +501,52 @@ table tr:last-child td{
 .dashActivity { display:flex; flex-direction:column; gap:10px; }
 .dashActRow { display:flex; justify-content:space-between; gap:12px; padding-top:10px; border-top:1px solid #eee; }
 .dashActTime { color:#777; font-size:12px; white-space:nowrap; }
+
+
+/* =====================================================
+   ✅ NEW: UPAD SUMMARY + ACTION BUTTON POLISH (ADD ONLY)
+   (No existing rules removed)
+===================================================== */
+
+/* Make long tables usable on mobile */
+#upad_list{
+  overflow:auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+}
+
+/* Keep action buttons smaller in tables (Edit/Delete/Export etc.) */
+#upad_list .userToggleBtn{
+  min-width: auto;
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.06);
+  color: #111;
+}
+#upad_list .userToggleBtn:hover{
+  opacity: 0.92;
+}
+
+/* Delete = red hint, Edit = orange hint (superadmin only buttons) */
+#upad_list .userToggleBtn[data-upad-del]{
+  background: rgba(220,38,38,.12);
+  color: #b91c1c;
+}
+#upad_list .userToggleBtn[data-upad-edit]{
+  background: rgba(255,106,0,.14);
+  color: #b45309;
+}
+
+/* Small helper text supports multi-line */
+#upad_total{
+  white-space: pre-wrap;
+}
+
+/* Optional: make filter row nicer on wide screens without changing HTML */
+@media (min-width: 700px){
+  /* give selects a little breathing room on desktop */
+  #upad_filter_month, #upad_filter_worker{
+    max-width: 420px;
+  }
+}
