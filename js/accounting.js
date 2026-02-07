@@ -1368,12 +1368,14 @@ const r = await api({
       if (!desc || !amount) return alert("Enter description and amount");
 
       const r = await apiSafe({
-        action: "addExpense",
-        date: todayISO(),
-        category,
-        desc,
-        amount
-      });
+  action: "addExpense",
+  date: todayISO(),
+  category,
+  description: desc, // ✅ new correct key
+  desc,              // ✅ keep old key so nothing breaks
+  amount
+});
+
 
       if (r && r.queued) alert("Saved offline. Will sync when online.");
       else alert("Expense added");
