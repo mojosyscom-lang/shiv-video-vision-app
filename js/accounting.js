@@ -54,6 +54,50 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${m}-${d.getFullYear()}`;
   }
 
+  
+  // ✅ NEW: normalize ANY month coming from backend:
+// - "2026-01-31T18:30:00.000Z"  (Date serialized)
+// - Date object
+// - "'Feb-2026"
+// - "Feb-2026"
+function monthLabelFromAny(v) {
+  if (v === null || v === undefined || v === "") return "";
+
+  // If backend returns ISO date string
+  if (typeof v === "string") {
+    let s = String(v).trim();
+
+    // remove leading apostrophe (Sheets text forcing)
+    if (s.startsWith("'")) s = s.slice(1);
+
+    // if ISO like 2026-01-31T18:30:00.000Z => convert to local month label
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+        return `${m}-${d.getFullYear()}`;
+      }
+    }
+
+    // if YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      return monthLabelFromISO(s);
+    }
+
+    // already label
+    return s;
+  }
+
+  // if Date object
+  if (Object.prototype.toString.call(v) === "[object Date]") {
+    const d = v;
+    const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+    return `${m}-${d.getFullYear()}`;
+  }
+
+  return String(v);
+}
+
   function monthLabelNow() {
     return monthLabelFromISO(todayISO());
   }
@@ -81,14 +125,10 @@ document.addEventListener("DOMContentLoaded", () => {
     return d.toISOString().slice(0,10);
   }
 
-  function prettyMonth(v){
-    if (!v) return "";
-    const s = String(v);
-    if (s.includes("T") && s.includes("Z")) {
-      return monthLabelFromISO(prettyISODate(s));
-    }
-    return String(v);
-  }
+function prettyMonth(v){
+  return monthLabelFromAny(v);
+}
+
 
   // ✅ NEW: Dashboard Upad total fallback (handles different backend response shapes)
   function getUpadTotalFromDash(dash) {
@@ -132,12 +172,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function getSalaryMonthsFromUpad() {
     const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
-    return (meta.months || []).slice();
+    return (meta.months || []).map(monthLabelFromAny);
+
   }
 
   async function getMonthsFromHolidays() {
     const rows = await cachedApi("holidaysAll", 60000, () => api({ action: "listHolidays", month: "" }));
-    const months = (rows || []).map(r => normMonthLabel(prettyMonth(r.month)));
+    const months = (rows || []).map(r => normMonthLabel(monthLabelFromAny(r.month)));
     return months.filter(Boolean);
   }
 
