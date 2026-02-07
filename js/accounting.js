@@ -419,31 +419,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /* ==========================================================
-       ✅ UPDATED: UPAD (filters + summary + superadmin edit/delete)
-       - Show nothing until user clicks Show
-       - After first Show, filter change auto reload
+       ✅ UPDATED: Upad Section
+       - Add Upad remains for all
+       - Summary (Month + Worker filters)
+       - NO auto-load until user clicks Show OR changes filters
+       - Auto reload when filters change
+       - Superadmin only: Edit / Delete / Export CSV
        ========================================================== */
     if (type === "upad") {
       content.innerHTML = `<div class="card"><h2>Upad</h2><p>Loading…</p></div>`;
 
-      const [meta, workers] = await Promise.all([
+      const [meta, workers, monthsMerged] = await Promise.all([
         cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" })),
-        getActiveWorkers()
+        getActiveWorkers(),
+        getMonthOptionsMerged()
       ]);
 
-      const months = (meta?.months || []).map(m => String(m || "").trim()).filter(Boolean);
-      const currentMonth = monthLabelNow();
-      const mergedMonths = Array.from(new Set([currentMonth, ...months.map(normMonthLabel).map(x => x)]))
-        .map(m => m) // keep as is
-        .filter(Boolean);
-
-      let upadLoadedOnce = false;
+      const current = monthLabelNow();
+      const monthOptions = (monthsMerged && monthsMerged.length) ? monthsMerged : (meta.months || []);
+      const hasCurrent = monthOptions.map(normMonthLabel).includes(normMonthLabel(current));
 
       content.innerHTML = `
         <div class="card">
           <h2>Upad</h2>
 
-          <!-- Add Upad -->
           <div class="card" style="margin-top:12px;">
             <h3 style="margin-top:0;">Add Upad</h3>
 
@@ -451,29 +450,26 @@ document.addEventListener("DOMContentLoaded", () => {
             <select id="upad_worker">
               ${(workers || []).map(w => `<option value="${escapeAttr(w)}">${escapeHtml(w)}</option>`).join("")}
             </select>
-            <br><br>
 
-            <label>Amount</label>
-            <input id="upad_amount" type="number" placeholder="Amount"><br><br>
+            <label style="margin-top:10px;">Amount</label>
+            <input id="upad_amount" type="number" placeholder="Amount">
 
-            <label>Month</label>
-            <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)" value="${escapeAttr(currentMonth)}">
+            <label style="margin-top:10px;">Month</label>
+            <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)" value="${escapeAttr(current)}">
             <datalist id="monthList">
-              ${(meta?.months || []).map(m => `<option value="${escapeAttr(m)}"></option>`).join("")}
+              ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}"></option>`).join("")}
             </datalist>
-            <br><br>
 
-            <button class="primary" id="btn_upad">Add Upad</button>
+            <button class="primary" id="btn_upad" style="margin-top:14px;">Add Upad</button>
           </div>
 
-          <!-- View / Summary -->
           <div class="card" style="margin-top:12px;">
             <h3 style="margin-top:0;">Upad Summary</h3>
 
             <label>Month</label>
             <select id="upad_filter_month">
               <option value="">All</option>
-              ${((meta?.months || [])).map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+              ${monthOptions.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
             </select>
 
             <label style="margin-top:10px;">Worker</label>
@@ -483,89 +479,81 @@ document.addEventListener("DOMContentLoaded", () => {
             </select>
 
             <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
-              <button class="primary" id="btn_upad_show">Show</button>
-              <button id="btn_upad_clear">Clear</button>
+              <button class="primary" id="btn_upad_load">Show</button>
+              <button class="primary" id="btn_upad_clear" style="background:#111;">Clear</button>
+              ${
+                role === "superadmin"
+                  ? `<button class="primary" id="btn_upad_export" style="background:#1fa971;">Export CSV</button>`
+                  : ``
+              }
             </div>
 
             <p id="upad_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
             <div id="upad_list" style="margin-top:12px;"></div>
 
-            <p style="margin-top:10px;color:#777;font-size:12px;">
-              Note: Summary will stay empty until you click <b>Show</b>.
-              ${role === "superadmin" ? ` Superadmin can edit/delete entries.` : ``}
+            <p class="dashSmall" style="margin-top:10px;">
+              (Nothing will show until you click <b>Show</b> or change Month/Worker.)
             </p>
           </div>
         </div>
       `;
 
-      // set default month selection to current month if exists
-      const selMonth = document.getElementById("upad_filter_month");
-      if (selMonth) {
-        const all = Array.from(selMonth.options).map(o => normMonthLabel(o.value));
-        if (all.includes(normMonthLabel(currentMonth))) {
-          selMonth.value = Array.from(selMonth.options).find(o => normMonthLabel(o.value) === normMonthLabel(currentMonth))?.value || "";
-        }
+      // defaults (selection only, still no auto-load)
+      const mSel = document.getElementById("upad_filter_month");
+      if (mSel && hasCurrent) {
+        mSel.value = monthOptions.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
       }
 
-      document.getElementById("btn_upad").addEventListener("click", async () => {
-        await addUpad();
-        // if user already loaded summary once, refresh it
-        if (upadLoadedOnce) await loadUpadSummary();
-      });
+      // ✅ state: do not load until user clicks Show OR changes filters
+      let upadSummaryEnabled = false;
+      let lastUpadRows = []; // for export
 
-      const btnShow = document.getElementById("btn_upad_show");
-      const btnClear = document.getElementById("btn_upad_clear");
-      const filterMonth = document.getElementById("upad_filter_month");
-      const filterWorker = document.getElementById("upad_filter_worker");
+      // clear output
+      const listBox = document.getElementById("upad_list");
+      const totalBox = document.getElementById("upad_total");
+      if (listBox) listBox.innerHTML = "";
+      if (totalBox) totalBox.textContent = "";
+
+      // actions
+      document.getElementById("btn_upad").addEventListener("click", addUpad);
+
+      const loadBtn = document.getElementById("btn_upad_load");
+      const clearBtn = document.getElementById("btn_upad_clear");
+      const exportBtn = document.getElementById("btn_upad_export");
 
       async function loadUpadSummary() {
-        const month = (document.getElementById("upad_filter_month")?.value || "").trim();
-        const worker = (document.getElementById("upad_filter_worker")?.value || "").trim();
-
-        const btn = document.getElementById("btn_upad_show");
+        const btn = loadBtn;
         const unlock = lockButton(btn, "Loading...");
 
         try {
+          const month = (document.getElementById("upad_filter_month")?.value || "").trim();
+          const worker = (document.getElementById("upad_filter_worker")?.value || "").trim();
+
+          // backend should support: action=listUpad, month(optional), worker(optional)
           const rows = await api({ action: "listUpad", month, worker });
 
-          const box = document.getElementById("upad_list");
-          const totalBox = document.getElementById("upad_total");
-          if (!box) return;
+          lastUpadRows = Array.isArray(rows) ? rows : [];
 
-          const list = Array.isArray(rows) ? rows : [];
-          if (!list.length) {
-            box.innerHTML = `<p>No upad entries found.</p>`;
+          if (!listBox) return;
+
+          if (!lastUpadRows.length) {
+            listBox.innerHTML = `<p>No upad entries found.</p>`;
             if (totalBox) totalBox.textContent = "";
             return;
           }
 
-          const total = list.reduce((s, r) => s + Number(r.amount || 0), 0);
-          const count = list.length;
-
-          // per-worker totals (small summary line)
-          const perWorker = {};
-          list.forEach(r => {
-            const w = String(r.worker || "").trim();
-            if (!w) return;
-            perWorker[w] = (perWorker[w] || 0) + Number(r.amount || 0);
-          });
-
-          const workerSummary = Object.keys(perWorker)
-            .sort((a,b)=>a.localeCompare(b))
-            .map(w => `${w}: ₹${Number(perWorker[w] || 0).toFixed(0)}`)
-            .join(" • ");
+          const total = lastUpadRows.reduce((s, r) => s + Number(r.amount || r[3] || 0), 0);
 
           if (totalBox) {
             totalBox.textContent =
-              `Entries: ${count} • Total: ₹${Number(total || 0).toFixed(0)}` +
-              (month ? ` • Month: ${month}` : "") +
-              (worker ? ` • Worker: ${worker}` : "") +
-              (workerSummary ? `\n${workerSummary}` : "");
+              `Total upad: ₹${Math.round(total)}`
+              + (month ? ` • Month: ${month}` : "")
+              + (worker ? ` • Worker: ${worker}` : "");
           }
 
-          const showActions = role === "superadmin";
+          const showActions = (role === "superadmin");
 
-          box.innerHTML = `
+          listBox.innerHTML = `
             <table style="width:100%;border-collapse:collapse;">
               <tr>
                 <th align="left">Date</th>
@@ -573,42 +561,73 @@ document.addEventListener("DOMContentLoaded", () => {
                 <th align="right">Amount</th>
                 <th align="left">Month</th>
                 <th align="left">Added By</th>
-                ${showActions ? `<th align="left">Actions</th>` : ``}
+                ${showActions ? `<th align="right">Actions</th>` : ``}
               </tr>
-              ${list.map(r => `
-                <tr style="border-top:1px solid #eee;">
-                  <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
-                  <td>${escapeHtml(r.worker || "")}</td>
-                  <td align="right">₹${Number(r.amount || 0).toFixed(0)}</td>
-                  <td>${escapeHtml(String(r.month || ""))}</td>
-                  <td>${escapeHtml(r.added_by || "")}</td>
-                  ${
-                    showActions
-                      ? `<td>
-                          <button class="userToggleBtn" data-upad-edit="${escapeAttr(String(r.rowIndex || ""))}">Edit</button>
-                          <button class="userToggleBtn" data-upad-del="${escapeAttr(String(r.rowIndex || ""))}">Delete</button>
-                        </td>`
-                      : ``
-                  }
-                </tr>
-              `).join("")}
+              ${lastUpadRows.map(r => {
+                const rowId = r.row ?? r.rowIndex ?? r._row ?? ""; // backend should return this for edit/delete
+                const date = prettyISODate(r.date || r[1] || "");
+                const wk = String(r.worker || r[2] || "");
+                const amt = Number(r.amount || r[3] || 0);
+                const mon = String(r.month || r[4] || "");
+                const by = String(r.added_by || r[5] || "");
+
+                return `
+                  <tr style="border-top:1px solid #eee;">
+                    <td>${escapeHtml(date)}</td>
+                    <td>${escapeHtml(wk)}</td>
+                    <td align="right">₹${amt.toFixed(0)}</td>
+                    <td>${escapeHtml(mon)}</td>
+                    <td>${escapeHtml(by)}</td>
+                    ${
+                      showActions
+                        ? `<td align="right" style="white-space:nowrap;">
+                             <button class="userToggleBtn" data-upad-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
+                             <button class="userToggleBtn" data-upad-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
+                           </td>`
+                        : ``
+                    }
+                  </tr>
+                `;
+              }).join("")}
             </table>
           `;
 
           // bind edit/delete (superadmin only)
-          if (showActions) {
-            box.querySelectorAll("button[data-upad-del]").forEach(b => {
-              b.addEventListener("click", async () => {
-                const rowIndex = Number(b.dataset.upadDel || 0);
-                if (!rowIndex) return;
+          if (role === "superadmin") {
+            listBox.querySelectorAll("button[data-upad-edit]").forEach(btn => {
+              btn.addEventListener("click", async () => {
+                const row = btn.getAttribute("data-row");
+                if (!row) return alert("Row id missing");
 
-                if (!confirm("Delete this upad entry?")) return;
+                // find current row data
+                const cur = lastUpadRows.find(x => String(x.row ?? x.rowIndex ?? x._row) === String(row));
+                const curWorker = String(cur?.worker || "");
+                const curMonth = String(cur?.month || "");
+                const curAmt = Number(cur?.amount || 0);
 
-                const unlock2 = lockButton(b, "Deleting...");
+                const newWorker = prompt("Worker:", curWorker);
+                if (newWorker === null) return;
+
+                const newMonth = prompt("Month (e.g. Feb-2026):", curMonth);
+                if (newMonth === null) return;
+
+                const newAmountStr = prompt("Amount:", String(curAmt || 0));
+                if (newAmountStr === null) return;
+                const newAmount = Number(newAmountStr || 0);
+
+                if (!String(newWorker).trim() || !newAmount) return alert("Worker and Amount required");
+
+                const unlock2 = lockButton(btn, "Saving...");
                 try {
-                  const r = await api({ action: "deleteUpad", rowIndex });
-                  if (r && r.error) return alert(r.error);
-                  alert("Deleted");
+                  const r = await api({
+                    action: "updateUpad",
+                    row: Number(row),
+                    worker: String(newWorker).trim(),
+                    month: String(newMonth).trim(),
+                    amount: newAmount
+                  });
+                  if (r && r.error) return alert(String(r.error));
+                  alert("Upad updated");
                   invalidateCache(["upadMeta", "monthsMerged"]);
                   await loadUpadSummary();
                 } finally {
@@ -617,49 +636,20 @@ document.addEventListener("DOMContentLoaded", () => {
               });
             });
 
-            box.querySelectorAll("button[data-upad-edit]").forEach(b => {
-              b.addEventListener("click", async () => {
-                const rowIndex = Number(b.dataset.upadEdit || 0);
-                if (!rowIndex) return;
+            listBox.querySelectorAll("button[data-upad-del]").forEach(btn => {
+              btn.addEventListener("click", async () => {
+                const row = btn.getAttribute("data-row");
+                if (!row) return alert("Row id missing");
+                if (!confirm("Delete this upad entry?")) return;
 
-                // find row values from current rendered list (best UX)
-                const cur = list.find(x => Number(x.rowIndex) === rowIndex);
-                const curDate = cur?.date ? prettyISODate(cur.date) : todayISO();
-                const curWorker = String(cur?.worker || "");
-                const curAmount = String(cur?.amount || "");
-                const curMonth = String(cur?.month || "");
-
-                const newDate = prompt("Edit Date (YYYY-MM-DD)", curDate);
-                if (newDate === null) return;
-
-                const newWorker = prompt("Edit Worker", curWorker);
-                if (newWorker === null) return;
-
-                const newAmountStr = prompt("Edit Amount", curAmount);
-                if (newAmountStr === null) return;
-                const newAmount = Number(newAmountStr || 0);
-
-                const newMonth = prompt("Edit Month (e.g. Feb-2026)", curMonth || monthLabelNow());
-                if (newMonth === null) return;
-
-                if (!newDate.trim() || !newWorker.trim() || !newMonth.trim() || !newAmount) {
-                  return alert("All fields required and amount must be > 0");
-                }
-
-                const unlock2 = lockButton(b, "Saving...");
+                const unlock2 = lockButton(btn, "Deleting...");
                 try {
                   const r = await api({
-                    action: "updateUpad",
-                    rowIndex,
-                    date: newDate.trim(),
-                    worker: newWorker.trim(),
-                    amount: newAmount,
-                    month: newMonth.trim()
+                    action: "deleteUpad",
+                    row: Number(row)
                   });
-
-                  if (r && r.error) return alert(r.error);
-
-                  alert("Updated");
+                  if (r && r.error) return alert(String(r.error));
+                  alert("Upad deleted");
                   invalidateCache(["upadMeta", "monthsMerged"]);
                   await loadUpadSummary();
                 } finally {
@@ -668,37 +658,83 @@ document.addEventListener("DOMContentLoaded", () => {
               });
             });
           }
+
         } finally {
           setTimeout(unlock, 350);
         }
       }
 
-      // Show button: first time enables auto reload
-      btnShow?.addEventListener("click", async () => {
-        upadLoadedOnce = true;
-        await loadUpadSummary();
+      function enableAndLoad() {
+        upadSummaryEnabled = true;
+        loadUpadSummary();
+      }
+
+      loadBtn?.addEventListener("click", enableAndLoad);
+
+      // ✅ Change month/worker => auto reload (and also counts as enabling)
+      document.getElementById("upad_filter_month")?.addEventListener("change", () => {
+        upadSummaryEnabled = true;
+        loadUpadSummary();
+      });
+      document.getElementById("upad_filter_worker")?.addEventListener("change", () => {
+        upadSummaryEnabled = true;
+        loadUpadSummary();
       });
 
-      // Clear button: clears UI and resets "loaded once" to false
-      btnClear?.addEventListener("click", () => {
-        if (filterMonth) filterMonth.value = "";
-        if (filterWorker) filterWorker.value = "";
-        const box = document.getElementById("upad_list");
-        const totalBox = document.getElementById("upad_total");
-        if (box) box.innerHTML = "";
+      clearBtn?.addEventListener("click", () => {
+        upadSummaryEnabled = false;
+        lastUpadRows = [];
+        if (listBox) listBox.innerHTML = "";
         if (totalBox) totalBox.textContent = "";
-        upadLoadedOnce = false;
+        const m = document.getElementById("upad_filter_month");
+        const w = document.getElementById("upad_filter_worker");
+        if (m) m.value = hasCurrent ? (monthOptions.find(x => normMonthLabel(x) === normMonthLabel(current)) || "") : "";
+        if (w) w.value = "";
       });
 
-      // Auto reload only AFTER user clicked Show once
-      filterMonth?.addEventListener("change", async () => {
-        if (!upadLoadedOnce) return;
-        await loadUpadSummary();
-      });
+      // ✅ Export CSV (superadmin only)
+      exportBtn?.addEventListener("click", () => {
+        if (role !== "superadmin") return;
 
-      filterWorker?.addEventListener("change", async () => {
-        if (!upadLoadedOnce) return;
-        await loadUpadSummary();
+        // If not loaded yet, do nothing
+        if (!upadSummaryEnabled || !Array.isArray(lastUpadRows) || !lastUpadRows.length) {
+          alert("Please click Show first.");
+          return;
+        }
+
+        const month = (document.getElementById("upad_filter_month")?.value || "").trim();
+        const worker = (document.getElementById("upad_filter_worker")?.value || "").trim();
+
+        const header = ["date","worker","amount","month","added_by","row"];
+        const lines = [header.join(",")];
+
+        lastUpadRows.forEach(r => {
+          const rowId = r.row ?? r.rowIndex ?? r._row ?? "";
+          const cols = [
+            prettyISODate(r.date || ""),
+            String(r.worker || ""),
+            String(Number(r.amount || 0)),
+            String(r.month || ""),
+            String(r.added_by || ""),
+            String(rowId)
+          ].map(v => csvEscape(v));
+          lines.push(cols.join(","));
+        });
+
+        const csv = lines.join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+
+        const a = document.createElement("a");
+        const company = (localStorage.getItem("company") || "company").replace(/\s+/g, "_");
+        const file = `upad_${company}_${(month || "All")}_${(worker || "All")}_${todayISO()}.csv`.replace(/[^\w\-\.]/g, "_");
+        a.href = URL.createObjectURL(blob);
+        a.download = file;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(a.href);
+          a.remove();
+        }, 200);
       });
 
       return;
@@ -1283,6 +1319,13 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       setTimeout(unlock, 700);
     }
+  }
+
+  // CSV helpers
+  function csvEscape(v) {
+    const s = String(v ?? "");
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
   }
 
   if (role !== "superadmin") {
