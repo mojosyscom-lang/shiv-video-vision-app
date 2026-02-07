@@ -1698,24 +1698,101 @@ const r = await api({
           (workerFilter ? ` • Worker: ${workerFilter}` : "");
       }
 
-      box.innerHTML = `
-        <table style="width:100%;border-collapse:collapse;">
-          <tr>
-            <th align="left">Date</th>
-            <th align="left">Worker</th>
-            <th align="left">Month</th>
-            <th align="left">Reason</th>
-          </tr>
-          ${filtered.map(r => `
-            <tr style="border-top:1px solid #eee;">
-              <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
-              <td>${escapeHtml(r.worker || "")}</td>
-              <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
-              <td>${escapeHtml(r.reason || "")}</td>
-            </tr>
-          `).join("")}
-        </table>
+      const showActions = (role === "superadmin");
+
+box.innerHTML = `
+  <table style="width:100%;border-collapse:collapse;">
+    <tr>
+      <th align="left">Date</th>
+      <th align="left">Worker</th>
+      <th align="left">Month</th>
+      <th align="left">Reason</th>
+      ${showActions ? `<th align="right">Actions</th>` : ``}
+    </tr>
+    ${filtered.map(r => {
+      const rowId = r.rowIndex ?? r.row ?? r._row ?? ""; // supports different shapes
+      return `
+        <tr style="border-top:1px solid #eee;">
+          <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
+          <td>${escapeHtml(r.worker || "")}</td>
+          <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
+          <td>${escapeHtml(r.reason || "")}</td>
+          ${
+            showActions
+              ? `<td align="right" style="white-space:nowrap;">
+                   <button class="userToggleBtn" data-hol-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
+                   <button class="userToggleBtn" data-hol-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
+                 </td>`
+              : ``
+          }
+        </tr>
       `;
+    }).join("")}
+  </table>
+`;
+
+      if (role === "superadmin") {
+  box.querySelectorAll("button[data-hol-edit]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const row = btn.getAttribute("data-row");
+      if (!row) return alert("Row id missing");
+
+      const cur = filtered.find(x => String(x.rowIndex ?? x.row) === String(row));
+      if (!cur) return alert("Row not found");
+
+      const newWorker = prompt("Worker:", String(cur.worker || ""));
+      if (newWorker === null) return;
+
+      const newDate = prompt("Date (YYYY-MM-DD):", String(prettyISODate(cur.date || todayISO())));
+      if (newDate === null) return;
+
+      const newReason = prompt("Reason:", String(cur.reason || ""));
+      if (newReason === null) return;
+
+      if (!String(newWorker).trim() || !String(newDate).trim()) {
+        return alert("Worker and Date required");
+      }
+
+      const unlock = lockButton(btn, "Saving...");
+      try {
+        const r = await api({
+          action: "updateHoliday",
+          rowIndex: Number(row),
+          worker: String(newWorker).trim(),
+          date: String(newDate).trim(),
+          reason: String(newReason || "").trim()
+        });
+        if (r && r.error) return alert(String(r.error));
+        alert("Holiday updated");
+        invalidateCache(["holidaysAll", "monthsMerged"]);
+        loadHolidays();
+      } finally {
+        setTimeout(unlock, 500);
+      }
+    });
+  });
+
+  box.querySelectorAll("button[data-hol-del]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const row = btn.getAttribute("data-row");
+      if (!row) return alert("Row id missing");
+      if (!confirm("Delete this holiday entry?")) return;
+
+      const unlock = lockButton(btn, "Deleting...");
+      try {
+        const r = await api({ action: "deleteHoliday", rowIndex: Number(row) });
+        if (r && r.error) return alert(String(r.error));
+        alert("Holiday deleted");
+        invalidateCache(["holidaysAll", "monthsMerged"]);
+        loadHolidays();
+      } finally {
+        setTimeout(unlock, 500);
+      }
+    });
+  });
+}
+
+
     } finally {
       setTimeout(unlock, 400);
     }
