@@ -54,49 +54,48 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${m}-${d.getFullYear()}`;
   }
 
-  
   // ✅ NEW: normalize ANY month coming from backend:
-// - "2026-01-31T18:30:00.000Z"  (Date serialized)
-// - Date object
-// - "'Feb-2026"
-// - "Feb-2026"
-function monthLabelFromAny(v) {
-  if (v === null || v === undefined || v === "") return "";
+  // - "2026-01-31T18:30:00.000Z"  (Date serialized)
+  // - Date object
+  // - "'Feb-2026"
+  // - "Feb-2026"
+  function monthLabelFromAny(v) {
+    if (v === null || v === undefined || v === "") return "";
 
-  // If backend returns ISO date string
-  if (typeof v === "string") {
-    let s = String(v).trim();
+    // If backend returns ISO date string
+    if (typeof v === "string") {
+      let s = String(v).trim();
 
-    // remove leading apostrophe (Sheets text forcing)
-    if (s.startsWith("'")) s = s.slice(1);
+      // remove leading apostrophe (Sheets text forcing)
+      if (s.startsWith("'")) s = s.slice(1);
 
-    // if ISO like 2026-01-31T18:30:00.000Z => convert to local month label
-    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
-      const d = new Date(s);
-      if (!isNaN(d.getTime())) {
-        const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-        return `${m}-${d.getFullYear()}`;
+      // if ISO like 2026-01-31T18:30:00.000Z => convert to local month label
+      if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) {
+          const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+          return `${m}-${d.getFullYear()}`;
+        }
       }
+
+      // if YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        return monthLabelFromISO(s);
+      }
+
+      // already label
+      return s;
     }
 
-    // if YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-      return monthLabelFromISO(s);
+    // if Date object
+    if (Object.prototype.toString.call(v) === "[object Date]") {
+      const d = v;
+      const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+      return `${m}-${d.getFullYear()}`;
     }
 
-    // already label
-    return s;
+    return String(v);
   }
-
-  // if Date object
-  if (Object.prototype.toString.call(v) === "[object Date]") {
-    const d = v;
-    const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-    return `${m}-${d.getFullYear()}`;
-  }
-
-  return String(v);
-}
 
   function monthLabelNow() {
     return monthLabelFromISO(todayISO());
@@ -125,16 +124,14 @@ function monthLabelFromAny(v) {
     return d.toISOString().slice(0,10);
   }
 
-function prettyMonth(v){
-  return monthLabelFromAny(v);
-}
-
+  function prettyMonth(v){
+    return monthLabelFromAny(v);
+  }
 
   // ✅ NEW: Dashboard Upad total fallback (handles different backend response shapes)
   function getUpadTotalFromDash(dash) {
     if (!dash) return 0;
 
-    // direct fields (common)
     const direct =
       Number(dash.upad_total) ||
       Number(dash.monthly_upad_total) ||
@@ -144,7 +141,6 @@ function prettyMonth(v){
 
     if (direct) return direct;
 
-    // map fields (your current logic expects this)
     const map =
       dash.upad_by_worker ||
       dash.upadByWorker ||
@@ -173,7 +169,6 @@ function prettyMonth(v){
   async function getSalaryMonthsFromUpad() {
     const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
     return (meta.months || []).map(monthLabelFromAny);
-
   }
 
   async function getMonthsFromHolidays() {
@@ -197,7 +192,7 @@ function prettyMonth(v){
       const list = [...set].filter(m => {
         const k = monthKey(m);
         if (!k) return false;
-        if (nowKey && k > nowKey) return false; // remove future months
+        if (nowKey && k > nowKey) return false;
         return true;
       });
 
@@ -286,6 +281,19 @@ function prettyMonth(v){
         `).join("");
       }
     }
+  }
+
+  // ✅ NEW: Upad row-id resolver (fixes "Invalid row")
+  function getUpadRowId(r) {
+    const v =
+      r?.row ??
+      r?.rowIndex ??
+      r?._row ??
+      r?.id ??
+      r?.rid ??
+      "";
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
   }
 
   async function loadSection(type) {
@@ -461,11 +469,6 @@ function prettyMonth(v){
 
     /* ==========================================================
        ✅ UPDATED: Upad Section
-       - Add Upad remains for all
-       - Summary (Month + Worker filters)
-       - NO auto-load until user clicks Show OR changes filters
-       - Auto reload when filters change
-       - Superadmin only: Edit / Delete / Export CSV
        ========================================================== */
     if (type === "upad") {
       content.innerHTML = `<div class="card"><h2>Upad</h2><p>Loading…</p></div>`;
@@ -477,7 +480,9 @@ function prettyMonth(v){
       ]);
 
       const current = monthLabelNow();
-      const monthOptions = (monthsMerged && monthsMerged.length) ? monthsMerged : (meta.months || []);
+      const monthOptionsRaw = (monthsMerged && monthsMerged.length) ? monthsMerged : (meta.months || []);
+      const monthOptions = monthOptionsRaw.map(m => monthLabelFromAny(m)).filter(Boolean);
+
       const hasCurrent = monthOptions.map(normMonthLabel).includes(normMonthLabel(current));
 
       content.innerHTML = `
@@ -498,7 +503,11 @@ function prettyMonth(v){
             <label style="margin-top:10px;">Month</label>
             <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)" value="${escapeAttr(current)}">
             <datalist id="monthList">
-              ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}"></option>`).join("")}
+              ${(meta.months || [])
+                .map(m => monthLabelFromAny(m))
+                .filter(Boolean)
+                .map(m => `<option value="${escapeAttr(m)}"></option>`)
+                .join("")}
             </datalist>
 
             <button class="primary" id="btn_upad" style="margin-top:14px;">Add Upad</button>
@@ -510,7 +519,9 @@ function prettyMonth(v){
             <label>Month</label>
             <select id="upad_filter_month">
               <option value="">All</option>
-              ${monthOptions.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+              ${monthOptions
+                .map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`)
+                .join("")}
             </select>
 
             <label style="margin-top:10px;">Worker</label>
@@ -539,23 +550,19 @@ function prettyMonth(v){
         </div>
       `;
 
-      // defaults (selection only, still no auto-load)
       const mSel = document.getElementById("upad_filter_month");
       if (mSel && hasCurrent) {
         mSel.value = monthOptions.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
       }
 
-      // ✅ state: do not load until user clicks Show OR changes filters
       let upadSummaryEnabled = false;
-      let lastUpadRows = []; // for export
+      let lastUpadRows = [];
 
-      // clear output
       const listBox = document.getElementById("upad_list");
       const totalBox = document.getElementById("upad_total");
       if (listBox) listBox.innerHTML = "";
       if (totalBox) totalBox.textContent = "";
 
-      // actions
       document.getElementById("btn_upad").addEventListener("click", addUpad);
 
       const loadBtn = document.getElementById("btn_upad_load");
@@ -570,9 +577,7 @@ function prettyMonth(v){
           const month = (document.getElementById("upad_filter_month")?.value || "").trim();
           const worker = (document.getElementById("upad_filter_worker")?.value || "").trim();
 
-          // backend should support: action=listUpad, month(optional), worker(optional)
           const rows = await api({ action: "listUpad", month, worker });
-
           lastUpadRows = Array.isArray(rows) ? rows : [];
 
           if (!listBox) return;
@@ -605,11 +610,11 @@ function prettyMonth(v){
                 ${showActions ? `<th align="right">Actions</th>` : ``}
               </tr>
               ${lastUpadRows.map(r => {
-                const rowId = r.row ?? r.rowIndex ?? r._row ?? ""; // backend should return this for edit/delete
+                const rowId = getUpadRowId(r);
                 const date = prettyISODate(r.date || r[1] || "");
                 const wk = String(r.worker || r[2] || "");
                 const amt = Number(r.amount || r[3] || 0);
-                const mon = String(r.month || r[4] || "");
+                const mon = monthLabelFromAny(r.month ?? r[4] ?? "");
                 const by = String(r.added_by || r[5] || "");
 
                 return `
@@ -622,8 +627,8 @@ function prettyMonth(v){
                     ${
                       showActions
                         ? `<td align="right" style="white-space:nowrap;">
-                             <button class="userToggleBtn" data-upad-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
-                             <button class="userToggleBtn" data-upad-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
+                             <button class="userToggleBtn" data-upad-edit="1" data-row="${escapeAttr(rowId ?? "")}">Edit</button>
+                             <button class="userToggleBtn" data-upad-del="1" data-row="${escapeAttr(rowId ?? "")}">Delete</button>
                            </td>`
                         : ``
                     }
@@ -633,17 +638,15 @@ function prettyMonth(v){
             </table>
           `;
 
-          // bind edit/delete (superadmin only)
           if (role === "superadmin") {
             listBox.querySelectorAll("button[data-upad-edit]").forEach(btn => {
               btn.addEventListener("click", async () => {
-                const row = btn.getAttribute("data-row");
-                if (!row) return alert("Row id missing");
+                const row = Number(btn.getAttribute("data-row") || 0);
+                if (!row) return alert("Invalid row");
 
-                // find current row data
-                const cur = lastUpadRows.find(x => String(x.row ?? x.rowIndex ?? x._row) === String(row));
+                const cur = lastUpadRows.find(x => getUpadRowId(x) === row);
                 const curWorker = String(cur?.worker || "");
-                const curMonth = String(cur?.month || "");
+                const curMonth = monthLabelFromAny(cur?.month || "");
                 const curAmt = Number(cur?.amount || 0);
 
                 const newWorker = prompt("Worker:", curWorker);
@@ -662,7 +665,7 @@ function prettyMonth(v){
                 try {
                   const r = await api({
                     action: "updateUpad",
-                    row: Number(row),
+                    row,
                     worker: String(newWorker).trim(),
                     month: String(newMonth).trim(),
                     amount: newAmount
@@ -679,15 +682,15 @@ function prettyMonth(v){
 
             listBox.querySelectorAll("button[data-upad-del]").forEach(btn => {
               btn.addEventListener("click", async () => {
-                const row = btn.getAttribute("data-row");
-                if (!row) return alert("Row id missing");
+                const row = Number(btn.getAttribute("data-row") || 0);
+                if (!row) return alert("Invalid row");
                 if (!confirm("Delete this upad entry?")) return;
 
                 const unlock2 = lockButton(btn, "Deleting...");
                 try {
                   const r = await api({
                     action: "deleteUpad",
-                    row: Number(row)
+                    row
                   });
                   if (r && r.error) return alert(String(r.error));
                   alert("Upad deleted");
@@ -712,7 +715,6 @@ function prettyMonth(v){
 
       loadBtn?.addEventListener("click", enableAndLoad);
 
-      // ✅ Change month/worker => auto reload (and also counts as enabling)
       document.getElementById("upad_filter_month")?.addEventListener("change", () => {
         upadSummaryEnabled = true;
         loadUpadSummary();
@@ -733,11 +735,9 @@ function prettyMonth(v){
         if (w) w.value = "";
       });
 
-      // ✅ Export CSV (superadmin only)
       exportBtn?.addEventListener("click", () => {
         if (role !== "superadmin") return;
 
-        // If not loaded yet, do nothing
         if (!upadSummaryEnabled || !Array.isArray(lastUpadRows) || !lastUpadRows.length) {
           alert("Please click Show first.");
           return;
@@ -750,12 +750,12 @@ function prettyMonth(v){
         const lines = [header.join(",")];
 
         lastUpadRows.forEach(r => {
-          const rowId = r.row ?? r.rowIndex ?? r._row ?? "";
+          const rowId = getUpadRowId(r) ?? "";
           const cols = [
             prettyISODate(r.date || ""),
             String(r.worker || ""),
             String(Number(r.amount || 0)),
-            String(r.month || ""),
+            monthLabelFromAny(r.month || ""),
             String(r.added_by || ""),
             String(rowId)
           ].map(v => csvEscape(v));
@@ -780,6 +780,8 @@ function prettyMonth(v){
 
       return;
     }
+
+    // ---- rest of your file unchanged below ----
 
     if (type === "expenses") {
       content.innerHTML = `
