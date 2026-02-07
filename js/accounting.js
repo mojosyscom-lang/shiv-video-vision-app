@@ -58,54 +58,8 @@ document.addEventListener("DOMContentLoaded", () => {
     return monthLabelFromISO(todayISO());
   }
 
-  // ✅ NEW: normalize ANY month coming from backend:
-  // - "2026-01-31T18:30:00.000Z"  (Date serialized)
-  // - Date object
-  // - "'Feb-2026"
-  // - "Feb-2026"
-  function monthLabelFromAny(v) {
-    if (v === null || v === undefined || v === "") return "";
-
-    // If backend returns ISO date string
-    if (typeof v === "string") {
-      let s = String(v).trim();
-
-      // remove leading apostrophe (Sheets text forcing)
-      if (s.startsWith("'")) s = s.slice(1);
-
-      // if ISO like 2026-01-31T18:30:00.000Z => convert to local month label
-      if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
-        const d = new Date(s);
-        if (!isNaN(d.getTime())) {
-          const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-          return `${m}-${d.getFullYear()}`;
-        }
-      }
-
-      // if YYYY-MM-DD
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-        return monthLabelFromISO(s);
-      }
-
-      // already label
-      return s;
-    }
-
-    // if Date object
-    if (Object.prototype.toString.call(v) === "[object Date]") {
-      const d = v;
-      const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-      return `${m}-${d.getFullYear()}`;
-    }
-
-    return String(v);
-  }
-
   function normMonthLabel(s) {
-    // normalize for comparisons + remove spaces + remove leading apostrophe
-    let x = String(s || "").trim();
-    if (x.startsWith("'")) x = x.slice(1);
-    return x.replace(/–|—/g, "-").replace(/\s+/g, "");
+    return String(s || "").trim().replace(/\s+/g, "");
   }
 
   function monthKey(label) {
@@ -128,13 +82,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function prettyMonth(v){
-    return monthLabelFromAny(v);
+    if (!v) return "";
+    const s = String(v);
+    if (s.includes("T") && s.includes("Z")) {
+      return monthLabelFromISO(prettyISODate(s));
+    }
+    return String(v);
   }
 
   // ✅ NEW: Dashboard Upad total fallback (handles different backend response shapes)
   function getUpadTotalFromDash(dash) {
     if (!dash) return 0;
 
+    // direct fields (common)
     const direct =
       Number(dash.upad_total) ||
       Number(dash.monthly_upad_total) ||
@@ -144,6 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (direct) return direct;
 
+    // map fields (your current logic expects this)
     const map =
       dash.upad_by_worker ||
       dash.upadByWorker ||
@@ -153,6 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (map && typeof map === "object") {
       return Object.values(map).reduce((a,b)=>a + Number(b || 0), 0);
     }
+
     return 0;
   }
 
@@ -168,15 +130,14 @@ document.addEventListener("DOMContentLoaded", () => {
     return list;
   }
 
-  // ✅ months from upad meta, normalize them to Mon-YYYY labels
   async function getSalaryMonthsFromUpad() {
     const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
-    return (meta.months || []).map(monthLabelFromAny);
+    return (meta.months || []).slice();
   }
 
   async function getMonthsFromHolidays() {
     const rows = await cachedApi("holidaysAll", 60000, () => api({ action: "listHolidays", month: "" }));
-    const months = (rows || []).map(r => normMonthLabel(monthLabelFromAny(r.month)));
+    const months = (rows || []).map(r => normMonthLabel(prettyMonth(r.month)));
     return months.filter(Boolean);
   }
 
@@ -187,7 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
         getMonthsFromHolidays()
       ]);
 
-      const upadMonths = (upadMonthsRaw || []).map(m => normMonthLabel(monthLabelFromAny(m)));
+      const upadMonths = (upadMonthsRaw || []).map(normMonthLabel);
       const set = new Set([...upadMonths, ...holMonths].filter(Boolean));
 
       const nowKey = monthKey(monthLabelNow());
@@ -234,7 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="dashSub">
             Logged in as: <b>${escapeHtml(localStorage.getItem("username") || "")}</b> (${escapeHtml(role)}) • 
             Company: <b>${escapeHtml(localStorage.getItem("company") || "")}</b> • 
-            Month: <b>${escapeHtml((dash && monthLabelFromAny(dash.month)) || month)}</b>
+            Month: <b>${escapeHtml((dash && dash.month) || month)}</b>
           </div>
         </div>
       </div>
@@ -458,7 +419,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /* ==========================================================
-       ✅ UPDATED: Upad Section (Month display fixed)
+       ✅ UPDATED: Upad Section
+       - Add Upad remains for all
+       - Summary (Month + Worker filters)
+       - NO auto-load until user clicks Show OR changes filters
+       - Auto reload when filters change
+       - Superadmin only: Edit / Delete / Export CSV
        ========================================================== */
     if (type === "upad") {
       content.innerHTML = `<div class="card"><h2>Upad</h2><p>Loading…</p></div>`;
@@ -470,13 +436,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ]);
 
       const current = monthLabelNow();
-
-      // normalize meta.months too (in case backend sends Date)
-      const metaMonths = (meta.months || []).map(monthLabelFromAny).filter(Boolean);
-
-      // use merged months if present else meta months
-      const monthOptions = (monthsMerged && monthsMerged.length) ? monthsMerged : metaMonths;
-
+      const monthOptions = (monthsMerged && monthsMerged.length) ? monthsMerged : (meta.months || []);
       const hasCurrent = monthOptions.map(normMonthLabel).includes(normMonthLabel(current));
 
       content.innerHTML = `
@@ -497,7 +457,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <label style="margin-top:10px;">Month</label>
             <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)" value="${escapeAttr(current)}">
             <datalist id="monthList">
-              ${metaMonths.map(m => `<option value="${escapeAttr(m)}"></option>`).join("")}
+              ${(meta.months || []).map(m => `<option value="${escapeAttr(m)}"></option>`).join("")}
             </datalist>
 
             <button class="primary" id="btn_upad" style="margin-top:14px;">Add Upad</button>
@@ -544,14 +504,17 @@ document.addEventListener("DOMContentLoaded", () => {
         mSel.value = monthOptions.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
       }
 
+      // ✅ state: do not load until user clicks Show OR changes filters
       let upadSummaryEnabled = false;
       let lastUpadRows = []; // for export
 
+      // clear output
       const listBox = document.getElementById("upad_list");
       const totalBox = document.getElementById("upad_total");
       if (listBox) listBox.innerHTML = "";
       if (totalBox) totalBox.textContent = "";
 
+      // actions
       document.getElementById("btn_upad").addEventListener("click", addUpad);
 
       const loadBtn = document.getElementById("btn_upad_load");
@@ -563,9 +526,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const unlock = lockButton(btn, "Loading...");
 
         try {
-          const month = (document.getElementById("upad_filter_month")?.value || "").trim(); // already Mon-YYYY
+          const month = (document.getElementById("upad_filter_month")?.value || "").trim();
           const worker = (document.getElementById("upad_filter_worker")?.value || "").trim();
 
+          // backend should support: action=listUpad, month(optional), worker(optional)
           const rows = await api({ action: "listUpad", month, worker });
 
           lastUpadRows = Array.isArray(rows) ? rows : [];
@@ -600,11 +564,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${showActions ? `<th align="right">Actions</th>` : ``}
               </tr>
               ${lastUpadRows.map(r => {
-                const rowId = r.row ?? r.rowIndex ?? r._row ?? "";
+                const rowId = r.row ?? r.rowIndex ?? r._row ?? ""; // backend should return this for edit/delete
                 const date = prettyISODate(r.date || r[1] || "");
                 const wk = String(r.worker || r[2] || "");
                 const amt = Number(r.amount || r[3] || 0);
-                const mon = monthLabelFromAny(r.month || r[4] || ""); // ✅ FIXED DISPLAY
+                const mon = String(r.month || r[4] || "");
                 const by = String(r.added_by || r[5] || "");
 
                 return `
@@ -628,15 +592,17 @@ document.addEventListener("DOMContentLoaded", () => {
             </table>
           `;
 
+          // bind edit/delete (superadmin only)
           if (role === "superadmin") {
             listBox.querySelectorAll("button[data-upad-edit]").forEach(btn => {
               btn.addEventListener("click", async () => {
                 const row = btn.getAttribute("data-row");
                 if (!row) return alert("Row id missing");
 
+                // find current row data
                 const cur = lastUpadRows.find(x => String(x.row ?? x.rowIndex ?? x._row) === String(row));
                 const curWorker = String(cur?.worker || "");
-                const curMonth = monthLabelFromAny(cur?.month || "");
+                const curMonth = String(cur?.month || "");
                 const curAmt = Number(cur?.amount || 0);
 
                 const newWorker = prompt("Worker:", curWorker);
@@ -657,7 +623,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     action: "updateUpad",
                     row: Number(row),
                     worker: String(newWorker).trim(),
-                    month: monthLabelFromAny(String(newMonth).trim()), // ✅ ensure correct format
+                    month: String(newMonth).trim(),
                     amount: newAmount
                   });
                   if (r && r.error) return alert(String(r.error));
@@ -705,6 +671,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       loadBtn?.addEventListener("click", enableAndLoad);
 
+      // ✅ Change month/worker => auto reload (and also counts as enabling)
       document.getElementById("upad_filter_month")?.addEventListener("change", () => {
         upadSummaryEnabled = true;
         loadUpadSummary();
@@ -729,6 +696,7 @@ document.addEventListener("DOMContentLoaded", () => {
       exportBtn?.addEventListener("click", () => {
         if (role !== "superadmin") return;
 
+        // If not loaded yet, do nothing
         if (!upadSummaryEnabled || !Array.isArray(lastUpadRows) || !lastUpadRows.length) {
           alert("Please click Show first.");
           return;
@@ -746,7 +714,7 @@ document.addEventListener("DOMContentLoaded", () => {
             prettyISODate(r.date || ""),
             String(r.worker || ""),
             String(Number(r.amount || 0)),
-            monthLabelFromAny(r.month || ""),
+            String(r.month || ""),
             String(r.added_by || ""),
             String(rowId)
           ].map(v => csvEscape(v));
@@ -863,6 +831,114 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    if (type === "userMgmt") {
+      if (role !== "superadmin") {
+        content.innerHTML = `<div class="card">Unauthorized</div>`;
+        return;
+      }
+
+      content.innerHTML = `<div class="card"><h2>User Management</h2><p>Loading…</p></div>`;
+      const users = await api({ action: "getUsers" });
+
+      content.innerHTML = `
+        <div class="card">
+          <h2>User Management</h2>
+          ${(users || []).map(u => `
+            <div class="card">
+              <strong>${escapeHtml(u.username)}</strong> (${escapeHtml(u.role)})<br>
+              Company: ${escapeHtml(u.company)}<br>
+              Status: <strong>${escapeHtml(u.status)}</strong><br>
+              Last login: ${u.last_login || "Never"}<br><br>
+
+              <button class="userToggleBtn"
+                data-status="${escapeAttr(u.status)}"
+                data-target="${escapeAttr(u.username)}"
+                data-next="${escapeAttr(u.status === "ACTIVE" ? "DISABLED" : "ACTIVE")}">
+                ${u.status === "ACTIVE" ? "Disable" : "Enable"}
+              </button>
+            </div>
+          `).join("")}
+        </div>
+      `;
+
+      content.querySelectorAll("button[data-target]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const unlock = lockButton(btn, "Updating...");
+          try {
+            await toggleUser(btn.dataset.target, btn.dataset.next);
+          } finally {
+            setTimeout(unlock, 500);
+          }
+        });
+      });
+      return;
+    }
+
+    if (type === "userAdd") {
+      if (role !== "superadmin") {
+        content.innerHTML = `<div class="card">Unauthorized</div>`;
+        return;
+      }
+
+      content.innerHTML = `
+        <div class="card">
+          <h2>Add New User</h2>
+
+          <label>Username</label>
+          <input id="new_username" placeholder="e.g. staff1">
+
+          <label style="margin-top:10px;">Password</label>
+          <input id="new_password" type="password" placeholder="Set password">
+
+          <label style="margin-top:10px;">Role</label>
+          <select id="new_role">
+            <option value="staff">staff</option>
+            <option value="owner">owner</option>
+            <option value="superadmin">superadmin</option>
+          </select>
+
+          <label style="margin-top:10px;">Company</label>
+          <input id="new_company" placeholder="e.g. Shiv Video Vision">
+
+          <button class="primary" id="btn_add_user" style="margin-top:14px;">➕ Create User</button>
+        </div>
+      `;
+
+      document.getElementById("btn_add_user").addEventListener("click", addNewUser);
+      return;
+    }
+
+    if (type === "userPw") {
+      if (role !== "superadmin") {
+        content.innerHTML = `<div class="card">Unauthorized</div>`;
+        return;
+      }
+
+      content.innerHTML = `<div class="card"><h2>Edit Password</h2><p>Loading…</p></div>`;
+      const users = await api({ action: "getUsers" });
+
+      content.innerHTML = `
+        <div class="card">
+          <h2>Edit Password</h2>
+
+          <label>Select User</label>
+          <select id="pw_user">
+            ${(users || []).map(u => `
+              <option value="${escapeAttr(u.username)}">${escapeHtml(u.username)} (${escapeHtml(u.role)})</option>
+            `).join("")}
+          </select>
+
+          <label style="margin-top:10px;">New Password</label>
+          <input id="pw_new" type="password" placeholder="Enter new password">
+
+          <button class="primary" id="btn_pw_update" style="margin-top:14px;">🔑 Update Password</button>
+        </div>
+      `;
+
+      document.getElementById("btn_pw_update").addEventListener("click", updateUserPassword);
+      return;
+    }
+
     content.innerHTML = `<div class="card">Section not found: ${escapeHtml(type)}</div>`;
   }
 
@@ -877,7 +953,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const worker = document.getElementById("upad_worker").value.trim();
       const amount = Number(document.getElementById("upad_amount").value || 0);
-      const month = monthLabelFromAny(document.getElementById("upad_month").value.trim() || monthLabelNow());
+      const month = document.getElementById("upad_month").value.trim() || monthLabelNow();
 
       if (!worker || !amount) return alert("Enter worker and amount");
 
@@ -1010,6 +1086,18 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       setTimeout(unlock, 600);
     }
+  }
+
+  async function toggleUser(targetUsername, status) {
+    const r = await api({
+      action: "updateUserStatus",
+      target_username: targetUsername,
+      status
+    });
+
+    if (r && r.error) return;
+    alert(`Updated: ${targetUsername} → ${status}`);
+    loadSection("userMgmt");
   }
 
   async function addWorker() {
@@ -1170,6 +1258,66 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     } finally {
       setTimeout(unlock, 400);
+    }
+  }
+
+  async function addNewUser() {
+    const btn = document.getElementById("btn_add_user");
+    const unlock = lockButton(btn, "Creating...");
+
+    try {
+      const username = document.getElementById("new_username").value.trim();
+      const password = document.getElementById("new_password").value.trim();
+      const roleVal  = document.getElementById("new_role").value.trim();
+      const company  = document.getElementById("new_company").value.trim();
+
+      if (!username || !password || !roleVal || !company) {
+        alert("Please fill all fields");
+        return;
+      }
+
+      const r = await api({
+        action: "addUser",
+        username,
+        password,
+        role: roleVal,
+        company
+      });
+
+      if (r && r.error) return;
+
+      alert("User created");
+      loadSection("userMgmt");
+    } finally {
+      setTimeout(unlock, 700);
+    }
+  }
+
+  async function updateUserPassword() {
+    const btn = document.getElementById("btn_pw_update");
+    const unlock = lockButton(btn, "Updating...");
+
+    try {
+      const target_username = document.getElementById("pw_user").value.trim();
+      const new_password = document.getElementById("pw_new").value.trim();
+
+      if (!target_username || !new_password) {
+        alert("Select user and enter new password");
+        return;
+      }
+
+      const r = await api({
+        action: "updateUserPassword",
+        target_username,
+        new_password
+      });
+
+      if (r && r.error) return;
+
+      alert("Password updated");
+      document.getElementById("pw_new").value = "";
+    } finally {
+      setTimeout(unlock, 700);
     }
   }
 
