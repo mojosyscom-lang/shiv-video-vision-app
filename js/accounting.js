@@ -665,7 +665,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 try {
                   const r = await api({
                     action: "updateUpad",
-                    row,
+                    rowIndex: Number(row),
                     worker: String(newWorker).trim(),
                     month: String(newMonth).trim(),
                     amount: newAmount
@@ -690,7 +690,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 try {
                   const r = await api({
                     action: "deleteUpad",
-                    row
+                    rowIndex: Number(row)
                   });
                   if (r && r.error) return alert(String(r.error));
                   alert("Upad deleted");
