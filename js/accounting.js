@@ -663,13 +663,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const unlock2 = lockButton(btn, "Saving...");
                 try {
-                  const r = await api({
-                    action: "updateUpad",
-                    rowIndex: Number(row),
-                    worker: String(newWorker).trim(),
-                    month: String(newMonth).trim(),
-                    amount: newAmount
-                  });
+                 const keepDate = prettyISODate(cur?.date || todayISO());
+
+const r = await api({
+  action: "updateUpad",
+  rowIndex: Number(row),
+  date: keepDate, // ✅ REQUIRED by backend
+  worker: String(newWorker).trim(),
+  month: String(newMonth).trim(),
+  amount: newAmount
+});
+
                   if (r && r.error) return alert(String(r.error));
                   alert("Upad updated");
                   invalidateCache(["upadMeta", "monthsMerged"]);
