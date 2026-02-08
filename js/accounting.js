@@ -1668,135 +1668,144 @@ const r = await api({
   }
 
   async function loadHolidays() {
-    const btn = document.getElementById("btn_hol_load");
-    const unlock = lockButton(btn, "Loading...");
+  const btn = document.getElementById("btn_hol_load");
+  const unlock = lockButton(btn, "Loading...");
 
-    try {
-      const month = (document.getElementById("hol_month")?.value || "").trim();
-      const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
+  try {
+    const month = (document.getElementById("hol_month")?.value || "").trim();
+    const workerFilter = (document.getElementById("hol_worker_filter")?.value || "").trim();
 
-      const rows = await api({ action: "listHolidays", month });
+    const rows = await api({ action: "listHolidays", month });
 
-      const box = document.getElementById("hol_list");
-      const totalBox = document.getElementById("hol_total");
-      if (!box) return;
+    const box = document.getElementById("hol_list");
+    const totalBox = document.getElementById("hol_total");
+    if (!box) return;
 
-      const filtered = (rows || []).filter(r => {
-        if (!workerFilter) return true;
-        return String(r.worker || "").trim() === workerFilter;
+    const filtered = (rows || []).filter(r => {
+      if (!workerFilter) return true;
+      return String(r.worker || "").trim() === workerFilter;
+    });
+
+    if (!filtered.length) {
+      box.innerHTML = `<p>No holidays found.</p>`;
+      if (totalBox) totalBox.textContent = "";
+      return;
+    }
+
+    if (totalBox) {
+      totalBox.textContent =
+        `Total holidays: ${filtered.length} day(s)` +
+        (month ? ` • Month: ${month}` : "") +
+        (workerFilter ? ` • Worker: ${workerFilter}` : "");
+    }
+
+    const showActions = (role === "superadmin");
+
+    // ✅ FIX: use ONE consistent row id resolver everywhere (table + find + api calls)
+    function holRowId(r) {
+      const id = (r && (r.rowIndex ?? r.row ?? r._row)) ? (r.rowIndex ?? r.row ?? r._row) : "";
+      return String(id || "").trim();
+    }
+
+    box.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th align="left">Date</th>
+          <th align="left">Worker</th>
+          <th align="left">Month</th>
+          <th align="left">Reason</th>
+          ${showActions ? `<th align="right">Actions</th>` : ``}
+        </tr>
+        ${filtered.map(r => {
+          const rowId = holRowId(r); // ✅ FIX
+          return `
+            <tr style="border-top:1px solid #eee;">
+              <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
+              <td>${escapeHtml(r.worker || "")}</td>
+              <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
+              <td>${escapeHtml(r.reason || "")}</td>
+              ${
+                showActions
+                  ? `<td align="right" style="white-space:nowrap;">
+                       <button class="userToggleBtn" data-hol-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
+                       <button class="userToggleBtn" data-hol-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
+                     </td>`
+                  : ``
+              }
+            </tr>
+          `;
+        }).join("")}
+      </table>
+    `;
+
+    if (role === "superadmin") {
+      box.querySelectorAll("button[data-hol-edit]").forEach(btn2 => {
+        btn2.addEventListener("click", async () => {
+          const row = String(btn2.getAttribute("data-row") || "").trim();
+          if (!row) return alert("Row id missing");
+
+          // ✅ FIX: find using the SAME resolver used for rendering
+          const cur = filtered.find(x => holRowId(x) === row);
+          if (!cur) return alert("Row not found");
+
+          const newWorker = prompt("Worker:", String(cur.worker || ""));
+          if (newWorker === null) return;
+
+          const newDate = prompt(
+            "Date (YYYY-MM-DD):",
+            String(prettyISODate(cur.date || todayISO()))
+          );
+          if (newDate === null) return;
+
+          const newReason = prompt("Reason:", String(cur.reason || ""));
+          if (newReason === null) return;
+
+          if (!String(newWorker).trim() || !String(newDate).trim()) {
+            return alert("Worker and Date required");
+          }
+
+          const unlock2 = lockButton(btn2, "Saving...");
+          try {
+            const r = await api({
+              action: "updateHoliday",
+              rowIndex: Number(row), // backend expects rowIndex
+              worker: String(newWorker).trim(),
+              date: String(newDate).trim(),
+              reason: String(newReason || "").trim()
+            });
+            if (r && r.error) return alert(String(r.error));
+            alert("Holiday updated");
+            invalidateCache(["holidaysAll", "monthsMerged"]);
+            loadHolidays();
+          } finally {
+            setTimeout(unlock2, 500);
+          }
+        });
       });
 
-      if (!filtered.length) {
-        box.innerHTML = `<p>No holidays found.</p>`;
-        if (totalBox) totalBox.textContent = "";
-        return;
-      }
+      box.querySelectorAll("button[data-hol-del]").forEach(btn2 => {
+        btn2.addEventListener("click", async () => {
+          const row = String(btn2.getAttribute("data-row") || "").trim();
+          if (!row) return alert("Row id missing");
+          if (!confirm("Delete this holiday entry?")) return;
 
-      if (totalBox) {
-        totalBox.textContent = `Total holidays: ${filtered.length} day(s)` +
-          (month ? ` • Month: ${month}` : "") +
-          (workerFilter ? ` • Worker: ${workerFilter}` : "");
-      }
-
-      const showActions = (role === "superadmin");
-
-box.innerHTML = `
-  <table style="width:100%;border-collapse:collapse;">
-    <tr>
-      <th align="left">Date</th>
-      <th align="left">Worker</th>
-      <th align="left">Month</th>
-      <th align="left">Reason</th>
-      ${showActions ? `<th align="right">Actions</th>` : ``}
-    </tr>
-    ${filtered.map(r => {
-      const rowId = r.rowIndex ?? r.row ?? r._row ?? ""; // supports different shapes
-      return `
-        <tr style="border-top:1px solid #eee;">
-          <td>${escapeHtml(prettyISODate(r.date || ""))}</td>
-          <td>${escapeHtml(r.worker || "")}</td>
-          <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
-          <td>${escapeHtml(r.reason || "")}</td>
-          ${
-            showActions
-              ? `<td align="right" style="white-space:nowrap;">
-                   <button class="userToggleBtn" data-hol-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
-                   <button class="userToggleBtn" data-hol-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
-                 </td>`
-              : ``
+          const unlock2 = lockButton(btn2, "Deleting...");
+          try {
+            const r = await api({ action: "deleteHoliday", rowIndex: Number(row) });
+            if (r && r.error) return alert(String(r.error));
+            alert("Holiday deleted");
+            invalidateCache(["holidaysAll", "monthsMerged"]);
+            loadHolidays();
+          } finally {
+            setTimeout(unlock2, 500);
           }
-        </tr>
-      `;
-    }).join("")}
-  </table>
-`;
-
-      if (role === "superadmin") {
-  box.querySelectorAll("button[data-hol-edit]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const row = btn.getAttribute("data-row");
-      if (!row) return alert("Row id missing");
-
-      const cur = filtered.find(x => String(x.rowIndex ?? x.row) === String(row));
-      if (!cur) return alert("Row not found");
-
-      const newWorker = prompt("Worker:", String(cur.worker || ""));
-      if (newWorker === null) return;
-
-      const newDate = prompt("Date (YYYY-MM-DD):", String(prettyISODate(cur.date || todayISO())));
-      if (newDate === null) return;
-
-      const newReason = prompt("Reason:", String(cur.reason || ""));
-      if (newReason === null) return;
-
-      if (!String(newWorker).trim() || !String(newDate).trim()) {
-        return alert("Worker and Date required");
-      }
-
-      const unlock = lockButton(btn, "Saving...");
-      try {
-        const r = await api({
-          action: "updateHoliday",
-          rowIndex: Number(row),
-          worker: String(newWorker).trim(),
-          date: String(newDate).trim(),
-          reason: String(newReason || "").trim()
         });
-        if (r && r.error) return alert(String(r.error));
-        alert("Holiday updated");
-        invalidateCache(["holidaysAll", "monthsMerged"]);
-        loadHolidays();
-      } finally {
-        setTimeout(unlock, 500);
-      }
-    });
-  });
-
-  box.querySelectorAll("button[data-hol-del]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const row = btn.getAttribute("data-row");
-      if (!row) return alert("Row id missing");
-      if (!confirm("Delete this holiday entry?")) return;
-
-      const unlock = lockButton(btn, "Deleting...");
-      try {
-        const r = await api({ action: "deleteHoliday", rowIndex: Number(row) });
-        if (r && r.error) return alert(String(r.error));
-        alert("Holiday deleted");
-        invalidateCache(["holidaysAll", "monthsMerged"]);
-        loadHolidays();
-      } finally {
-        setTimeout(unlock, 500);
-      }
-    });
-  });
-}
-
-
-    } finally {
-      setTimeout(unlock, 400);
+      });
     }
+  } finally {
+    setTimeout(unlock, 400);
   }
+}
 
   async function addNewUser() {
     const btn = document.getElementById("btn_add_user");
