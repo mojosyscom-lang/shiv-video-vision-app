@@ -1242,7 +1242,15 @@ const r = await api({
           </select>
           <br><br>
 
-          <button class="primary" id="btn_sal_load">Load Summary</button>
+          
+<div style="display:flex;gap:10px;flex-wrap:wrap;">
+  <button class="primary" id="btn_sal_load">Load Summary</button>
+  ${
+    role === "superadmin"
+      ? `<button class="primary" id="btn_sal_export" style="background:#1fa971;">Export CSV</button>`
+      : ``
+  }
+        </div>  
         </div>
 
         <div class="card" id="sal_result">
@@ -1286,6 +1294,75 @@ const r = await api({
 
       document.getElementById("btn_sal_load").addEventListener("click", loadSalarySummary);
       document.getElementById("btn_sal_pay").addEventListener("click", addSalaryPayment);
+      // --- new export salary function
+
+document.getElementById("btn_sal_export")?.addEventListener("click", () => {
+  if (role !== "superadmin") return;
+
+  const rows = window.__lastSalaryRows || [];
+  const month = window.__lastSalaryMonth || "";
+
+  if (!Array.isArray(rows) || !rows.length) {
+    alert("Please click Load Summary first.");
+    return;
+  }
+
+  const header = [
+    "worker",
+    "monthly_salary",
+    "prorated_salary",
+    "upad",
+    "holiday_count",
+    "holiday_deduction",
+    "paid",
+    "balance"
+  ];
+
+  const lines = [header.join(",")];
+
+  rows.forEach(r => {
+    const upadVal = Number(
+      r.upad_total ??
+      r.upadTotal ??
+      r.upad ??
+      r.advance_total ??
+      0
+    );
+
+    const cols = [
+      String(r.worker || ""),
+      String(Number(r.monthly_salary || 0)),
+      String(Number(r.prorated_salary || 0)),
+      String(upadVal),
+      String(Number(r.holiday_count || 0)),
+      String(Number(r.holiday_deduction || 0)),
+      String(Number(r.paid_total || 0)),
+      String(Number(r.balance || 0))
+    ].map(v => csvEscape(v));
+
+    lines.push(cols.join(","));
+  });
+
+  const csv = lines.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+
+  const a = document.createElement("a");
+  const company = (localStorage.getItem("company") || "company").replace(/\s+/g, "_");
+  const file = `salary_${company}_${(month || "All")}_${todayISO()}.csv`.replace(/[^\w\-\.]/g, "_");
+
+  a.href = URL.createObjectURL(blob);
+  a.download = file;
+  document.body.appendChild(a);
+  a.click();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 200);
+});
+
+      
+      // --- here it ends
       return;
     }
 
@@ -1471,6 +1548,8 @@ const r = await api({
     try {
       const month = document.getElementById("sal_month").value.trim();
       const rows = await api({ action: "getSalarySummary", month });
+window.__lastSalaryRows = Array.isArray(rows) ? rows : [];
+window.__lastSalaryMonth = month || "";
 
       const box = document.getElementById("sal_result");
       if (!rows || rows.length === 0) {
