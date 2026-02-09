@@ -284,6 +284,14 @@ function toggleTheme() {
     loadSection(section);
   }
 }
+
+    function navTo(page){
+  document.querySelectorAll('.drawer button[data-nav]').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.drawer button[data-nav="${page}"]`)?.classList.add('active');
+
+  loadSection(page);
+}
+
 </script>
 
 </body>
