@@ -1832,13 +1832,22 @@ if (type === "orders") {
           box.innerHTML = `<p>Loading availability…</p>`;
 
           // Load availability + existing planned items
-          const [availRes, existingRes] = await Promise.all([
-            api({ action: "getInventoryAvailability", from_date, to_date }),
-            api({ action: "listOrderItems", order_id })
-          ]);
+   const [availRes, existingRes] = await Promise.all([
+  api({ action: "listAvailableInventory", from_date, to_date }),
+  api({ action: "listOrderItems", order_id: String(order_id) })
+]);
 
-          const avail = Array.isArray(availRes) ? availRes : [];
-          const existing = Array.isArray(existingRes) ? existingRes : [];
+console.log("AVAIL RAW:", availRes);
+
+// ✅ support both array and wrapped shapes
+const avail =
+  Array.isArray(availRes) ? availRes :
+  Array.isArray(availRes?.rows) ? availRes.rows :
+  Array.isArray(availRes?.data) ? availRes.data :
+  Array.isArray(availRes?.items) ? availRes.items :
+  [];
+
+const existing = Array.isArray(existingRes) ? existingRes : [];
 
           // existing planned map (so editing doesn't block itself)
           const existingMap = {};
