@@ -1816,7 +1816,7 @@ if (type === "orders") {
           const [availRes, existingRes] = await Promise.all([
             api({
   action: "listAvailableInventory",
-  setup_date: from_date,
+  setup_date: setup_date,
   start_date: from_date,
   end_date: to_date
 }),
