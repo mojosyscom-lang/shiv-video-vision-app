@@ -180,10 +180,12 @@ function toggleTheme() {
   function openDrawer(){
     drawer.classList.add("open");
     overlay.classList.add("open");
+    document.body.classList.add("drawer-open");
   }
   function closeDrawer(){
     drawer.classList.remove("open");
     overlay.classList.remove("open");
+     document.body.classList.remove("drawer-open");
   }
 
   // force closed at load
