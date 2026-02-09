@@ -118,11 +118,23 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function prettyISODate(v){
-    if (!v) return "";
-    const d = new Date(v);
-    if (isNaN(d.getTime())) return String(v);
-    return d.toISOString().slice(0,10);
-  }
+  if (!v) return "";
+
+  // If already ISO date text, return as-is (no timezone shift)
+  const s = String(v).trim().replace(/^'/, "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // If Sheets returns a Date-like object or other string, try to format safely
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+
+  // Convert using local date parts (not toISOString)
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 
   function prettyMonth(v){
     return monthLabelFromAny(v);
@@ -1802,7 +1814,13 @@ if (type === "orders") {
           box.innerHTML = `<p>Loading availability…</p>`;
 
           const [availRes, existingRes] = await Promise.all([
-            api({ action: "listAvailableInventory", setup_date, start_date, end_date }),
+            api({
+  action: "listAvailableInventory",
+  setup_date: from_date,
+  start_date: from_date,
+  end_date: to_date
+}),
+
             api({ action: "listOrderItems", order_id: String(order_id) })
           ]);
 
