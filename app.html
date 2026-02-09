@@ -273,6 +273,18 @@ function toggleTheme() {
     });
   }
 </script>
+  <script> function navTo(section) {
+  // highlight active menu
+  document.querySelectorAll('[data-nav]').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-nav') === section);
+  });
+
+  // load page section
+  if (typeof loadSection === "function") {
+    loadSection(section);
+  }
+}
+</script>
 
 </body>
 </html>
