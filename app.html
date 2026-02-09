@@ -116,7 +116,6 @@
 <h4>OPERATIONS</h4>
 <button data-nav="clients" onclick="navTo('clients'); closeDrawer()">👤 Clients</button>
 <button data-nav="orders" onclick="navTo('orders'); closeDrawer()">📅 Orders</button>
-<button data-nav="inventory" onclick="navTo('inventory'); closeDrawer()">📦 Inventory</button>
 
     <h4>INVOICE</h4>
     <button data-nav="invoice" onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
@@ -283,13 +282,6 @@ function toggleTheme() {
   if (typeof loadSection === "function") {
     loadSection(section);
   }
-}
-
-    function navTo(page){
-  document.querySelectorAll('.drawer button[data-nav]').forEach(b => b.classList.remove('active'));
-  document.querySelector(`.drawer button[data-nav="${page}"]`)?.classList.add('active');
-
-  loadSection(page);
 }
 
 </script>
