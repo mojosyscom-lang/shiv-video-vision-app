@@ -100,6 +100,7 @@ input, textarea, select {
   pointer-events: none;
   transition: opacity .25s ease;
   z-index: 99999; /* cover everything */
+   touch-action: none;
 }
 .drawerOverlay.open{
   opacity: 1;
@@ -116,6 +117,10 @@ input, textarea, select {
   height: 100dvh;
   width: 280px;
   max-width: 82vw;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 
   padding:
     calc(env(safe-area-inset-top) + 16px)
@@ -139,6 +144,12 @@ input, textarea, select {
 
   box-shadow: 18px 0 60px rgba(0,0,0,.35);
 }
+body.drawer-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+
 
 .drawer.open{
   transform: translate3d(0,0,0) !important;
