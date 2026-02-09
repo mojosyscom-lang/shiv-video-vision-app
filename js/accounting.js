@@ -1136,7 +1136,300 @@ if (type === "clients") {
 
 
     // ----- clients module loadsection ends here
-    
+    // ----- inventory master starts here
+     if (type === "inventory") {
+  content.innerHTML = `<div class="card"><h2>Inventory</h2><p>Loading…</p></div>`;
+
+  const isSuper = (role === "superadmin");
+
+  // Load inventory list (all statuses for superadmin; only active for others)
+  const rows = await api({
+    action: "listInventoryMaster",
+    onlyActive: isSuper ? false : true
+  });
+
+  const items = Array.isArray(rows) ? rows : [];
+  const activeItems = items.filter(x => String(x.status || "ACTIVE").toUpperCase() === "ACTIVE");
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Inventory</h2>
+
+      ${
+        isSuper ? `
+        <div class="card" style="margin-top:12px;">
+          <h3 style="margin-top:0;">Add Item</h3>
+
+          <label>Item Name</label>
+          <input id="inv_name" placeholder="e.g. Power cable">
+
+          <label style="margin-top:10px;">Total Qty</label>
+          <input id="inv_qty" type="number" inputmode="numeric" placeholder="e.g. 334">
+
+          <label style="margin-top:10px;">Unit (optional)</label>
+          <input id="inv_unit" placeholder="e.g. pcs, box, set">
+
+          <button class="primary" id="btn_inv_add" style="margin-top:14px;">➕ Add Item</button>
+
+          <p class="dashSmall" style="margin-top:10px;">
+            Only <b>Superadmin</b> can add/edit inventory master.
+          </p>
+        </div>
+        ` : `
+          <p class="dashSmall" style="margin-top:8px;">
+            You can view inventory. Only <b>Superadmin</b> can change inventory master.
+          </p>
+        `
+      }
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Inventory List</h3>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0;">
+          <input id="inv_search" placeholder="Search item name" style="flex:1; min-width:200px;">
+          ${
+            isSuper
+              ? `
+                <button class="primary" id="btn_inv_export" style="background:#1fa971;">Export CSV</button>
+                <button class="primary" id="btn_inv_show_active" style="background:#111;">Show Active</button>
+                <button class="primary" id="btn_inv_show_all" style="background:#111;">Show All</button>
+              `
+              : `
+                <button class="primary" id="btn_inv_show_active" style="background:#111;">Show</button>
+              `
+          }
+        </div>
+
+        <p id="inv_meta" class="dashSmall" style="margin-top:6px;"></p>
+        <div id="inv_list" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  `;
+
+  const listBox = document.getElementById("inv_list");
+  const metaBox = document.getElementById("inv_meta");
+  const searchInp = document.getElementById("inv_search");
+
+  let mode = isSuper ? "ALL" : "ACTIVE"; // ALL or ACTIVE
+  let shown = []; // current shown array for export/search
+
+  function norm(s){ return String(s || "").toLowerCase().trim(); }
+
+  function renderList() {
+    const q = norm(searchInp?.value || "");
+    const base = (mode === "ALL") ? items : activeItems;
+    const filtered = base.filter(it => {
+      if (!q) return true;
+      return norm(it.item_name).includes(q) || norm(it.item_id).includes(q);
+    });
+
+    shown = filtered;
+
+    if (metaBox) {
+      metaBox.textContent =
+        (mode === "ALL" ? `Showing all items: ${filtered.length}` : `Showing active items: ${filtered.length}`) +
+        (q ? ` • Search: "${q}"` : "");
+    }
+
+    if (!listBox) return;
+
+    if (!filtered.length) {
+      listBox.innerHTML = `<p>No inventory items found.</p>`;
+      return;
+    }
+
+    listBox.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th align="left">Item</th>
+          <th align="right">Total</th>
+          <th align="left">Unit</th>
+          ${isSuper ? `<th align="left">Status</th>` : ``}
+          ${isSuper ? `<th align="right">Actions</th>` : ``}
+        </tr>
+        ${filtered.map(it => {
+          const rowId = it.rowIndex ?? "";
+          const status = String(it.status || "ACTIVE").toUpperCase();
+          return `
+            <tr style="border-top:1px solid #eee;">
+              <td>
+                <b>${escapeHtml(it.item_name || "")}</b><br>
+                <span class="dashSmall">${escapeHtml(it.item_id || "")}</span>
+              </td>
+              <td align="right">${Number(it.total_qty || 0).toFixed(0)}</td>
+              <td>${escapeHtml(it.unit || "")}</td>
+              ${isSuper ? `<td><b>${escapeHtml(status)}</b></td>` : ``}
+              ${
+                isSuper
+                  ? `<td align="right" style="white-space:nowrap;">
+                       <button class="userToggleBtn" data-inv-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
+                       <button class="userToggleBtn"
+                         data-inv-status="1"
+                         data-row="${escapeAttr(rowId)}"
+                         data-next="${escapeAttr(status === "ACTIVE" ? "INACTIVE" : "ACTIVE")}">
+                         ${status === "ACTIVE" ? "Set Inactive" : "Set Active"}
+                       </button>
+                     </td>`
+                  : ``
+              }
+            </tr>
+          `;
+        }).join("")}
+      </table>
+    `;
+
+    // Bind superadmin actions
+    if (isSuper) {
+      listBox.querySelectorAll("button[data-inv-edit]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const row = btn.getAttribute("data-row");
+          if (!row) return alert("Row id missing");
+
+          const cur = items.find(x => String(x.rowIndex) === String(row));
+          if (!cur) return alert("Item not found");
+
+          const newName = prompt("Item Name:", String(cur.item_name || ""));
+          if (newName === null) return;
+
+          const newQtyStr = prompt("Total Qty:", String(Number(cur.total_qty || 0)));
+          if (newQtyStr === null) return;
+          const newQty = Number(newQtyStr || 0);
+
+          const newUnit = prompt("Unit (optional):", String(cur.unit || ""));
+          if (newUnit === null) return;
+
+          if (!String(newName).trim() || !(newQty >= 0)) {
+            return alert("Item name required and qty must be >= 0");
+          }
+
+          const unlock = lockButton(btn, "Saving...");
+          try {
+            const r = await api({
+              action: "updateInventoryItem",
+              rowIndex: Number(row),
+              item_name: String(newName).trim(),
+              total_qty: newQty,
+              unit: String(newUnit || "").trim()
+            });
+            if (r && r.error) return alert(String(r.error));
+            alert("Item updated");
+            loadSection("inventory");
+          } finally {
+            setTimeout(unlock, 500);
+          }
+        });
+      });
+
+      listBox.querySelectorAll("button[data-inv-status]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const row = btn.getAttribute("data-row");
+          const next = btn.getAttribute("data-next");
+          if (!row || !next) return alert("Row/status missing");
+
+          const unlock = lockButton(btn, "Updating...");
+          try {
+            const r = await api({
+              action: "updateInventoryItemStatus",
+              rowIndex: Number(row),
+              status: String(next).trim()
+            });
+            if (r && r.error) return alert(String(r.error));
+            alert("Status updated");
+            loadSection("inventory");
+          } finally {
+            setTimeout(unlock, 500);
+          }
+        });
+      });
+    }
+  }
+
+  // Initial render: do NOT auto-load summary concept not needed here; but render list is instant from fetched data
+  renderList();
+
+  // Search
+  searchInp?.addEventListener("input", () => renderList());
+
+  // Show buttons
+  document.getElementById("btn_inv_show_active")?.addEventListener("click", () => {
+    mode = "ACTIVE";
+    renderList();
+  });
+
+  document.getElementById("btn_inv_show_all")?.addEventListener("click", () => {
+    mode = "ALL";
+    renderList();
+  });
+
+  // Add item (superadmin)
+  document.getElementById("btn_inv_add")?.addEventListener("click", async () => {
+    if (!isSuper) return;
+
+    const btn = document.getElementById("btn_inv_add");
+    const unlock = lockButton(btn, "Saving...");
+
+    try {
+      const name = (document.getElementById("inv_name")?.value || "").trim();
+      const qty = Number(document.getElementById("inv_qty")?.value || 0);
+      const unit = (document.getElementById("inv_unit")?.value || "").trim();
+
+      if (!name) return alert("Item name required");
+      if (!(qty >= 0)) return alert("Qty must be >= 0");
+
+      const r = await api({
+        action: "addInventoryItem",
+        item_name: name,
+        total_qty: qty,
+        unit
+      });
+      if (r && r.error) return alert(String(r.error));
+
+      alert("Item added");
+      loadSection("inventory");
+    } finally {
+      setTimeout(unlock, 500);
+    }
+  });
+
+  // Export CSV (superadmin)
+  document.getElementById("btn_inv_export")?.addEventListener("click", () => {
+    if (!isSuper) return;
+
+    const header = ["item_id","item_name","total_qty","unit","status","added_by","created_at","updated_at","rowIndex"];
+    const lines = [header.join(",")];
+
+    (shown || []).forEach(it => {
+      const cols = [
+        String(it.item_id || ""),
+        String(it.item_name || ""),
+        String(Number(it.total_qty || 0)),
+        String(it.unit || ""),
+        String(it.status || ""),
+        String(it.added_by || ""),
+        String(it.created_at || ""),
+        String(it.updated_at || ""),
+        String(it.rowIndex || "")
+      ].map(v => csvEscape(v));
+      lines.push(cols.join(","));
+    });
+
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+
+    const a = document.createElement("a");
+    const company = (localStorage.getItem("company") || "company").replace(/\s+/g, "_");
+    const file = `inventory_master_${company}_${todayISO()}.csv`.replace(/[^\w\-\.]/g, "_");
+    a.href = URL.createObjectURL(blob);
+    a.download = file;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
+  });
+
+  return;
+}
+
+    // ----- inventory masters end here 
 // ---- expenses section updates starts here 
  if (type === "expenses") {
   content.innerHTML = `<div class="card"><h2>Expenses</h2><p>Loading…</p></div>`;
