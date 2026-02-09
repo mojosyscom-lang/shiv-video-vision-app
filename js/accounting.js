@@ -786,6 +786,357 @@ const r = await api({
     }
 
     // ---- rest of your file unchanged below ----
+
+    // ------ clients module loadsection starts here 
+if (type === "clients") {
+  content.innerHTML = `<div class="card"><h2>Clients</h2><p>Loading…</p></div>`;
+
+  // We will NOT auto-render list. Only fetch once, then filter on UI.
+  const rows = await api({ action: "listClients" });
+  const allClients = Array.isArray(rows) ? rows : [];
+
+  const canAdd = (role === "owner" || role === "superadmin");
+  const isSuper = (role === "superadmin");
+
+  // UI state
+  let viewMode = ""; // "ACTIVE" | "ALL"
+  let lastShown = []; // rows currently shown (after mode + search)
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Clients</h2>
+
+      ${
+        canAdd ? `
+        <div class="card" style="margin-top:12px;">
+          <h3 style="margin-top:0;">Add Client</h3>
+
+          <label>Name</label>
+          <input id="cl_name" placeholder="Client name">
+
+          <label style="margin-top:10px;">Company (optional)</label>
+          <input id="cl_company" placeholder="Company name">
+
+          <label style="margin-top:10px;">Phone 1</label>
+          <input id="cl_phone1" inputmode="numeric" placeholder="Mobile number">
+
+          <label style="margin-top:10px;">Phone 2 (optional)</label>
+          <input id="cl_phone2" inputmode="numeric" placeholder="Alternate number">
+
+          <label style="margin-top:10px;">Address (optional)</label>
+          <input id="cl_address" placeholder="Address">
+
+          <label style="margin-top:10px;">GST (optional)</label>
+          <input id="cl_gst" placeholder="GST number">
+
+          <button class="primary" id="btn_cl_add" style="margin-top:14px;">➕ Add Client</button>
+          <p class="dashSmall" style="margin-top:10px;">Owner & Superadmin can add. Only Superadmin can edit/status/export.</p>
+        </div>
+        ` : `
+        <p class="dashSmall" style="margin-top:8px;">You can view clients. Only Owner/Superadmin can add.</p>
+        `
+      }
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Client List</h3>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button class="primary" id="btn_cl_show_active">Show Active Summary</button>
+          <button class="primary" id="btn_cl_show_all" style="background:#111;">Show Full List</button>
+          ${
+            isSuper
+              ? `<button class="primary" id="btn_cl_export" style="background:#1fa971;">Export CSV</button>`
+              : ``
+          }
+        </div>
+
+        <div style="margin-top:12px;">
+          <label>Search (name / phone / company)</label>
+          <input id="cl_search" placeholder="Type to search..." autocomplete="off">
+          <p class="dashSmall" id="cl_hint" style="margin-top:8px;">
+            Click <b>Show Active Summary</b> or <b>Show Full List</b> to load list.
+          </p>
+        </div>
+
+        <p id="cl_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+        <div id="cl_list" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  `;
+
+  const listBox = document.getElementById("cl_list");
+  const totalBox = document.getElementById("cl_total");
+  const searchInput = document.getElementById("cl_search");
+  const hint = document.getElementById("cl_hint");
+
+  function norm(s){ return String(s || "").trim().toLowerCase(); }
+
+  function applySearchAndRender() {
+    if (!listBox) return;
+
+    const q = norm(searchInput?.value || "");
+
+    let base = [];
+    if (viewMode === "ACTIVE") {
+      base = allClients.filter(c => String(c.status || "ACTIVE").toUpperCase() === "ACTIVE");
+    } else if (viewMode === "ALL") {
+      base = allClients.slice();
+    } else {
+      // not loaded yet
+      listBox.innerHTML = "";
+      if (totalBox) totalBox.textContent = "";
+      return;
+    }
+
+    const filtered = !q ? base : base.filter(c => {
+      const hay = [
+        c.client_name,
+        c.client_company,
+        c.phone1,
+        c.phone2,
+        c.address,
+        c.gst,
+        c.client_id
+      ].map(norm).join(" ");
+      return hay.includes(q);
+    });
+
+    lastShown = filtered;
+
+    if (totalBox) {
+      totalBox.textContent =
+        `Showing ${filtered.length} client(s)` +
+        (viewMode === "ACTIVE" ? " • Active only" : " • Active + Inactive") +
+        (q ? ` • Search: "${q}"` : "");
+    }
+
+    if (!filtered.length) {
+      listBox.innerHTML = `<p>No clients found.</p>`;
+      return;
+    }
+
+    const showActions = isSuper;
+
+    listBox.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th align="left">Name</th>
+          <th align="left">Phone 1</th>
+          <th align="left">Company</th>
+          <th align="left">GST</th>
+          <th align="left">Status</th>
+          ${showActions ? `<th align="right">Actions</th>` : ``}
+        </tr>
+        ${filtered.map(c => {
+          const rowId = c.rowIndex ?? "";
+          const status = String(c.status || "ACTIVE").toUpperCase();
+
+          return `
+            <tr style="border-top:1px solid #eee;">
+              <td>${escapeHtml(c.client_name || "")}</td>
+              <td>${escapeHtml(c.phone1 || "")}</td>
+              <td>${escapeHtml(c.client_company || "")}</td>
+              <td>${escapeHtml(c.gst || "")}</td>
+              <td><b>${escapeHtml(status)}</b></td>
+              ${
+                showActions ? `
+                  <td align="right" style="white-space:nowrap;">
+                    <button class="userToggleBtn" data-cl-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
+                    <button class="userToggleBtn"
+                      data-cl-status="1"
+                      data-row="${escapeAttr(rowId)}"
+                      data-next="${escapeAttr(status === "ACTIVE" ? "INACTIVE" : "ACTIVE")}">
+                      ${status === "ACTIVE" ? "Set Inactive" : "Set Active"}
+                    </button>
+                  </td>
+                ` : ``
+              }
+            </tr>
+          `;
+        }).join("")}
+      </table>
+    `;
+
+    // Bind superadmin actions
+    if (isSuper) {
+      listBox.querySelectorAll("button[data-cl-edit]").forEach(b => {
+        b.addEventListener("click", async () => {
+          const row = b.getAttribute("data-row");
+          if (!row) return alert("Row id missing");
+
+          const cur = allClients.find(x => String(x.rowIndex) === String(row));
+          if (!cur) return alert("Client not found");
+
+          const newName = prompt("Name:", String(cur.client_name || ""));
+          if (newName === null) return;
+
+          const newCompany = prompt("Company:", String(cur.client_company || ""));
+          if (newCompany === null) return;
+
+          const newPhone1 = prompt("Phone 1:", String(cur.phone1 || ""));
+          if (newPhone1 === null) return;
+
+          const newPhone2 = prompt("Phone 2:", String(cur.phone2 || ""));
+          if (newPhone2 === null) return;
+
+          const newAddress = prompt("Address:", String(cur.address || ""));
+          if (newAddress === null) return;
+
+          const newGst = prompt("GST:", String(cur.gst || ""));
+          if (newGst === null) return;
+
+          if (!String(newName).trim() || !String(newPhone1).trim()) {
+            return alert("Name and phone1 required");
+          }
+
+          const unlock = lockButton(b, "Saving...");
+          try {
+            const r = await api({
+              action: "updateClient",
+              rowIndex: Number(row),
+              client_name: String(newName).trim(),
+              client_company: String(newCompany || "").trim(),
+              phone1: String(newPhone1).trim(),
+              phone2: String(newPhone2 || "").trim(),
+              address: String(newAddress || "").trim(),
+              gst: String(newGst || "").trim()
+            });
+            if (r && r.error) return alert(String(r.error));
+            alert("Client updated");
+            loadSection("clients");
+          } finally {
+            setTimeout(unlock, 500);
+          }
+        });
+      });
+
+      listBox.querySelectorAll("button[data-cl-status]").forEach(b => {
+        b.addEventListener("click", async () => {
+          const row = b.getAttribute("data-row");
+          const next = b.getAttribute("data-next");
+          if (!row || !next) return alert("Row/status missing");
+
+          const unlock = lockButton(b, "Updating...");
+          try {
+            const r = await api({
+              action: "updateClientStatus",
+              rowIndex: Number(row),
+              status: String(next).trim()
+            });
+            if (r && r.error) return alert(String(r.error));
+            alert("Status updated");
+            loadSection("clients");
+          } finally {
+            setTimeout(unlock, 500);
+          }
+        });
+      });
+    }
+  }
+
+  // Buttons: load lists (no auto load)
+  document.getElementById("btn_cl_show_active")?.addEventListener("click", () => {
+    viewMode = "ACTIVE";
+    if (hint) hint.textContent = "Active clients loaded. Use search to filter.";
+    applySearchAndRender();
+  });
+
+  document.getElementById("btn_cl_show_all")?.addEventListener("click", () => {
+    viewMode = "ALL";
+    if (hint) hint.textContent = "All clients loaded (Active + Inactive). Use search to filter.";
+    applySearchAndRender();
+  });
+
+  // Search live filtering (only after user loaded some view)
+  searchInput?.addEventListener("input", () => {
+    applySearchAndRender();
+  });
+
+  // Export CSV (superadmin) — exports what is currently shown
+  document.getElementById("btn_cl_export")?.addEventListener("click", () => {
+    if (!isSuper) return;
+
+    if (!viewMode) return alert("Please click Show Active Summary or Show Full List first.");
+    if (!Array.isArray(lastShown) || !lastShown.length) return alert("No clients to export.");
+
+    const header = [
+      "client_id","client_name","client_company","phone1","phone2","address","gst","status","added_by","created_at","updated_at","rowIndex"
+    ];
+    const lines = [header.join(",")];
+
+    lastShown.forEach(c => {
+      const cols = [
+        String(c.client_id || ""),
+        String(c.client_name || ""),
+        String(c.client_company || ""),
+        String(c.phone1 || ""),
+        String(c.phone2 || ""),
+        String(c.address || ""),
+        String(c.gst || ""),
+        String(c.status || ""),
+        String(c.added_by || ""),
+        String(c.created_at || ""),
+        String(c.updated_at || ""),
+        String(c.rowIndex || "")
+      ].map(v => csvEscape(v));
+      lines.push(cols.join(","));
+    });
+
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+
+    const a = document.createElement("a");
+    const company = (localStorage.getItem("company") || "company").replace(/\s+/g, "_");
+    const mode = (viewMode === "ACTIVE" ? "ACTIVE" : "ALL");
+    const file = `clients_${company}_${mode}_${todayISO()}.csv`.replace(/[^\w\-\.]/g, "_");
+    a.href = URL.createObjectURL(blob);
+    a.download = file;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
+  });
+
+  // Add client (owner + superadmin)
+  if (canAdd) {
+    document.getElementById("btn_cl_add")?.addEventListener("click", async () => {
+      const btn = document.getElementById("btn_cl_add");
+      const unlock = lockButton(btn, "Saving...");
+
+      try {
+        const client_name = (document.getElementById("cl_name")?.value || "").trim();
+        const client_company = (document.getElementById("cl_company")?.value || "").trim();
+        const phone1 = (document.getElementById("cl_phone1")?.value || "").trim();
+        const phone2 = (document.getElementById("cl_phone2")?.value || "").trim();
+        const address = (document.getElementById("cl_address")?.value || "").trim();
+        const gst = (document.getElementById("cl_gst")?.value || "").trim();
+
+        if (!client_name || !phone1) return alert("Name and phone1 required");
+
+        const r = await api({
+          action: "addClient",
+          client_name,
+          client_company,
+          phone1,
+          phone2,
+          address,
+          gst
+        });
+        if (r && r.error) return alert(String(r.error));
+
+        alert("Client added");
+        loadSection("clients");
+      } finally {
+        setTimeout(unlock, 500);
+      }
+    });
+  }
+
+  return;
+}
+
+
+    // ----- clients module loadsection ends here
+    
 // ---- expenses section updates starts here 
  if (type === "expenses") {
   content.innerHTML = `<div class="card"><h2>Expenses</h2><p>Loading…</p></div>`;
