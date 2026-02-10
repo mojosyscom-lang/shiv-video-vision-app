@@ -1817,8 +1817,8 @@ if (type === "orders") {
             api({
   action: "listAvailableInventory",
   setup_date: setup_date,
-  start_date: from_date,
-  end_date: to_date
+  start_date: start_date,
+  end_date: end_date
 }),
 
             api({ action: "listOrderItems", order_id: String(order_id) })
