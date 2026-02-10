@@ -313,6 +313,146 @@ document.addEventListener("DOMContentLoaded", () => {
       location.href = "invoice.html";
       return;
     } */
+
+/* ==========================================================
+   ✅ SUPERADMIN REPORTS SECTION
+   - Access: STRICTLY Superadmin only
+   - Features: Monthly/Yearly GST Summary, PDF Export, WhatsApp
+   ========================================================== */
+if (type === "reports") {
+  // Final safeguard: If someone tries to force the URL/Action
+  if (role !== "superadmin") {
+    content.innerHTML = `
+      <div class="card" style="text-align:center; padding:40px;">
+        <h2 style="color:#d93025;">🚫 Access Denied</h2>
+        <p>You do not have permission to view this section.</p>
+      </div>`;
+    return;
+  }
+
+  const currentYear = new Date().getFullYear();
+  const years = [currentYear, currentYear - 1, currentYear - 2];
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Financial Intelligence</h2>
+      
+      <div class="card" style="background: #fdf7e3; border: 1px solid #f1d3a1; margin-top:12px;">
+        <h3 style="margin-top:0;">GST & Sales Summary</h3>
+        <p class="dashSmall">View historical performance and tax liabilities.</p>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom:15px;">
+          <div>
+            <label>Monthly View</label>
+            <select id="rep_month">
+              <option value="">-- Choose Month --</option>
+              ${monthList.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label>Yearly View</label>
+            <select id="rep_year">
+              <option value="">-- Choose Year --</option>
+              ${years.map(y => `<option value="${y}">${y}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <button class="primary" id="btn_gen_report">Generate Report</button>
+
+        <div id="tax_rep_result" style="margin-top: 20px; display: none; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+          <div id="pdf_export_area">
+            <h4 id="rep_title" style="margin-top:0; color:#111; border-bottom:2px solid #333; padding-bottom:5px;">Summary</h4>
+            <div style="display:flex; justify-content: space-between; padding:5px 0;"><span>Active Invoices:</span><b id="rep_count">0</b></div>
+            <div style="display:flex; justify-content: space-between; padding:5px 0;"><span>Taxable Value:</span><b>₹ <span id="rep_sub">0.00</span></b></div>
+            <hr>
+            <div style="display:flex; justify-content: space-between; padding:3px 0; color:#555;"><span>CGST:</span><span>₹ <span id="rep_cgst">0.00</span></span></div>
+            <div style="display:flex; justify-content: space-between; padding:3px 0; color:#555;"><span>SGST:</span><span>₹ <span id="rep_sgst">0.00</span></span></div>
+            <div style="display:flex; justify-content: space-between; padding:3px 0; color:#555;"><span>IGST:</span><span>₹ <span id="rep_igst">0.00</span></span></div>
+            <div style="display:flex; justify-content: space-between; font-weight:bold; color:#d93025; padding:5px 0; border-top:1px solid #eee;">
+              <span>Total GST:</span><span>₹ <span id="rep_total_gst">0.00</span></span>
+            </div>
+            <hr>
+            <div style="display:flex; justify-content: space-between; font-size: 1.2em; font-weight: bold; color:#188038; background:#e6f4ea; padding:8px; border-radius:4px;">
+              <span>Grand Total:</span><span>₹ <span id="rep_grand">0.00</span></span>
+            </div>
+          </div>
+          
+          <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="primary" id="btn_pdf_rep" style="flex:1; background:#111;">🖨 PDF</button>
+            <button class="primary" id="btn_wa_rep" style="flex:1; background:#25D366;">📱 WhatsApp</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // --- REPORT GENERATION ---
+  document.getElementById("btn_gen_report")?.addEventListener("click", async () => {
+    const month = document.getElementById("rep_month").value;
+    const year = document.getElementById("rep_year").value;
+    
+    // Clear the other dropdown if one is selected to avoid confusion
+    if (month && year) {
+        alert("Please select either a Month OR a Year, not both.");
+        return;
+    }
+    if (!month && !year) return alert("Please select a period to generate report.");
+
+    const btn = document.getElementById("btn_gen_report");
+    const unlock = lockButton(btn, "Processing...");
+
+    try {
+      const r = await api({ action: "getTaxSummaryReport", month, year });
+      if (r.error) return alert(r.error);
+
+      document.getElementById("tax_rep_result").style.display = "block";
+      document.getElementById("rep_title").textContent = `Summary: ${r.period}`;
+      document.getElementById("rep_count").textContent = r.invoice_count;
+      document.getElementById("rep_sub").textContent = money(r.subtotal);
+      document.getElementById("rep_cgst").textContent = money(r.cgst);
+      document.getElementById("rep_sgst").textContent = money(r.sgst);
+      document.getElementById("rep_igst").textContent = money(r.igst);
+      document.getElementById("rep_total_gst").textContent = money(r.total_tax);
+      document.getElementById("rep_grand").textContent = money(r.grand_total);
+      
+      window.latestReport = r;
+    } finally { unlock(); }
+  });
+
+  // --- WHATSAPP SHARING ---
+  document.getElementById("btn_wa_rep")?.addEventListener("click", () => {
+    const r = window.latestReport;
+    if (!r) return;
+    const msg = `📊 *Financial Summary: ${r.period}*\n` +
+                `Total Invoices: ${r.invoice_count}\n` +
+                `Taxable Value: ₹${money(r.subtotal)}\n` +
+                `--------------------------\n` +
+                `CGST: ₹${money(r.cgst)}\n` +
+                `SGST: ₹${money(r.sgst)}\n` +
+                `IGST: ₹${money(r.igst)}\n` +
+                `Total GST: ₹${money(r.total_tax)}\n` +
+                `--------------------------\n` +
+                `*Grand Total: ₹${money(r.grand_total)}*`;
+    
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  });
+
+  // --- PDF PRINT ---
+  document.getElementById("btn_pdf_rep")?.addEventListener("click", () => {
+    const r = window.latestReport;
+    const company = localStorage.getItem("company") || "Shiv Video Vision";
+    const win = window.open("", "_blank");
+    win.document.write(`<html><head><title>Financial Report</title><style>body{font-family:sans-serif;padding:30px;} .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;}</style></head><body>` +
+      `<h2 style="margin-bottom:0;">${company}</h2><p style="margin-top:0; color:#666;">Tax Summary Report</p><h3>Period: ${r.period}</h3>` +
+      document.getElementById("pdf_export_area").innerHTML + 
+      `<div style="margin-top:30px; font-size:12px; color:#999; text-align:center;">Generated on ${new Date().toLocaleString()}</div>` +
+      `<script>window.print();</script></body></html>`);
+    win.document.close();
+  });
+}
+
+
+
     
 // --- invoice section starts here -----//
 
