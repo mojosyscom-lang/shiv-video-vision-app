@@ -2095,7 +2095,460 @@ if (type === "orders") {
 
   return;
 }
+// ---- orders module ends here
 
+    // ----- inventoryTxn starts here
+
+/* ==========================================================
+   ✅ INVENTORY OUT / RETURN / LOST / DAMAGED (NEW UI)
+   - Staff: OUT/RETURN + can record LOST/DAMAGED (PENDING)
+   - Owner/Superadmin: can ALLOW/REJECT pending LOST/DAMAGED
+   - Print Planned Item List (Staff also)
+   ========================================================== */
+if (type === "inventoryTxn") {
+  content.innerHTML = `<div class="card"><h2>Inventory OUT/RETURN</h2><p>Loading…</p></div>`;
+
+  const isAdmin = (role === "owner" || role === "superadmin");
+
+  // Load orders + for admin load pending adjustments
+  const [ordersRes, pendingRes] = await Promise.all([
+    api({ action: "listOrders", month: "" }),
+    isAdmin ? api({ action: "listPendingInvAdjust" }) : Promise.resolve([])
+  ]);
+
+  const ordersAll = Array.isArray(ordersRes) ? ordersRes : [];
+  const ordersActive = ordersAll.filter(o => String(o.status || "ACTIVE").toUpperCase() === "ACTIVE");
+
+  const pending = Array.isArray(pendingRes) ? pendingRes : [];
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Inventory OUT / RETURN</h2>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Select Order</h3>
+
+        <label>Order</label>
+        <select id="inv_ord_pick">
+          <option value="">-- Select order --</option>
+          ${ordersActive.map(o => `
+            <option value="${escapeAttr(String(o.order_id || ""))}"
+              data-setup="${escapeAttr(String(o.setup_date || ""))}"
+              data-start="${escapeAttr(String(o.start_date || ""))}"
+              data-end="${escapeAttr(String(o.end_date || ""))}"
+              data-client="${escapeAttr(String(o.client_name || ""))}"
+              data-phone="${escapeAttr(String(o.client_phone || ""))}"
+              data-venue="${escapeAttr(String(o.venue || ""))}">
+              ${escapeHtml(o.order_id || "")} • ${escapeHtml(o.client_name || "")} • ${escapeHtml(prettyISODate(o.start_date || ""))}
+            </option>
+          `).join("")}
+        </select>
+
+        <div id="inv_ord_meta" class="dashSmall" style="margin-top:10px;"></div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="primary" id="btn_inv_load" style="background:#111;">Load Items</button>
+          <button class="primary" id="btn_inv_print" style="background:#1fa971;">🖨 Print Planned List</button>
+        </div>
+
+        <div id="inv_items_box" style="margin-top:12px;"></div>
+      </div>
+
+      ${
+        isAdmin ? `
+        <div class="card" style="margin-top:12px;">
+          <h3 style="margin-top:0;">Pending LOST / DAMAGED (Approval Needed)</h3>
+          <div id="inv_pending_box"></div>
+        </div>
+        ` : ``
+      }
+    </div>
+  `;
+
+  const sel = document.getElementById("inv_ord_pick");
+  const meta = document.getElementById("inv_ord_meta");
+  const box = document.getElementById("inv_items_box");
+
+  function selectedOrderObj(){
+    const opt = sel?.selectedOptions?.[0];
+    if (!opt) return null;
+    const order_id = String(opt.value || "").trim();
+    if (!order_id) return null;
+
+    const setup_date = String(opt.getAttribute("data-setup") || "").trim();
+    const start_date = String(opt.getAttribute("data-start") || "").trim();
+    const end_date = String(opt.getAttribute("data-end") || "").trim();
+
+    return {
+      order_id,
+      setup_date,
+      start_date,
+      end_date,
+      client_name: String(opt.getAttribute("data-client") || ""),
+      client_phone: String(opt.getAttribute("data-phone") || ""),
+      venue: String(opt.getAttribute("data-venue") || "")
+    };
+  }
+
+  function renderMeta(o){
+    if (!meta) return;
+    if (!o) { meta.innerHTML = ""; return; }
+    meta.innerHTML = `
+      <div><b>Client:</b> ${escapeHtml(o.client_name)} • ${escapeHtml(o.client_phone)}</div>
+      <div><b>Venue:</b> ${escapeHtml(o.venue)}</div>
+      <div><b>Dates:</b> Setup ${escapeHtml(prettyISODate(o.setup_date))} • ${escapeHtml(prettyISODate(o.start_date))} → ${escapeHtml(prettyISODate(o.end_date))}</div>
+      <div class="dashSmall" style="margin-top:6px;">Note: LOST/DAMAGED will be <b>PENDING</b> until Owner/Superadmin allows it.</div>
+    `;
+  }
+
+  sel?.addEventListener("change", () => renderMeta(selectedOrderObj()));
+  renderMeta(selectedOrderObj());
+
+  async function loadOrderItemsUI(){
+    const o = selectedOrderObj();
+    if (!o) return alert("Select an order first.");
+    if (!o.setup_date || !o.start_date || !o.end_date) return alert("Order dates missing.");
+
+    if (box) box.innerHTML = `<p>Loading items…</p>`;
+
+    // 1) planned list
+    const plannedRes = await api({ action: "listOrderItems", order_id: o.order_id });
+    const planned = Array.isArray(plannedRes) ? plannedRes : [];
+
+    if (!planned.length) {
+      if (box) box.innerHTML = `<p class="dashSmall">No planned items found in this order.</p>`;
+      return;
+    }
+
+    // 2) availability for range (IMPORTANT: backend expects setup_date/start_date/end_date)
+    const availRes = await api({
+      action: "listAvailableInventory",
+      setup_date: o.setup_date,
+      start_date: o.start_date,
+      end_date: o.end_date
+    });
+
+    console.log("AVAIL RAW:", availRes);
+
+    if (availRes && availRes.error) {
+      if (box) box.innerHTML = `<p class="dashSmall">Availability error: ${escapeHtml(String(availRes.error))}</p>`;
+      return;
+    }
+
+    const availList = Array.isArray(availRes) ? availRes : [];
+
+    // 3) order issue summary (OUT/RETURN/LOST/DAMAGED/outstanding)
+    const sumRes = await api({ action: "getOrderIssueSummary", order_id: o.order_id });
+    const sums = Array.isArray(sumRes) ? sumRes : [];
+    const sumMap = {};
+    sums.forEach(s => { sumMap[String(s.item_id||"").trim()] = s; });
+
+    // Build rows ONLY from planned list (staff cannot change item list)
+    const rows = planned
+      .filter(p => String(p.status || "ACTIVE").toUpperCase() === "ACTIVE")
+      .map(p => {
+        const item_id = String(p.item_id || "").trim();
+        const planned_qty = Number(p.planned_qty || 0);
+        const item_name = String(p.item_name || "");
+        const avail = availList.find(a => String(a.item_id||"").trim() === item_id);
+
+        const total_qty = Number(avail?.total_qty || 0);
+        const available_qty = Number(avail?.available_qty || 0);
+
+        const s = sumMap[item_id] || { out:0, ret:0, lost:0, damaged:0, outstanding:0 };
+
+        return {
+          item_id, item_name, planned_qty,
+          total_qty, available_qty,
+          out: Number(s.out||0),
+          ret: Number(s.ret||0),
+          lost: Number(s.lost||0),
+          damaged: Number(s.damaged||0),
+          outstanding: Number(s.outstanding||0)
+        };
+      });
+
+    box.innerHTML = `
+      <div style="overflow:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Item</th>
+            <th align="right">Planned</th>
+            <th align="right">Avail</th>
+            <th align="right">OUT</th>
+            <th align="right">RETURN</th>
+            <th align="right">LOST</th>
+            <th align="right">DAMAGED</th>
+            <th align="right">Outstanding</th>
+          </tr>
+
+          ${rows.map(r => `
+            <tr style="border-top:1px solid #eee;vertical-align:top;">
+              <td>
+                <b>${escapeHtml(r.item_name)}</b><br>
+                <span class="dashSmall">${escapeHtml(r.item_id)}</span>
+              </td>
+              <td align="right">${r.planned_qty}</td>
+              <td align="right">${r.available_qty}</td>
+              <td align="right">${r.out}</td>
+              <td align="right">${r.ret}</td>
+              <td align="right">${r.lost}</td>
+              <td align="right">${r.damaged}</td>
+              <td align="right"><b>${r.outstanding}</b></td>
+            </tr>
+
+            <tr style="border-top:0;">
+              <td colspan="8" style="padding:10px 0 12px;">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                  ${actionMini(r, o, "OUT", r.available_qty)}
+                  ${actionMini(r, o, "RETURN", r.outstanding)}
+                  ${actionMini(r, o, "LOST", r.outstanding)}
+                  ${actionMini(r, o, "DAMAGED", r.outstanding)}
+                </div>
+                ${
+                  (r.out > r.planned_qty)
+                    ? `<div class="dashSmall" style="margin-top:6px;color:#b07b00;">
+                        ⚠ OUT is greater than Planned (allowed).
+                      </div>`
+                    : ``
+                }
+              </td>
+            </tr>
+          `).join("")}
+        </table>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Lost / Damaged Summary</h3>
+        ${
+          rows.filter(x => x.lost > 0 || x.damaged > 0).length
+            ? `<ul style="margin:0;padding-left:18px;">
+                ${rows.filter(x => x.lost>0 || x.damaged>0).map(x => `
+                  <li>
+                    ${escapeHtml(x.item_name)} —
+                    Lost: <b>${x.lost}</b>, Damaged: <b>${x.damaged}</b>
+                  </li>
+                `).join("")}
+              </ul>`
+            : `<p class="dashSmall" style="margin:0;">No lost/damaged recorded for this order.</p>`
+        }
+        <p class="dashSmall" style="margin-top:10px;">
+          Note: LOST/DAMAGED reduce inventory_master only after Owner/Superadmin allows it.
+        </p>
+      </div>
+    `;
+
+    // bind mini action buttons
+    box.querySelectorAll("button[data-inv-act]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const txn_type = btn.getAttribute("data-type");
+        const item_id = btn.getAttribute("data-item");
+        const item_name = btn.getAttribute("data-name");
+        const max = Number(btn.getAttribute("data-max") || 0);
+        const inpId = btn.getAttribute("data-inp");
+        const inp = document.getElementById(inpId);
+
+        const qty = Number(inp?.value || 0);
+        if (!(qty > 0)) return alert("Enter qty > 0");
+        if (qty > max) return alert(`Qty too high. Max allowed: ${max}`);
+
+        const unlock = lockButton(btn, "Saving...");
+        try {
+          const r = await api({
+            action: "addInventoryTxn",
+            order_id: o.order_id,
+            item_id,
+            item_name,
+            txn_type,
+            qty
+          });
+          if (r && r.error) return alert(String(r.error));
+
+          if (txn_type === "LOST" || txn_type === "DAMAGED") {
+            alert(`${txn_type} recorded as PENDING for approval.`);
+          } else {
+            alert(`${txn_type} saved.`);
+          }
+
+          await loadOrderItemsUI();
+          if (isAdmin) await renderPendingBox(); // refresh approvals
+        } finally {
+          setTimeout(unlock, 350);
+        }
+      });
+    });
+  }
+
+  function actionMini(r, o, type, max){
+    const safe = String(type).toUpperCase();
+    const id = `inv_${safe}_${r.item_id}`;
+    return `
+      <div class="card" style="padding:8px 10px;display:flex;gap:8px;align-items:center;">
+        <b style="min-width:70px;">${escapeHtml(safe)}</b>
+        <input id="${escapeAttr(id)}"
+               type="number"
+               inputmode="numeric"
+               style="width:90px;"
+               min="0"
+               placeholder="Qty"
+               />
+        <button class="userToggleBtn"
+                data-inv-act="1"
+                data-type="${escapeAttr(safe)}"
+                data-item="${escapeAttr(r.item_id)}"
+                data-name="${escapeAttr(r.item_name)}"
+                data-max="${escapeAttr(String(max))}"
+                data-inp="${escapeAttr(id)}">
+          Save
+        </button>
+        <span class="dashSmall">max ${escapeHtml(String(max))}</span>
+      </div>
+    `;
+  }
+
+  // Print Planned List (staff allowed)
+  document.getElementById("btn_inv_print")?.addEventListener("click", async () => {
+    const o = selectedOrderObj();
+    if (!o) return alert("Select an order first.");
+
+    const plannedRes = await api({ action: "listOrderItems", order_id: o.order_id });
+    const planned = Array.isArray(plannedRes) ? plannedRes : [];
+    const rows = planned.filter(p => String(p.status||"ACTIVE").toUpperCase() === "ACTIVE");
+
+    if (!rows.length) return alert("No planned items found.");
+
+    const html = `
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>Planned Items - ${o.order_id}</title>
+          <style>
+            body{font-family:Arial, sans-serif; padding:16px;}
+            h2{margin:0 0 6px;}
+            .meta{font-size:12px;color:#444;margin-bottom:12px;line-height:1.4;}
+            table{width:100%;border-collapse:collapse;}
+            th,td{border:1px solid #ddd;padding:8px;font-size:12px;}
+            th{text-align:left;background:#f5f5f5;}
+          </style>
+        </head>
+        <body>
+          <h2>Planned Item List</h2>
+          <div class="meta">
+            <b>Order:</b> ${o.order_id}<br>
+            <b>Client:</b> ${escapeHtml(o.client_name)} • ${escapeHtml(o.client_phone)}<br>
+            <b>Venue:</b> ${escapeHtml(o.venue)}<br>
+            <b>Dates:</b> Setup ${prettyISODate(o.setup_date)} • ${prettyISODate(o.start_date)} → ${prettyISODate(o.end_date)}
+          </div>
+
+          <table>
+            <tr>
+              <th>Item</th>
+              <th style="text-align:right;">Planned Qty</th>
+            </tr>
+            ${rows.map(p => `
+              <tr>
+                <td>${escapeHtml(p.item_name || p.item_id)}</td>
+                <td style="text-align:right;">${Number(p.planned_qty||0)}</td>
+              </tr>
+            `).join("")}
+          </table>
+
+          <script>
+            window.onload = () => window.print();
+          </script>
+        </body>
+      </html>
+    `;
+
+    const w = window.open("", "_blank");
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  });
+
+  // Load Items
+  document.getElementById("btn_inv_load")?.addEventListener("click", async () => {
+    await loadOrderItemsUI();
+  });
+
+  // --- Admin approvals UI
+  async function renderPendingBox(){
+    if (!isAdmin) return;
+    const box2 = document.getElementById("inv_pending_box");
+    if (!box2) return;
+
+    const rows = await api({ action: "listPendingInvAdjust" });
+    const pending = Array.isArray(rows) ? rows : [];
+    if (!pending.length) {
+      box2.innerHTML = `<p class="dashSmall">No pending LOST/DAMAGED.</p>`;
+      return;
+    }
+
+    box2.innerHTML = `
+      <div style="overflow:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Txn</th>
+            <th align="left">Order</th>
+            <th align="left">Item</th>
+            <th align="right">Qty</th>
+            <th align="left">Type</th>
+            <th align="left">By</th>
+            <th align="right">Actions</th>
+          </tr>
+          ${pending.map(p => `
+            <tr style="border-top:1px solid #eee;">
+              <td>${escapeHtml(p.txn_id || "")}</td>
+              <td>${escapeHtml(p.order_id || "")}</td>
+              <td>${escapeHtml(p.item_name || "")}<br><span class="dashSmall">${escapeHtml(p.item_id || "")}</span></td>
+              <td align="right"><b>${Number(p.qty||0)}</b></td>
+              <td>${escapeHtml(p.txn_type || "")}</td>
+              <td>${escapeHtml(p.added_by || "")}</td>
+              <td align="right" style="white-space:nowrap;">
+                <button class="userToggleBtn" data-decide="1" data-id="${escapeAttr(p.txn_id)}" data-decision="ALLOW">ALLOW</button>
+                <button class="userToggleBtn" data-decide="1" data-id="${escapeAttr(p.txn_id)}" data-decision="REJECT">REJECT</button>
+              </td>
+            </tr>
+          `).join("")}
+        </table>
+      </div>
+      <p class="dashSmall" style="margin-top:10px;">
+        ALLOW will reduce inventory_master total_qty. REJECT will not.
+      </p>
+    `;
+
+    box2.querySelectorAll("button[data-decide]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const txn_id = btn.getAttribute("data-id");
+        const decision = btn.getAttribute("data-decision");
+        if (!txn_id || !decision) return;
+
+        if (!confirm(`${decision} this adjustment?`)) return;
+
+        const unlock = lockButton(btn, "Saving...");
+        try {
+          const r = await api({ action: "decideInvAdjust", txn_id, decision });
+          if (r && r.error) return alert(String(r.error));
+          alert(`Saved: ${String(r.status || decision)}`);
+          await renderPendingBox();
+          // also refresh current order display if loaded
+          if (selectedOrderObj()?.order_id) await loadOrderItemsUI();
+        } finally {
+          setTimeout(unlock, 350);
+        }
+      });
+    });
+  }
+
+  if (isAdmin) renderPendingBox();
+
+  return;
+}
+
+
+
+    
+    // ----- inventoryTxn ends here
 
 // ---- expenses section updates starts here 
  if (type === "expenses") {
