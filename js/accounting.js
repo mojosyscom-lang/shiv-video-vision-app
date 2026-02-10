@@ -309,10 +309,887 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadSection(type) {
-    if (type === "invoice") {
+    /* if (type === "invoice") {
       location.href = "invoice.html";
       return;
+    } */
+    
+// --- invoice section starts here -----//
+
+/* ==========================================================
+   ✅ INVOICE (NEW)
+   - Create from Order: auto-fill client + venue + dates + planned items
+   - Add extra inventory rows
+   - GST: NONE / CGST+SGST / IGST
+   - Save + List + View + Edit + PDF/Print + CSV export
+   ========================================================== */
+if (type === "invoice") {
+  content.innerHTML = `<div class="card"><h2>Invoice</h2><p>Loading…</p></div>`;
+
+  const isSuper = (role === "superadmin");
+  const canEdit = (role === "owner" || role === "superadmin");
+
+  // Prefetch
+  const [companyRes, clientsRes, ordersRes, invRes, invMasterRes] = await Promise.all([
+    api({ action: "getCompanyProfile" }),
+    api({ action: "listClients" }),
+    api({ action: "listOrders", month: "" }),
+    api({ action: "listInvoices", month: "", q: "" }),
+    api({ action: "listInventory" }) // ✅ if your inventory module uses a different action, change here
+  ]);
+
+  const company = companyRes && !companyRes.error ? companyRes : {
+    company_name: (localStorage.getItem("company") || ""),
+    address: "",
+    phone: "",
+    gstin: ""
+  };
+
+  const allClients = Array.isArray(clientsRes) ? clientsRes : [];
+  const activeClients = allClients.filter(c => String(c.status || "ACTIVE").toUpperCase() === "ACTIVE");
+
+  const allOrders = Array.isArray(ordersRes) ? ordersRes : [];
+  const activeOrders = allOrders.filter(o => String(o.status || "ACTIVE").toUpperCase() === "ACTIVE");
+
+  const invListAll = Array.isArray(invRes) ? invRes : [];
+  const invMasterAll = Array.isArray(invMasterRes) ? invMasterRes : [];
+
+  // months for invoice list
+  const monthSet = new Set(invListAll.map(x => normMonthLabel(prettyMonth(x.invoice_date || ""))).filter(Boolean));
+  const monthList = [...monthSet].sort((a,b)=>(monthKey(b)||0)-(monthKey(a)||0));
+
+  // UI state
+  let editingInvoiceId = ""; // if set -> updateInvoice else addInvoice
+  let currentItems = [];     // [{item_id,item_name,qty,unit,rate,amount}]
+  let listModeMonth = "";
+  let listModeQuery = "";
+
+  function norm(s){ return String(s||"").trim().toLowerCase(); }
+  function money(n){ return Number(n||0).toFixed(2); }
+  function round2(n){ return Math.round((Number(n||0)+Number.EPSILON)*100)/100; }
+
+  function recalc(){
+    currentItems = currentItems.map(it => {
+      const qty = Number(it.qty||0);
+      const rate = Number(it.rate||0);
+      return { ...it, qty, rate, amount: round2(qty*rate) };
+    });
+
+    const gstType = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST");
+    const gstRate = Number(document.getElementById("inv_gst_rate")?.value || 18);
+
+    const subtotal = round2(currentItems.reduce((a,it)=>a+Number(it.amount||0),0));
+    let cgst=0, sgst=0, igst=0;
+    if (gstType === "CGST_SGST"){
+      cgst = round2(subtotal * (gstRate/2)/100);
+      sgst = round2(subtotal * (gstRate/2)/100);
+    } else if (gstType === "IGST"){
+      igst = round2(subtotal * gstRate/100);
     }
+    const grand = round2(subtotal + cgst + sgst + igst);
+
+    const elSub = document.getElementById("inv_subtotal");
+    const elCgst = document.getElementById("inv_cgst");
+    const elSgst = document.getElementById("inv_sgst");
+    const elIgst = document.getElementById("inv_igst");
+    const elGrand = document.getElementById("inv_grand");
+
+    if (elSub) elSub.textContent = money(subtotal);
+    if (elCgst) elCgst.textContent = money(cgst);
+    if (elSgst) elSgst.textContent = money(sgst);
+    if (elIgst) elIgst.textContent = money(igst);
+    if (elGrand) elGrand.textContent = money(grand);
+
+    // show/hide gst rows
+    document.getElementById("row_cgst")?.style && (document.getElementById("row_cgst").style.display = (gstType==="CGST_SGST") ? "" : "none");
+    document.getElementById("row_sgst")?.style && (document.getElementById("row_sgst").style.display = (gstType==="CGST_SGST") ? "" : "none");
+    document.getElementById("row_igst")?.style && (document.getElementById("row_igst").style.display = (gstType==="IGST") ? "" : "none");
+
+    // items table render amounts
+    document.querySelectorAll("tr[data-inv-line]").forEach(tr => {
+      const idx = Number(tr.getAttribute("data-inv-line")||0);
+      const it = currentItems[idx];
+      const amt = tr.querySelector("[data-amt]");
+      if (amt) amt.textContent = money(it?.amount||0);
+    });
+  }
+
+  // Indian number words (simple)
+  function amountInWordsIN(num){
+    const n = Math.floor(Number(num||0));
+    if (!isFinite(n)) return "";
+    if (n === 0) return "Zero";
+
+    const a = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten",
+      "Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+    const b = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+
+    function two(x){
+      x = Number(x);
+      if (x < 20) return a[x];
+      return b[Math.floor(x/10)] + (x%10 ? " " + a[x%10] : "");
+    }
+    function three(x){
+      x = Number(x);
+      const h = Math.floor(x/100);
+      const r = x%100;
+      return (h ? a[h] + " Hundred" + (r ? " " : "") : "") + (r ? two(r) : "");
+    }
+
+    let x = n;
+    const crore = Math.floor(x / 10000000); x %= 10000000;
+    const lakh  = Math.floor(x / 100000);   x %= 100000;
+    const thou  = Math.floor(x / 1000);     x %= 1000;
+    const hund  = x;
+
+    const parts = [];
+    if (crore) parts.push(three(crore) + " Crore");
+    if (lakh)  parts.push(three(lakh) + " Lakh");
+    if (thou)  parts.push(three(thou) + " Thousand");
+    if (hund)  parts.push(three(hund));
+
+    return parts.join(" ").replace(/\s+/g," ").trim();
+  }
+
+  function renderItemsTable(){
+    const box = document.getElementById("inv_items_box");
+    if (!box) return;
+
+    if (!currentItems.length){
+      box.innerHTML = `<p class="dashSmall">No items yet. Select an order or add inventory items.</p>`;
+      return;
+    }
+
+    box.innerHTML = `
+      <div style="overflow:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Item</th>
+            <th align="right">Qty</th>
+            <th align="right">Rate (₹)</th>
+            <th align="right">Amount</th>
+            <th></th>
+          </tr>
+          ${currentItems.map((it, idx)=>`
+            <tr data-inv-line="${idx}" style="border-top:1px solid #eee;vertical-align:top;">
+              <td>
+                <b>${escapeHtml(it.item_name||"")}</b><br>
+                <span class="dashSmall">${escapeHtml(it.item_id||"")} ${it.unit ? "• "+escapeHtml(it.unit) : ""}</span>
+              </td>
+              <td align="right">
+                <input data-qty="${idx}" type="number" inputmode="numeric" style="width:90px;" value="${escapeAttr(String(it.qty||0))}">
+              </td>
+              <td align="right">
+                <input data-rate="${idx}" type="number" inputmode="numeric" style="width:110px;" value="${escapeAttr(String(it.rate||0))}">
+              </td>
+              <td align="right"><span data-amt>${money(it.amount||0)}</span></td>
+              <td align="right">
+                ${canEdit ? `<button class="userToggleBtn" data-del="${idx}">✖</button>` : ``}
+              </td>
+            </tr>
+          `).join("")}
+        </table>
+      </div>
+    `;
+
+    // bind qty/rate
+    box.querySelectorAll("input[data-qty]").forEach(inp=>{
+      inp.addEventListener("input", ()=>{
+        const i = Number(inp.getAttribute("data-qty"));
+        currentItems[i].qty = Number(inp.value||0);
+        recalc();
+      });
+    });
+    box.querySelectorAll("input[data-rate]").forEach(inp=>{
+      inp.addEventListener("input", ()=>{
+        const i = Number(inp.getAttribute("data-rate"));
+        currentItems[i].rate = Number(inp.value||0);
+        recalc();
+      });
+    });
+
+    // delete
+    box.querySelectorAll("button[data-del]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const i = Number(btn.getAttribute("data-del"));
+        currentItems.splice(i,1);
+        renderItemsTable();
+        recalc();
+      });
+    });
+
+    recalc();
+  }
+
+  function selectedClientFromPick(){
+    const sel = document.getElementById("inv_client_pick");
+    const opt = sel?.selectedOptions?.[0];
+    if (!opt) return null;
+    return {
+      client_id: String(opt.value||"").trim(),
+      client_name: opt.getAttribute("data-name")||"",
+      client_phone: opt.getAttribute("data-phone")||"",
+      client_address: opt.getAttribute("data-address")||""
+    };
+  }
+
+  function setClientFields(c){
+    document.getElementById("inv_client_id").textContent = c?.client_id || "";
+    document.getElementById("inv_client_name").textContent = c?.client_name || "";
+    document.getElementById("inv_client_phone").textContent = c?.client_phone || "";
+    document.getElementById("inv_client_address").textContent = c?.client_address || "";
+  }
+
+  function setOrderFields(o){
+    document.getElementById("inv_order_id").textContent = o?.order_id || "";
+    document.getElementById("inv_venue").value = o?.venue || "";
+    document.getElementById("inv_setup").value = prettyISODate(o?.setup_date || "");
+    document.getElementById("inv_start").value = prettyISODate(o?.start_date || "");
+    document.getElementById("inv_end").value = prettyISODate(o?.end_date || "");
+  }
+
+  async function loadPlannedItemsFromOrder(order_id){
+    const itemsRes = await api({ action: "listOrderItems", order_id: String(order_id) });
+    const planned = Array.isArray(itemsRes) ? itemsRes : [];
+
+    // merge unit from inventory master if exists
+    const unitMap = {};
+    invMasterAll.forEach(x=>{
+      const id = String(x.item_id||"").trim();
+      if (id) unitMap[id] = String(x.unit||"").trim();
+    });
+
+    currentItems = planned
+      .filter(p => String(p.status||"ACTIVE").toUpperCase() === "ACTIVE")
+      .map(p => ({
+        item_id: String(p.item_id||""),
+        item_name: String(p.item_name||p.item_id||""),
+        qty: Number(p.planned_qty||0),
+        unit: unitMap[String(p.item_id||"")] || "",
+        rate: 0,
+        amount: 0
+      }));
+
+    renderItemsTable();
+  }
+
+  // --- UI
+  content.innerHTML = `
+    <div class="card">
+      <h2>Invoice</h2>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Create Invoice</h3>
+
+        <div class="dashSmall">
+          <b>${escapeHtml(company.company_name || "")}</b><br>
+          ${escapeHtml(company.address || "")}<br>
+          ${company.phone ? ("Phone: " + escapeHtml(company.phone) + "<br>") : ""}
+          ${company.gstin ? ("GSTIN: " + escapeHtml(company.gstin)) : ""}
+        </div>
+
+        <label style="margin-top:12px;">Invoice Date</label>
+        <input id="inv_date" type="date" value="${todayISO()}">
+
+        <label style="margin-top:10px;">Order Link</label>
+        <select id="inv_order_pick">
+          <option value="">-- Select Order (optional) --</option>
+          ${activeOrders.map(o=>{
+            const label = `${o.order_id} • ${o.client_name} • ${prettyISODate(o.start_date)}→${prettyISODate(o.end_date)}`;
+            return `<option value="${escapeAttr(String(o.order_id||""))}"
+              data-client_id="${escapeAttr(String(o.client_id||""))}"
+              data-client_name="${escapeAttr(String(o.client_name||""))}"
+              data-client_phone="${escapeAttr(String(o.client_phone||""))}"
+              data-venue="${escapeAttr(String(o.venue||""))}"
+              data-setup="${escapeAttr(String(prettyISODate(o.setup_date||"")))}"
+              data-start="${escapeAttr(String(prettyISODate(o.start_date||"")))}"
+              data-end="${escapeAttr(String(prettyISODate(o.end_date||"")))}"
+            >${escapeHtml(label)}</option>`;
+          }).join("")}
+        </select>
+
+        <label style="margin-top:10px;">Client</label>
+        <select id="inv_client_pick">
+          <option value="">-- Select client --</option>
+          ${activeClients.map(c=>`
+            <option value="${escapeAttr(String(c.client_id||""))}"
+              data-name="${escapeAttr(String(c.client_name||""))}"
+              data-phone="${escapeAttr(String(c.phone1||c.client_phone||""))}"
+              data-address="${escapeAttr(String(c.address||""))}">
+              ${escapeHtml(c.client_name||"")} • ${escapeHtml(c.phone1||c.client_phone||"")}
+            </option>
+          `).join("")}
+        </select>
+
+        <div class="card" style="margin-top:12px;">
+          <div class="dashSmall"><b>Client Details</b></div>
+          <div class="dashSmall">ID: <span id="inv_client_id"></span></div>
+          <div class="dashSmall">Name: <span id="inv_client_name"></span></div>
+          <div class="dashSmall">Phone: <span id="inv_client_phone"></span></div>
+          <div class="dashSmall">Address: <span id="inv_client_address"></span></div>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <div class="dashSmall"><b>Order Details</b></div>
+          <div class="dashSmall">Order: <span id="inv_order_id"></span></div>
+
+          <label style="margin-top:8px;">Venue</label>
+          <input id="inv_venue" placeholder="Venue">
+
+          <label style="margin-top:8px;">Setup Date</label>
+          <input id="inv_setup" type="date">
+
+          <label style="margin-top:8px;">Start Date</label>
+          <input id="inv_start" type="date">
+
+          <label style="margin-top:8px;">End Date</label>
+          <input id="inv_end" type="date">
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <b>Line Items</b>
+            ${canEdit ? `<button class="userToggleBtn" id="btn_inv_add_row">➕ Add Item</button>` : ``}
+          </div>
+
+          <div id="inv_items_box" style="margin-top:10px;"></div>
+
+          <div id="inv_add_row_box" style="display:none;margin-top:12px;">
+            <label>Select Inventory Item</label>
+            <select id="inv_item_pick">
+              <option value="">-- Select --</option>
+              ${invMasterAll.map(it=>`
+                <option value="${escapeAttr(String(it.item_id||""))}"
+                  data-name="${escapeAttr(String(it.item_name||""))}"
+                  data-unit="${escapeAttr(String(it.unit||""))}">
+                  ${escapeHtml(it.item_name||"")} • ${escapeHtml(String(it.item_id||""))}
+                </option>
+              `).join("")}
+            </select>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+              <div style="flex:1;min-width:120px;">
+                <label>Qty</label>
+                <input id="inv_new_qty" type="number" inputmode="numeric" value="1">
+              </div>
+              <div style="flex:1;min-width:120px;">
+                <label>Rate (₹)</label>
+                <input id="inv_new_rate" type="number" inputmode="numeric" value="0">
+              </div>
+            </div>
+
+            <button class="primary" id="btn_inv_add_confirm" style="margin-top:10px;">Add</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <b>GST</b>
+
+          <label style="margin-top:8px;">GST Type</label>
+          <select id="inv_gst_type">
+            <option value="CGST_SGST">CGST + SGST</option>
+            <option value="IGST">IGST</option>
+            <option value="NONE">No GST</option>
+          </select>
+
+          <label style="margin-top:8px;">GST Rate (%)</label>
+          <input id="inv_gst_rate" type="number" inputmode="numeric" value="18">
+
+          <div style="margin-top:12px;">
+            <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><b>₹ <span id="inv_subtotal">0.00</span></b></div>
+            <div id="row_cgst" style="display:flex;justify-content:space-between;"><span>CGST</span><b>₹ <span id="inv_cgst">0.00</span></b></div>
+            <div id="row_sgst" style="display:flex;justify-content:space-between;"><span>SGST</span><b>₹ <span id="inv_sgst">0.00</span></b></div>
+            <div id="row_igst" style="display:none;justify-content:space-between;"><span>IGST</span><b>₹ <span id="inv_igst">0.00</span></b></div>
+            <hr>
+            <div style="display:flex;justify-content:space-between;"><span><b>Grand Total</b></span><b>₹ <span id="inv_grand">0.00</span></b></div>
+          </div>
+
+          <label style="margin-top:10px;">Amount in words (optional)</label>
+          <input id="inv_words" placeholder="Auto (optional)">
+          <button class="userToggleBtn" id="btn_inv_words" style="margin-top:8px;">Auto-fill words</button>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          ${canEdit ? `<button class="primary" id="btn_inv_save">💾 Save Invoice</button>` : ``}
+          <button class="primary" id="btn_inv_print" style="background:#111;">🖨 Print / PDF</button>
+          ${isSuper ? `<button class="primary" id="btn_inv_export_csv" style="background:#1fa971;">Export CSV (List)</button>` : ``}
+        </div>
+
+        <p class="dashSmall" id="inv_status" style="margin-top:10px;color:#777;"></p>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Invoices List</h3>
+
+        <label>Month</label>
+        <select id="inv_month">
+          <option value="">All</option>
+          ${monthList.map(m=>`<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+        </select>
+
+        <label style="margin-top:10px;">Search (invoice no / client / phone / venue / order)</label>
+        <input id="inv_search" placeholder="Type to search...">
+
+        <div style="margin-top:12px;">
+          <button class="primary" id="btn_inv_refresh">Refresh List</button>
+        </div>
+
+        <p id="inv_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+        <div id="inv_list" style="margin-top:12px;"></div>
+      </div>
+
+      <div id="inv_print_area" style="display:none;"></div>
+    </div>
+  `;
+
+  // init
+  document.getElementById("inv_client_pick")?.addEventListener("change", ()=>{
+    const c = selectedClientFromPick();
+    if (c) setClientFields(c);
+  });
+
+  document.getElementById("inv_order_pick")?.addEventListener("change", async (e)=>{
+    const sel = e.target;
+    const opt = sel?.selectedOptions?.[0];
+    if (!opt) return;
+
+    const order_id = String(opt.value||"").trim();
+    document.getElementById("inv_order_id").textContent = order_id;
+
+    // auto fill client selection (and lock it if you want later)
+    const client_id = opt.getAttribute("data-client_id") || "";
+    const client_name = opt.getAttribute("data-client_name") || "";
+    const client_phone = opt.getAttribute("data-client_phone") || "";
+
+    // set client dropdown to this client if exists
+    const clientPick = document.getElementById("inv_client_pick");
+    if (clientPick && client_id) clientPick.value = client_id;
+
+    setClientFields({ client_id, client_name, client_phone, client_address: "" });
+
+    setOrderFields({
+      order_id,
+      venue: opt.getAttribute("data-venue") || "",
+      setup_date: opt.getAttribute("data-setup") || "",
+      start_date: opt.getAttribute("data-start") || "",
+      end_date: opt.getAttribute("data-end") || ""
+    });
+
+    // load planned items as line items
+    if (order_id) await loadPlannedItemsFromOrder(order_id);
+  });
+
+  document.getElementById("inv_gst_type")?.addEventListener("change", recalc);
+  document.getElementById("inv_gst_rate")?.addEventListener("input", recalc);
+
+  // add row flow
+  document.getElementById("btn_inv_add_row")?.addEventListener("click", ()=>{
+    const box = document.getElementById("inv_add_row_box");
+    if (box) box.style.display = (box.style.display === "none" ? "" : "none");
+  });
+
+  document.getElementById("btn_inv_add_confirm")?.addEventListener("click", ()=>{
+    const sel = document.getElementById("inv_item_pick");
+    const opt = sel?.selectedOptions?.[0];
+    if (!opt || !opt.value) return alert("Select inventory item");
+
+    const item_id = String(opt.value||"");
+    const item_name = opt.getAttribute("data-name") || item_id;
+    const unit = opt.getAttribute("data-unit") || "";
+
+    const qty = Number(document.getElementById("inv_new_qty")?.value || 0);
+    const rate = Number(document.getElementById("inv_new_rate")?.value || 0);
+    if (!(qty > 0)) return alert("Qty must be > 0");
+
+    currentItems.push({ item_id, item_name, qty, unit, rate, amount: round2(qty*rate) });
+    renderItemsTable();
+  });
+
+  document.getElementById("btn_inv_words")?.addEventListener("click", ()=>{
+    const grand = Number(document.getElementById("inv_grand")?.textContent || 0);
+    const w = amountInWordsIN(grand);
+    document.getElementById("inv_words").value = w ? (w + " Only") : "";
+  });
+
+  // Save invoice
+  document.getElementById("btn_inv_save")?.addEventListener("click", async ()=>{
+    if (!canEdit) return;
+
+    const btn = document.getElementById("btn_inv_save");
+    const unlock = lockButton(btn, "Saving...");
+
+    try {
+      const invoice_date = String(document.getElementById("inv_date")?.value || "").trim();
+
+      const clientPick = selectedClientFromPick();
+      if (!clientPick || !clientPick.client_id) return alert("Select client");
+
+      const order_id = String(document.getElementById("inv_order_id")?.textContent || "").trim();
+      const venue = String(document.getElementById("inv_venue")?.value || "").trim();
+      const setup_date = String(document.getElementById("inv_setup")?.value || "").trim();
+      const start_date = String(document.getElementById("inv_start")?.value || "").trim();
+      const end_date = String(document.getElementById("inv_end")?.value || "").trim();
+
+      if (!venue) return alert("Venue required");
+      if (!setup_date || !start_date || !end_date) return alert("Setup/Start/End dates required");
+
+      const gst_type = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST");
+      const gst_rate = Number(document.getElementById("inv_gst_rate")?.value || 18);
+
+      // validate rates for planned items (you can allow 0, but usually no)
+      if (!currentItems.length) return alert("No items");
+      const bad = currentItems.find(it => !(Number(it.qty||0) > 0) || !(Number(it.rate||0) >= 0));
+      if (bad) return alert("Check qty/rate");
+
+      const payload = {
+        invoice_id: editingInvoiceId,
+        invoice_date,
+        order_id,
+        client_id: clientPick.client_id,
+        client_name: clientPick.client_name,
+        client_phone: clientPick.client_phone,
+        client_address: clientPick.client_address || "",
+        venue,
+        setup_date,
+        start_date,
+        end_date,
+        gst_type,
+        gst_rate,
+        items: currentItems.map(it => ({
+          item_id: it.item_id,
+          item_name: it.item_name,
+          qty: Number(it.qty||0),
+          unit: it.unit || "",
+          rate: Number(it.rate||0)
+        }))
+      };
+
+      const r = editingInvoiceId
+        ? await api({ action: "updateInvoice", ...payload })
+        : await api({ action: "addInvoice", ...payload });
+
+      if (r && r.error) return alert(String(r.error));
+
+      alert(editingInvoiceId ? "Invoice updated" : ("Invoice saved: " + (r.invoice_no || "")));
+      loadSection("invoice");
+    } finally {
+      setTimeout(unlock, 450);
+    }
+  });
+
+  // Print/PDF (browser print)
+  document.getElementById("btn_inv_print")?.addEventListener("click", ()=>{
+    const header = {
+      company_name: company.company_name || "",
+      address: company.address || "",
+      phone: company.phone || "",
+      gstin: company.gstin || "",
+      invoice_no: editingInvoiceId ? "(Preview)" : "(Preview)",
+      invoice_date: document.getElementById("inv_date")?.value || "",
+      client_name: document.getElementById("inv_client_name")?.textContent || "",
+      client_phone: document.getElementById("inv_client_phone")?.textContent || "",
+      client_address: document.getElementById("inv_client_address")?.textContent || "",
+      order_id: document.getElementById("inv_order_id")?.textContent || "",
+      venue: document.getElementById("inv_venue")?.value || "",
+      setup_date: document.getElementById("inv_setup")?.value || "",
+      start_date: document.getElementById("inv_start")?.value || "",
+      end_date: document.getElementById("inv_end")?.value || "",
+      gst_type: document.getElementById("inv_gst_type")?.value || "",
+      gst_rate: document.getElementById("inv_gst_rate")?.value || 0,
+      subtotal: document.getElementById("inv_subtotal")?.textContent || "0.00",
+      cgst: document.getElementById("inv_cgst")?.textContent || "0.00",
+      sgst: document.getElementById("inv_sgst")?.textContent || "0.00",
+      igst: document.getElementById("inv_igst")?.textContent || "0.00",
+      grand: document.getElementById("inv_grand")?.textContent || "0.00",
+      words: document.getElementById("inv_words")?.value || ""
+    };
+
+    const html = `
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Invoice</title>
+        <style>
+          body{ font-family: Arial, sans-serif; padding:24px; color:#111; }
+          .row{ display:flex; justify-content:space-between; gap:16px; }
+          .box{ border:1px solid #ddd; padding:12px; border-radius:10px; }
+          table{ width:100%; border-collapse:collapse; margin-top:10px; }
+          th,td{ border-bottom:1px solid #eee; padding:8px; font-size:13px; }
+          th{ text-align:left; }
+          .right{ text-align:right; }
+          .muted{ color:#666; font-size:12px; }
+          .top{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+          .title{ font-size:18px; font-weight:700; }
+          .sig{ height:70px; border:1px dashed #bbb; border-radius:10px; }
+          @media print { body{ padding:0; } .box{ border:0; } }
+        </style>
+      </head>
+      <body>
+        <div class="top">
+          <div>
+            <div class="title">${escapeHtml(header.company_name)}</div>
+            <div class="muted">${escapeHtml(header.address)}</div>
+            ${header.phone ? `<div class="muted">Phone: ${escapeHtml(header.phone)}</div>` : ``}
+            ${header.gstin ? `<div class="muted">GSTIN: ${escapeHtml(header.gstin)}</div>` : ``}
+          </div>
+          <div class="box" style="min-width:260px;">
+            <div><b>Invoice</b></div>
+            <div class="muted">Date: ${escapeHtml(header.invoice_date)}</div>
+            <div class="muted">Order: ${escapeHtml(header.order_id)}</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <div class="box" style="flex:1;">
+            <b>Bill To</b><br>
+            ${escapeHtml(header.client_name)}<br>
+            ${escapeHtml(header.client_phone)}<br>
+            <span class="muted">${escapeHtml(header.client_address)}</span>
+          </div>
+          <div class="box" style="flex:1;">
+            <b>Event</b><br>
+            Venue: ${escapeHtml(header.venue)}<br>
+            <span class="muted">Setup: ${escapeHtml(header.setup_date)} | Start: ${escapeHtml(header.start_date)} | End: ${escapeHtml(header.end_date)}</span>
+          </div>
+        </div>
+
+        <table>
+          <tr>
+            <th>#</th>
+            <th>Item</th>
+            <th class="right">Qty</th>
+            <th class="right">Rate</th>
+            <th class="right">Amount</th>
+          </tr>
+          ${currentItems.map((it, i)=>`
+            <tr>
+              <td>${i+1}</td>
+              <td>${escapeHtml(it.item_name||"")} <span class="muted">${escapeHtml(it.unit||"")}</span></td>
+              <td class="right">${Number(it.qty||0)}</td>
+              <td class="right">₹ ${money(it.rate||0)}</td>
+              <td class="right">₹ ${money(it.amount||0)}</td>
+            </tr>
+          `).join("")}
+        </table>
+
+        <div class="row" style="margin-top:12px;">
+          <div style="flex:1;">
+            <div class="box">
+              <b>Terms / Payment</b>
+              <div class="muted">Payment due on receipt. Please verify items before event.</div>
+              ${header.words ? `<div style="margin-top:8px;"><b>Amount in words:</b> ${escapeHtml(header.words)}</div>` : ``}
+            </div>
+          </div>
+          <div style="min-width:280px;">
+            <div class="box">
+              <div class="row"><span>Subtotal</span><b>₹ ${escapeHtml(header.subtotal)}</b></div>
+              ${header.gst_type==="CGST_SGST" ? `
+                <div class="row"><span>CGST</span><b>₹ ${escapeHtml(header.cgst)}</b></div>
+                <div class="row"><span>SGST</span><b>₹ ${escapeHtml(header.sgst)}</b></div>
+              `:``}
+              ${header.gst_type==="IGST" ? `
+                <div class="row"><span>IGST</span><b>₹ ${escapeHtml(header.igst)}</b></div>
+              `:``}
+              <hr>
+              <div class="row"><span><b>Grand Total</b></span><b>₹ ${escapeHtml(header.grand)}</b></div>
+            </div>
+
+            <div class="box" style="margin-top:10px;">
+              <b>Authorized Signature</b>
+              <div class="sig" style="margin-top:8px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <script>window.print();</script>
+      </body>
+      </html>
+    `;
+
+    const w = window.open("", "_blank");
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  });
+
+  // List render
+  async function renderInvoiceList(){
+    const listBox = document.getElementById("inv_list");
+    const totalBox = document.getElementById("inv_total");
+    if (!listBox) return;
+
+    const month = String(document.getElementById("inv_month")?.value || "").trim();
+    const q = String(document.getElementById("inv_search")?.value || "").trim();
+
+    const rows = await api({ action: "listInvoices", month, q });
+    const list = Array.isArray(rows) ? rows : [];
+
+    if (totalBox) totalBox.textContent = `Showing ${list.length} invoice(s)` + (month ? ` • ${month}` : "") + (q ? ` • "${q}"` : "");
+
+    if (!list.length){
+      listBox.innerHTML = `<p>No invoices found.</p>`;
+      return;
+    }
+
+    listBox.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th align="left">Invoice</th>
+          <th align="left">Client</th>
+          <th align="left">Date</th>
+          <th align="right">Total</th>
+          <th align="right">Actions</th>
+        </tr>
+        ${list.map(inv=>`
+          <tr style="border-top:1px solid #eee;vertical-align:top;">
+            <td><b>${escapeHtml(inv.invoice_no||"")}</b><br><span class="dashSmall">${escapeHtml(inv.order_id||"")}</span></td>
+            <td>${escapeHtml(inv.client_name||"")}<br><span class="dashSmall">${escapeHtml(inv.client_phone||"")}</span></td>
+            <td>${escapeHtml(prettyISODate(inv.invoice_date||""))}</td>
+            <td align="right"><b>₹ ${money(inv.grand_total||0)}</b></td>
+            <td align="right" style="white-space:nowrap;">
+              <button class="userToggleBtn" data-view="${escapeAttr(inv.invoice_id||"")}">View</button>
+              ${canEdit ? `<button class="userToggleBtn" data-edit="${escapeAttr(inv.invoice_id||"")}">Edit</button>` : ``}
+              ${isSuper ? `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
+            </td>
+          </tr>
+        `).join("")}
+      </table>
+    `;
+
+    // view
+    listBox.querySelectorAll("button[data-view]").forEach(b=>{
+      b.addEventListener("click", async ()=>{
+        const id = b.getAttribute("data-view");
+        const unlock = lockButton(b, "Loading...");
+        try {
+          const full = await api({ action: "getInvoiceFull", invoice_id: id });
+          if (full && full.error) return alert(String(full.error));
+          const h = full.header;
+          const items = full.items || [];
+          const msg = [
+            `${h.invoice_no} (${prettyISODate(h.invoice_date)})`,
+            `Client: ${h.client_name} ${h.client_phone}`,
+            `Venue: ${h.venue}`,
+            `Total: ₹ ${money(h.grand_total)}`
+          ].join("\n");
+          alert(msg);
+        } finally { setTimeout(unlock, 350); }
+      });
+    });
+
+    // edit
+    listBox.querySelectorAll("button[data-edit]").forEach(b=>{
+      b.addEventListener("click", async ()=>{
+        const id = b.getAttribute("data-edit");
+        const full = await api({ action: "getInvoiceFull", invoice_id: id });
+        if (full && full.error) return alert(String(full.error));
+
+        editingInvoiceId = id;
+
+        const h = full.header;
+        currentItems = (full.items || []).map(it=>({
+          item_id: it.item_id || "",
+          item_name: it.item_name || "",
+          qty: Number(it.qty||0),
+          unit: it.unit || "",
+          rate: Number(it.rate||0),
+          amount: round2(Number(it.qty||0)*Number(it.rate||0))
+        }));
+
+        document.getElementById("inv_date").value = prettyISODate(h.invoice_date||todayISO());
+
+        // set client dropdown
+        const cp = document.getElementById("inv_client_pick");
+        if (cp) cp.value = String(h.client_id||"");
+        setClientFields({ client_id: h.client_id, client_name: h.client_name, client_phone: h.client_phone, client_address: h.client_address });
+
+        // order
+        document.getElementById("inv_order_id").textContent = String(h.order_id||"");
+        document.getElementById("inv_venue").value = String(h.venue||"");
+        document.getElementById("inv_setup").value = prettyISODate(h.setup_date||"");
+        document.getElementById("inv_start").value = prettyISODate(h.start_date||"");
+        document.getElementById("inv_end").value = prettyISODate(h.end_date||"");
+
+        document.getElementById("inv_gst_type").value = String(h.gst_type||"CGST_SGST");
+        document.getElementById("inv_gst_rate").value = Number(h.gst_rate||18);
+
+        renderItemsTable();
+
+        document.getElementById("inv_status").textContent = `Editing: ${h.invoice_no}`;
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+
+    // cancel
+    listBox.querySelectorAll("button[data-cancel]").forEach(b=>{
+      b.addEventListener("click", async ()=>{
+        if (!isSuper) return;
+        const id = b.getAttribute("data-cancel");
+        if (!confirm("Cancel this invoice?")) return;
+
+        const unlock = lockButton(b, "Cancelling...");
+        try {
+          const r = await api({ action: "cancelInvoice", invoice_id: id });
+          if (r && r.error) return alert(String(r.error));
+          alert("Cancelled");
+          renderInvoiceList();
+        } finally { setTimeout(unlock, 350); }
+      });
+    });
+  }
+
+  document.getElementById("btn_inv_refresh")?.addEventListener("click", renderInvoiceList);
+  document.getElementById("inv_month")?.addEventListener("change", renderInvoiceList);
+  document.getElementById("inv_search")?.addEventListener("input", ()=> {
+    // small debounce not required; keep simple
+    renderInvoiceList();
+  });
+
+  // export CSV of list (superadmin)
+  document.getElementById("btn_inv_export_csv")?.addEventListener("click", async ()=>{
+    if (!isSuper) return;
+
+    const month = String(document.getElementById("inv_month")?.value || "").trim();
+    const q = String(document.getElementById("inv_search")?.value || "").trim();
+    const rows = await api({ action: "listInvoices", month, q });
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) return alert("No invoices to export.");
+
+    const header = [
+      "invoice_no","invoice_date","order_id","client_name","client_phone","venue",
+      "gst_type","gst_rate","subtotal","cgst","sgst","igst","grand_total","status"
+    ];
+    const lines = [header.join(",")];
+
+    list.forEach(x=>{
+      const cols = [
+        x.invoice_no, prettyISODate(x.invoice_date),
+        x.order_id, x.client_name, x.client_phone, x.venue,
+        x.gst_type, x.gst_rate, x.subtotal, x.cgst, x.sgst, x.igst, x.grand_total, x.status
+      ].map(v => csvEscape(String(v ?? "")));
+      lines.push(cols.join(","));
+    });
+
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `invoices_${(localStorage.getItem("company")||"company").replace(/\s+/g,"_")}_${todayISO()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 200);
+  });
+
+  // initial renders
+  renderItemsTable();
+  renderInvoiceList();
+
+  return;
+}
+
+    
+    //--- invoice section ends here ------//
 
     if (type === "workers") {
       if (!(role === "superadmin" || role === "owner")) {
