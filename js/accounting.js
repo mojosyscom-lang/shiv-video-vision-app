@@ -368,7 +368,8 @@ if (type === "invoice") {
   function money(n){ return Number(n||0).toFixed(2); }
   function round2(n){ return Math.round((Number(n||0)+Number.EPSILON)*100)/100; }
 
-  function recalc(){
+  /* updated recal function */
+function recalc(){
     currentItems = currentItems.map(it => {
       const qty = Number(it.qty||0);
       const rate = Number(it.rate||0);
@@ -379,15 +380,20 @@ if (type === "invoice") {
     const gstRate = Number(document.getElementById("inv_gst_rate")?.value || 18);
 
     const subtotal = round2(currentItems.reduce((a,it)=>a+Number(it.amount||0),0));
+    
+    // Applying the robust GST logic suggested earlier
     let cgst=0, sgst=0, igst=0;
+    const totalTax = round2(subtotal * gstRate / 100);
     if (gstType === "CGST_SGST"){
-      cgst = round2(subtotal * (gstRate/2)/100);
-      sgst = round2(subtotal * (gstRate/2)/100);
+      cgst = round2(totalTax / 2);
+      sgst = round2(totalTax - cgst);
     } else if (gstType === "IGST"){
-      igst = round2(subtotal * gstRate/100);
+      igst = totalTax;
     }
+    
     const grand = round2(subtotal + cgst + sgst + igst);
 
+    // Update the UI Labels
     const elSub = document.getElementById("inv_subtotal");
     const elCgst = document.getElementById("inv_cgst");
     const elSgst = document.getElementById("inv_sgst");
@@ -399,6 +405,10 @@ if (type === "invoice") {
     if (elSgst) elSgst.textContent = money(sgst);
     if (elIgst) elIgst.textContent = money(igst);
     if (elGrand) elGrand.textContent = money(grand);
+
+    // ✅ NEW: Live words update
+    const wordsInp = document.getElementById("inv_words");
+    if (wordsInp) wordsInp.value = amountInWordsIN(grand) + (grand > 0 ? " Only" : "");
 
     // show/hide gst rows
     document.getElementById("row_cgst")?.style && (document.getElementById("row_cgst").style.display = (gstType==="CGST_SGST") ? "" : "none");
@@ -414,6 +424,12 @@ if (type === "invoice") {
     });
   }
 
+
+
+
+
+
+  
   // Indian number words (simple)
   function amountInWordsIN(num){
     const n = Math.floor(Number(num||0));
@@ -779,9 +795,17 @@ if (type === "invoice") {
     if (order_id) await loadPlannedItemsFromOrder(order_id);
   });
 
+ // Recalculate on any GST change
   document.getElementById("inv_gst_type")?.addEventListener("change", recalc);
   document.getElementById("inv_gst_rate")?.addEventListener("input", recalc);
+  document.getElementById("inv_gst_rate")?.addEventListener("change", recalc);
 
+  // Recalculate if any global property that affects totals is touched
+  ["inv_gst_type", "inv_gst_rate"].forEach(id => {
+    document.getElementById(id)?.addEventListener("blur", recalc);
+  });
+
+  
   // add row flow
   document.getElementById("btn_inv_add_row")?.addEventListener("click", ()=>{
     const box = document.getElementById("inv_add_row_box");
@@ -797,8 +821,15 @@ if (type === "invoice") {
     const item_name = opt.getAttribute("data-name") || item_id;
     const unit = opt.getAttribute("data-unit") || "";
 
-    const qty = Number(document.getElementById("inv_new_qty")?.value || 0);
-    const rate = Number(document.getElementById("inv_new_rate")?.value || 0);
+   // Use the value from the input, but if it's 0, check if we can suggest the master rate
+    let qty = Number(document.getElementById("inv_new_qty")?.value || 1);
+    let rate = Number(document.getElementById("inv_new_rate")?.value || 0);
+
+    // If rate is still 0, try to pull from the master list
+    if (rate === 0) {
+      const masterItem = invMasterAll.find(x => String(x.item_id) === item_id);
+      rate = Number(masterItem?.rate || 0);
+    }
     if (!(qty > 0)) return alert("Qty must be > 0");
 
     currentItems.push({ item_id, item_name, qty, unit, rate, amount: round2(qty*rate) });
@@ -911,99 +942,128 @@ if (type === "invoice") {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Invoice</title>
         <style>
-          body{ font-family: Arial, sans-serif; padding:24px; color:#111; }
-          .row{ display:flex; justify-content:space-between; gap:16px; }
-          .box{ border:1px solid #ddd; padding:12px; border-radius:10px; }
-          table{ width:100%; border-collapse:collapse; margin-top:10px; }
-          th,td{ border-bottom:1px solid #eee; padding:8px; font-size:13px; }
-          th{ text-align:left; }
-          .right{ text-align:right; }
-          .muted{ color:#666; font-size:12px; }
-          .top{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
-          .title{ font-size:18px; font-weight:700; }
-          .sig{ height:70px; border:1px dashed #bbb; border-radius:10px; }
-          @media print { body{ padding:0; } .box{ border:0; } }
-        </style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+  body { font-family: 'Inter', sans-serif; padding: 40px; color: #1a1a1b; line-height: 1.5; }
+  
+  /* Header Section */
+  .invoice-header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+  .company-info .brand { font-size: 28px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 1px; }
+  .company-info div { font-size: 13px; color: #444; }
+  
+  /* Meta Box (Invoice No/Date) */
+  .invoice-meta { text-align: right; }
+  .invoice-meta h1 { font-size: 32px; margin: 0; color: #e5e7eb; position: absolute; right: 40px; top: 20px; z-index: -1; }
+  .meta-item { margin-bottom: 4px; font-size: 14px; }
+  .meta-label { font-weight: 700; color: #666; width: 100px; display: inline-block; }
+
+  /* Details Grid */
+  .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+  .detail-box h3 { font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; }
+  .detail-content { font-size: 14px; }
+
+  /* Table Style */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+  th { background: #f9fafb; padding: 12px 8px; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #eee; text-align: left; }
+  td { padding: 12px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+  .text-right { text-align: right; }
+
+  /* Totals Section */
+  .totals-area { display: flex; justify-content: flex-end; }
+  .totals-table { width: 300px; }
+  .totals-table div { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
+  .grand-total { border-top: 2px solid #000; margin-top: 10px; padding-top: 10px !important; font-weight: 700; font-size: 18px !important; }
+
+  /* Footer & Signature */
+  .footer { margin-top: 50px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
+  .signature-block { text-align: right; margin-top: 40px; }
+  .sig-line { display: inline-block; width: 200px; border-top: 1px solid #000; margin-top: 50px; }
+  
+  @media print {
+    body { padding: 0; }
+    .no-print { display: none; }
+  }
+</style>
       </head>
       <body>
-        <div class="top">
-          <div>
-            <div class="title">${escapeHtml(header.company_name)}</div>
-            <div class="muted">${escapeHtml(header.address)}</div>
-            ${header.phone ? `<div class="muted">Phone: ${escapeHtml(header.phone)}</div>` : ``}
-            ${header.gstin ? `<div class="muted">GSTIN: ${escapeHtml(header.gstin)}</div>` : ``}
-          </div>
-          <div class="box" style="min-width:260px;">
-            <div><b>Invoice</b></div>
-            <div class="muted">Date: ${escapeHtml(header.invoice_date)}</div>
-            <div class="muted">Order: ${escapeHtml(header.order_id)}</div>
-          </div>
-        </div>
+  <div class="invoice-header">
+    <div class="company-info">
+      <div class="brand">${escapeHtml(header.company_name)}</div>
+      <div>${escapeHtml(header.address)}</div>
+      <div>Phone: ${escapeHtml(header.phone)} | GSTIN: ${escapeHtml(header.gstin)}</div>
+    </div>
+    <div class="invoice-meta">
+      <h1>INVOICE</h1>
+      <div class="meta-item"><span class="meta-label">Invoice No:</span> ${escapeHtml(header.invoice_no)}</div>
+      <div class="meta-item"><span class="meta-label">Date:</span> ${escapeHtml(header.invoice_date)}</div>
+      <div class="meta-item"><span class="meta-label">Order ID:</span> ${escapeHtml(header.order_id)}</div>
+    </div>
+  </div>
 
-        <div class="row" style="margin-top:12px;">
-          <div class="box" style="flex:1;">
-            <b>Bill To</b><br>
-            ${escapeHtml(header.client_name)}<br>
-            ${escapeHtml(header.client_phone)}<br>
-            <span class="muted">${escapeHtml(header.client_address)}</span>
-          </div>
-          <div class="box" style="flex:1;">
-            <b>Event</b><br>
-            Venue: ${escapeHtml(header.venue)}<br>
-            <span class="muted">Setup: ${escapeHtml(header.setup_date)} | Start: ${escapeHtml(header.start_date)} | End: ${escapeHtml(header.end_date)}</span>
-          </div>
-        </div>
+  <div class="details-grid">
+    <div class="detail-box">
+      <h3>Bill To</h3>
+      <div class="detail-content">
+        <strong>${escapeHtml(header.client_name)}</strong><br>
+        ${escapeHtml(header.client_phone)}<br>
+        ${escapeHtml(header.client_address)}
+      </div>
+    </div>
+    <div class="detail-box">
+      <h3>Event Details</h3>
+      <div class="detail-content">
+        <strong>Venue:</strong> ${escapeHtml(header.venue)}<br>
+        <strong>Dates:</strong> ${escapeHtml(header.start_date)} to ${escapeHtml(header.end_date)}
+      </div>
+    </div>
+  </div>
 
-        <table>
-          <tr>
-            <th>#</th>
-            <th>Item</th>
-            <th class="right">Qty</th>
-            <th class="right">Rate</th>
-            <th class="right">Amount</th>
-          </tr>
-          ${currentItems.map((it, i)=>`
-            <tr>
-              <td>${i+1}</td>
-              <td>${escapeHtml(it.item_name||"")} <span class="muted">${escapeHtml(it.unit||"")}</span></td>
-              <td class="right">${Number(it.qty||0)}</td>
-              <td class="right">₹ ${money(it.rate||0)}</td>
-              <td class="right">₹ ${money(it.amount||0)}</td>
-            </tr>
-          `).join("")}
-        </table>
+  <table>
+    <thead>
+      <tr>
+        <th width="5%">#</th>
+        <th width="55%">Item Description</th>
+        <th width="10%" class="text-right">Qty</th>
+        <th width="15%" class="text-right">Rate</th>
+        <th width="15%" class="text-right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${currentItems.map((it, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${escapeHtml(it.item_name)} <small style="color:#888">(${escapeHtml(it.unit)})</small></td>
+          <td class="text-right">${it.qty}</td>
+          <td class="text-right">₹${money(it.rate)}</td>
+          <td class="text-right">₹${money(it.amount)}</td>
+        </tr>
+      `).join("")}
+    </tbody>
+  </table>
 
-        <div class="row" style="margin-top:12px;">
-          <div style="flex:1;">
-            <div class="box">
-              <b>Terms / Payment</b>
-              <div class="muted">Payment due on receipt. Please verify items before event.</div>
-              ${header.words ? `<div style="margin-top:8px;"><b>Amount in words:</b> ${escapeHtml(header.words)}</div>` : ``}
-            </div>
-          </div>
-          <div style="min-width:280px;">
-            <div class="box">
-              <div class="row"><span>Subtotal</span><b>₹ ${escapeHtml(header.subtotal)}</b></div>
-              ${header.gst_type==="CGST_SGST" ? `
-                <div class="row"><span>CGST</span><b>₹ ${escapeHtml(header.cgst)}</b></div>
-                <div class="row"><span>SGST</span><b>₹ ${escapeHtml(header.sgst)}</b></div>
-              `:``}
-              ${header.gst_type==="IGST" ? `
-                <div class="row"><span>IGST</span><b>₹ ${escapeHtml(header.igst)}</b></div>
-              `:``}
-              <hr>
-              <div class="row"><span><b>Grand Total</b></span><b>₹ ${escapeHtml(header.grand)}</b></div>
-            </div>
+  <div class="totals-area">
+    <div class="totals-table">
+      <div><span>Subtotal</span><span>₹${header.subtotal}</span></div>
+      ${header.gst_type === "CGST_SGST" ? `
+        <div><span>CGST</span><span>₹${header.cgst}</span></div>
+        <div><span>SGST</span><span>₹${header.sgst}</span></div>
+      ` : ""}
+      ${header.gst_type === "IGST" ? `<div><span>IGST</span><span>₹${header.igst}</span></div>` : ""}
+      <div class="grand-total"><span>Total</span><span>₹${header.grand}</span></div>
+    </div>
+  </div>
 
-            <div class="box" style="margin-top:10px;">
-              <b>Authorized Signature</b>
-              <div class="sig" style="margin-top:8px;"></div>
-            </div>
-          </div>
-        </div>
+  <div class="footer">
+    <strong>Amount in Words:</strong> ${escapeHtml(header.words)}<br><br>
+    <strong>Terms:</strong> 1. Please pay within 7 days. 2. Goods once rented are the responsibility of the client.
+    <div class="signature-block">
+      <div>For ${escapeHtml(header.company_name)}</div>
+      <div class="sig-line"></div>
+      <div>Authorized Signatory</div>
+    </div>
+  </div>
 
-        <script>window.print();</script>
-      </body>
+  <script>window.print();</script>
+</body>
       </html>
     `;
 
