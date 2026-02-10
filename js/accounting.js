@@ -335,7 +335,7 @@ if (type === "invoice") {
     api({ action: "listClients" }),
     api({ action: "listOrders", month: "" }),
     api({ action: "listInvoices", month: "", q: "" }),
-    api({ action: "listInventory" }) // ✅ if your inventory module uses a different action, change here
+    api({ action: "listInventoryMaster" }) // ✅ if your inventory module uses a different action, change here
   ]);
 
   const company = companyRes && !companyRes.error ? companyRes : {
