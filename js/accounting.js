@@ -1112,6 +1112,24 @@ if (type === "invoice") {
     const label = document.getElementById("inv_doc_label");
     if (label) label.textContent = (currentDocType === "QUOTATION") ? "Quotation" : "Invoice";
   }
+  
+  function applyDocTypeRules(){
+  const gstCard = document.getElementById("gst_card");
+  const gstTypeSel = document.getElementById("inv_gst_type");
+  const gstRateInp = document.getElementById("inv_gst_rate");
+
+  if (currentDocType === "QUOTATION") {
+    if (gstCard) gstCard.style.display = "none";
+    if (gstTypeSel) gstTypeSel.value = "NONE";
+    if (gstRateInp) gstRateInp.value = 0;
+  } else {
+    if (gstCard) gstCard.style.display = "";
+    // restore default GST when back to invoice
+    applyGSTDefaultsToUI();
+  }
+  recalc();
+}
+
 
   // --- UI
   const defaultGSTType = (gstDef && gstDef.gst_type) ? String(gstDef.gst_type).toUpperCase() : "CGST_SGST";
@@ -1236,7 +1254,7 @@ if (type === "invoice") {
           </div>
         </div>
 
-        <div class="card" style="margin-top:12px;">
+        <div class="card" id="gst_card"  style="margin-top:12px;">
           <b>GST</b>
 
           <label style="margin-top:8px;">GST Type</label>
@@ -1304,10 +1322,13 @@ if (type === "invoice") {
 
   document.getElementById("btn_doc_invoice")?.addEventListener("click", ()=>{
     setDocTypeUI("INVOICE");
+    applyDocTypeRules();
     document.getElementById("inv_status").textContent = "";
   });
+  
   document.getElementById("btn_doc_quote")?.addEventListener("click", ()=>{
     setDocTypeUI("QUOTATION");
+    applyDocTypeRules();
     document.getElementById("inv_status").textContent = "";
   });
 
@@ -1706,9 +1727,14 @@ if (type === "invoice") {
           const badge = (String(inv.doc_type||"INVOICE").toUpperCase()==="QUOTATION")
             ? `<span style="font-size:11px;background:#111;color:#fff;padding:2px 6px;border-radius:6px;">QTN</span>`
             : `<span style="font-size:11px;background:#1fa971;color:#fff;padding:2px 6px;border-radius:6px;">INV</span>`;
+          const st = String(inv.status||"ACTIVE").toUpperCase();
+          const stBadge = (st === "CANCELLED")
+            ? `<span style="font-size:11px;background:#d93025;color:#fff;padding:2px 6px;border-radius:6px;">CANCELLED</span>`
+            : ``;
+
           return `
           <tr style="border-top:1px solid #eee;vertical-align:top;">
-            <td><b>${escapeHtml(inv.invoice_no||"")}</b> ${badge}<br><span class="dashSmall">${escapeHtml(inv.order_id||"")}</span></td>
+            <td><b>${escapeHtml(inv.invoice_no||"")}</b> ${badge} ${stBadge}<br><span class="dashSmall">${escapeHtml(inv.order_id||"")}</span></td>
             <td>${escapeHtml(inv.client_name||"")}<br><span class="dashSmall">${escapeHtml(inv.client_phone||"")}</span></td>
             <td>${escapeHtml(prettyISODate(inv.invoice_date||""))}</td>
             <td align="right"><b>₹ ${money(inv.grand_total||0)}</b></td>
@@ -1764,6 +1790,12 @@ if (type === "invoice") {
           amount: round2(Number(it.qty||0)*Number(it.rate||0))
         }));
 
+/*check for this if smthing goes wrong */
+        
+applyDocTypeRules();
+        /*check for this if smthing goes wrong */
+        
+        
         document.getElementById("inv_date").value = prettyISODate(h.invoice_date||todayISO());
 
         // ✅ Fix: set order dropdown selected (not showing "optional")
@@ -1819,7 +1851,11 @@ if (type === "invoice") {
 
   document.getElementById("btn_inv_refresh")?.addEventListener("click", renderInvoiceList);
   document.getElementById("inv_month")?.addEventListener("change", renderInvoiceList);
-  document.getElementById("inv_search")?.addEventListener("input", ()=>renderInvoiceList());
+  // document.getElementById("inv_search")?.addEventListener("input", ()=>renderInvoiceList());
+  // Optional: keep search but only when user presses Enter
+document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
+  if (e.key === "Enter") renderInvoiceList();
+});
 
   // export CSV of list (superadmin)
   document.getElementById("btn_inv_export_csv")?.addEventListener("click", async ()=>{
