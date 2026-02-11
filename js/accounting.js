@@ -1,6 +1,10 @@
 document.addEventListener("DOMContentLoaded", () => {
   const role = localStorage.getItem("role") || "";
   const content = document.getElementById("content");
+  if (!content) {
+  console.error("❌ #content not found. Check HTML has <div id='content'></div>");
+  return;
+}
 
   /* =========================
      SPEED CACHE (NEW)
@@ -826,6 +830,7 @@ if (type === "invoice") {
   // UI state
   let editingInvoiceId = "";     // if set -> updateInvoice else addInvoice
   let lastSavedInvoiceId = "";   // for WhatsApp/PDF generation after save
+  let lastSavedInvoiceNo = "";
   let currentItems = [];         // [{item_id,item_name,qty,unit,rate,amount}]
   let currentDocType = "INVOICE"; // "INVOICE" or "QUOTATION"
 
@@ -1463,6 +1468,7 @@ if (type === "invoice") {
 
       lastSavedInvoiceId = r.invoice_id || editingInvoiceId || "";
       const no = r.invoice_no || "";
+      lastSavedInvoiceNo = no || lastSavedInvoiceNo;
       alert(editingInvoiceId ? "Saved" : (doc_type === "QUOTATION" ? ("Quotation saved: " + no) : ("Invoice saved: " + no)));
       loadSection("invoice");
     } finally {
@@ -1570,7 +1576,7 @@ if (type === "invoice") {
   function printSameWindow(){
     const header = {
       doc_type: currentDocType,
-      invoice_no: editingInvoiceId ? "(Preview)" : "(Preview)",
+      invoice_no: lastSavedInvoiceNo || "(Preview)",
       invoice_date: document.getElementById("inv_date")?.value || "",
       order_id: document.getElementById("inv_order_id")?.textContent || "",
       venue: document.getElementById("inv_venue")?.value || "",
@@ -1779,6 +1785,7 @@ if (type === "invoice") {
         lastSavedInvoiceId = id;
 
         const h = full.header;
+        lastSavedInvoiceNo = String(h.invoice_no || "");
         setDocTypeUI(String(h.doc_type||"INVOICE"));
 
         currentItems = (full.items || []).map(it=>({
@@ -4571,8 +4578,9 @@ if (type === "inventoryTxn") {
     renderTypes();
   }
 
-  return;
+/*  return;
 }
+    if something goes wrong this is culprit remove the start and dash */
 
 // ---- expenses updates end here 
     if (type === "salary") {
