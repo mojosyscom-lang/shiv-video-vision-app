@@ -438,27 +438,35 @@ if (type === "gst") {
    - Features: Monthly/Yearly GST Summary, PDF Export, WhatsApp
    ========================================================== */
 if (type === "reports") {
-  // Final safeguard: If someone tries to force the URL/Action
+  // 🔒 Security Gate
   if (role !== "superadmin") {
-    content.innerHTML = `
-      <div class="card" style="text-align:center; padding:40px;">
-        <h2 style="color:#d93025;">🚫 Access Denied</h2>
-        <p>You do not have permission to view this section.</p>
-      </div>`;
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;"><h2 style="color:#d93025;">🚫 Access Denied</h2></div>`;
     return;
   }
+
+  content.innerHTML = `<div class="card"><h2>Financial Intelligence</h2><p>Loading Data...</p></div>`;
+
+  // 🛠 FIX: Fetch Invoices to create the monthList specifically for this section
+  const invRes = await api({ action: "listInvoices", month: "", q: "" });
+  const invListAll = Array.isArray(invRes) ? invRes : [];
+
+  // Generate the monthList from actual invoice data
+  const monthSet = new Set(invListAll.map(x => {
+    // Ensure these helper functions (prettyMonth, normMonthLabel) exist in your accounting.js
+    return normMonthLabel(prettyMonth(x.invoice_date || ""));
+  }).filter(Boolean));
+  
+  const monthList = [...monthSet].sort((a,b)=>(monthKey(b)||0)-(monthKey(a)||0));
 
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2];
 
+  // --- NOW RENDER THE UI ---
   content.innerHTML = `
     <div class="card">
       <h2>Financial Intelligence</h2>
-      
       <div class="card" style="background: #fdf7e3; border: 1px solid #f1d3a1; margin-top:12px;">
-        <h3 style="margin-top:0;">GST & Sales Summary</h3>
-        <p class="dashSmall">View historical performance and tax liabilities.</p>
-        
+        <h3>GST & Sales Summary</h3>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom:15px;">
           <div>
             <label>Monthly View</label>
@@ -476,6 +484,20 @@ if (type === "reports") {
           </div>
         </div>
         <button class="primary" id="btn_gen_report">Generate Report</button>
+        ```
+
+---
+
+### Why this happened
+In JavaScript, variables created inside an `if` block (like your `invoice` section) usually stay inside that block. When you clicked the **Reports** button, the app jumped to a new part of the code where `monthList` didn't exist. By fetching the invoices and defining `monthList` immediately after the "Access Denied" check, we provide the data the dropdown needs to grow.
+
+
+
+### Oracle's Checklist:
+1.  **Check Helpers:** Ensure `normMonthLabel`, `prettyMonth`, and `monthKey` are defined as global functions in your `accounting.js` (usually at the very bottom or top of the file).
+2.  **Save & Refresh:** After pasting this, do a hard refresh (Cmd+Shift+R or Ctrl+F5) on your browser.
+
+**Does the Reports section load the "Monthly View" dropdown correctly now?**
 
         <div id="tax_rep_result" style="margin-top: 20px; display: none; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
           <div id="pdf_export_area">
