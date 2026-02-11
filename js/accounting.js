@@ -437,38 +437,40 @@ if (type === "gst") {
    ========================================================== */
 if (type === "reports") {
   if (role !== "superadmin") {
-    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;"><h2 style="color:#d93025;">🚫 Access Denied</h2></div>`;
+    content.innerHTML = `<div class="card"><h2>🚫 Access Denied</h2></div>`;
     return;
   }
 
-  content.innerHTML = `<div class="card"><h2>Financial Intelligence</h2><p id="rep_load_status">Loading Data...</p></div>`;
+  content.innerHTML = `<div class="card"><h2>Financial Intelligence</h2><p id="rep_status">Connecting to Archive...</p></div>`;
 
   try {
-    // 1. Fetch Invoices
+    // Attempt to fetch data
     const invRes = await api({ action: "listInvoices", month: "", q: "" });
-    const invListAll = Array.isArray(invRes) ? invRes : [];
+    
+    // If the API failed or returned an error, don't crash, show it!
+    if (!invRes || invRes.error) {
+      content.innerHTML = `<div class="card"><h2>Data Error</h2><p>${invRes?.error || "Archive returned empty data"}</p><button class="primary" onclick="loadSection('reports')">Retry</button></div>`;
+      return;
+    }
 
-    // 2. Generate monthList safely without external helpers
+    const invListAll = Array.isArray(invRes) ? invRes : [];
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthSet = new Set();
     
     invListAll.forEach(x => {
       if (x.invoice_date && x.invoice_date.includes("-")) {
-        const parts = x.invoice_date.split("-"); // Expects YYYY-MM-DD
+        const parts = x.invoice_date.split("-");
         const y = parts[0];
         const m = parseInt(parts[1], 10);
-        if (!isNaN(m)) {
-          monthSet.add(monthNames[m - 1] + "-" + y);
-        }
+        if (!isNaN(m)) monthSet.add(monthNames[m - 1] + "-" + y);
       }
     });
     
-    const monthList = [...monthSet].sort().reverse(); 
-
+    const monthList = [...monthSet].sort().reverse();
     const currentYear = new Date().getFullYear();
     const years = [currentYear, currentYear - 1, currentYear - 2];
 
-    // 3. Render UI
+    // Build the UI
     content.innerHTML = `
       <div class="card">
         <h2>Financial Intelligence</h2>
@@ -476,83 +478,43 @@ if (type === "reports") {
           <h3>GST & Sales Summary</h3>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom:15px;">
             <div>
-              <label>Monthly View</label>
-              <select id="rep_month">
-                <option value="">-- Month --</option>
-                ${monthList.map(m => '<option value="' + m + '">' + m + '</option>').join("")}
-              </select>
+              <label>Month</label>
+              <select id="rep_month"><option value="">-- All --</option>
+              ${monthList.map(m => '<option value="'+m+'">'+m+'</option>').join("")}</select>
             </div>
             <div>
-              <label>Yearly View</label>
-              <select id="rep_year">
-                <option value="">-- Year --</option>
-                ${years.map(y => '<option value="' + y + '">' + y + '</option>').join("")}
-              </select>
+              <label>Year</label>
+              <select id="rep_year"><option value="">-- All --</option>
+              ${years.map(y => '<option value="'+y+'">'+y+'</option>').join("")}</select>
             </div>
           </div>
           <button class="primary" id="btn_gen_report">Generate Report</button>
-
-          <div id="tax_rep_result" style="margin-top: 20px; display: none; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
-            <div id="pdf_export_area">
-              <h4 id="rep_title" style="margin:0 0 10px 0; border-bottom:2px solid #333;">Summary</h4>
-              <div style="display:flex; justify-content:space-between; padding:5px 0;"><span>Invoices:</span><b id="rep_count">0</b></div>
-              <div style="display:flex; justify-content:space-between; padding:5px 0;"><span>Subtotal:</span><b>₹ <span id="rep_sub">0.00</span></b></div>
-              <hr>
-              <div style="display:flex; justify-content:space-between; padding:2px 0;"><span>CGST:</span><span>₹ <span id="rep_cgst">0.00</span></span></div>
-              <div style="display:flex; justify-content:space-between; padding:2px 0;"><span>SGST:</span><span>₹ <span id="rep_sgst">0.00</span></span></div>
-              <div style="display:flex; justify-content:space-between; padding:2px 0;"><span>IGST:</span><span>₹ <span id="rep_igst">0.00</span></span></div>
-              <div style="display:flex; justify-content:space-between; font-weight:bold; color:#d93025; margin-top:5px;"><span>Total GST:</span><span>₹ <span id="rep_total_gst">0.00</span></span></div>
-              <hr>
-              <div style="display:flex; justify-content:space-between; font-size:1.1em; font-weight:bold; color:#188038; background:#e6f4ea; padding:5px;"><span>Grand Total:</span><span>₹ <span id="rep_grand">0.00</span></span></div>
-            </div>
-            <div style="display:flex; gap:10px; margin-top:15px;">
-              <button class="primary" id="btn_pdf_rep" style="flex:1; background:#111;">PDF</button>
-              <button class="primary" id="btn_wa_rep" style="flex:1; background:#25D366;">WhatsApp</button>
-            </div>
+          <div id="tax_rep_result" style="display:none; margin-top:20px;">
+             <div id="pdf_export_area">
+               <h4 id="rep_title"></h4>
+               <div style="display:flex;justify-content:space-between;"><span>Total Sales:</span><b id="rep_grand"></b></div>
+             </div>
+             <button class="primary" id="btn_wa_rep" style="background:#25D366; margin-top:10px;">WhatsApp</button>
           </div>
         </div>
       </div>
     `;
 
-    // 4. Re-bind Event Listeners (IMPORTANT)
+    // Re-bind click
     document.getElementById("btn_gen_report").onclick = async () => {
-       const m = document.getElementById("rep_month").value;
-       const y = document.getElementById("rep_year").value;
-       const r = await api({ action: "getTaxSummaryReport", month: m, year: y });
-       if(r.error) return alert(r.error);
-       
-       document.getElementById("tax_rep_result").style.display = "block";
-       document.getElementById("rep_title").textContent = "Summary: " + (m || y);
-       document.getElementById("rep_count").textContent = r.invoice_count;
-       document.getElementById("rep_sub").textContent = money(r.subtotal);
-       document.getElementById("rep_cgst").textContent = money(r.cgst);
-       document.getElementById("rep_sgst").textContent = money(r.sgst);
-       document.getElementById("rep_igst").textContent = money(r.igst);
-       document.getElementById("rep_total_gst").textContent = money(r.total_tax);
-       document.getElementById("rep_grand").textContent = money(r.grand_total);
-       window.latestReport = r;
-    };
-
-    document.getElementById("btn_wa_rep").onclick = () => {
-      const r = window.latestReport;
-      if(!r) return;
-      const msg = `📊 *Report: ${r.period}*\nSubtotal: ₹${money(r.subtotal)}\nGST: ₹${money(r.total_tax)}\n*Total: ₹${money(r.grand_total)}*`;
-      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-    };
-
-    document.getElementById("btn_pdf_rep").onclick = () => {
-       const r = window.latestReport;
-       const win = window.open("", "_blank");
-       win.document.write(`<html><body><h2>Tax Report</h2>${document.getElementById("pdf_export_area").innerHTML}<script>window.print();</script></body></html>`);
-       win.document.close();
+      const r = await api({ action: "getTaxSummaryReport", month: document.getElementById("rep_month").value, year: document.getElementById("rep_year").value });
+      if(r.ok) {
+        document.getElementById("tax_rep_result").style.display = "block";
+        document.getElementById("rep_grand").textContent = "₹ " + r.grand_total;
+        window.latestReport = r;
+      }
     };
 
   } catch (err) {
-    console.error("Report Error:", err);
-    content.innerHTML = `<div class="card"><h2>Error</h2><p>${err.message}</p></div>`;
+    console.error("Critical Report Crash:", err);
+    content.innerHTML = `<div class="card"><h2>Critical Error</h2><p>${err.toString()}</p></div>`;
   }
 }
-
 
 
     
