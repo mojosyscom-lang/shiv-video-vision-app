@@ -1825,34 +1825,37 @@ loadSection("invoice");
             <td>${escapeHtml(prettyISODate(inv.invoice_date||""))}</td>
             <td align="right"><b>₹ ${money(inv.grand_total||0)}</b></td>
             <td align="right" style="white-space:nowrap;">
-<button class="userToggleBtn" data-inv-print="${inv.invoice_id}">Print</button>
-<button class="userToggleBtn" data-inv-wa="${inv.invoice_id}">WhatsApp</button>
-             
+<button class="userToggleBtn" data-inv-print="${escapeAttr(inv.invoice_id||"")}">Print</button>
+<button class="userToggleBtn" data-inv-wa="${escapeAttr(inv.invoice_id||"")}">WhatsApp</button>
+     
               <button class="userToggleBtn" data-view="${escapeAttr(inv.invoice_id||"")}">View</button>
               ${canEdit ? `<button class="userToggleBtn" data-edit="${escapeAttr(inv.invoice_id||"")}">Edit</button>` : ``}
-              ${inv.status==="CANCELLED" ? "" : `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
+              ${inv.status==="CANCELLED" ? `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
             </td>
 
             
           </tr>`;
-            document.querySelectorAll("[data-inv-print]").forEach(btn=>{
-      btn.addEventListener("click", async ()=>{
-        const id = btn.getAttribute("data-inv-print");
-        await printFromInvoiceId(id);
-      });
-    });
-
-    document.querySelectorAll("[data-inv-wa]").forEach(btn=>{
-      btn.addEventListener("click", async ()=>{
-        const id = btn.getAttribute("data-inv-wa");
-        await whatsappFromInvoiceId(id);
-      });
-    });
+           
 
         
         }).join("")}
       </table>
     `;
+    // ✅ bind Print + WhatsApp buttons (Invoice List)
+listBox.querySelectorAll("[data-inv-print]").forEach(btn=>{
+  btn.addEventListener("click", async ()=>{
+    const id = btn.getAttribute("data-inv-print");
+    await printFromInvoiceId(id);
+  });
+});
+
+listBox.querySelectorAll("[data-inv-wa]").forEach(btn=>{
+  btn.addEventListener("click", async ()=>{
+    const id = btn.getAttribute("data-inv-wa");
+    await whatsappFromInvoiceId(id);
+  });
+});
+
 
     // view
     listBox.querySelectorAll("button[data-view]").forEach(b=>{
