@@ -825,7 +825,7 @@ if (type === "invoice") {
 
   // months for invoice list
   const monthSet = new Set(invListAll.map(x => normMonthLabel(prettyMonth(x.invoice_date || ""))).filter(Boolean));
-  const monthList = [...monthSet].sort((a,b)=>(monthKey(b)||0)-(monthKey(a)||0));
+  const monthList = Array.from(monthSet).sort((a,b)=>(monthKey(b)||0)-(monthKey(a)||0));
 
   // UI state
   let editingInvoiceId = "";     // if set -> updateInvoice else addInvoice
@@ -833,6 +833,7 @@ if (type === "invoice") {
   let lastSavedInvoiceNo = "";
   let currentItems = [];         // [{item_id,item_name,qty,unit,rate,amount}]
   let currentDocType = "INVOICE"; // "INVOICE" or "QUOTATION"
+  let currentHeaderCache = null; // last loaded/saved header for print/wa
 
   function norm(s){ return String(s||"").trim().toLowerCase(); }
   function money(n){ return Number(n||0).toFixed(2); }
@@ -1007,9 +1008,15 @@ if (type === "invoice") {
     const rowC = document.getElementById("row_cgst");
     const rowS = document.getElementById("row_sgst");
     const rowI = document.getElementById("row_igst");
-    if (rowC) rowC.style.display = (gstType==="CGST_SGST") ? "" : "none";
-    if (rowS) rowS.style.display = (gstType==="CGST_SGST") ? "" : "none";
-    if (rowI) rowI.style.display = (gstType==="IGST") ? "" : "none";
+   if (rowC) rowC.style.display = (gstType==="CGST_SGST") ? "" : "none";
+   if (rowS) rowS.style.display = (gstType==="CGST_SGST") ? "" : "none";
+   if (rowI) rowI.style.display = (gstType==="IGST") ? "" : "none";
+   // NONE => hide all tax rows
+   if (gstType === "NONE") {
+   if (rowC) rowC.style.display = "none";
+   if (rowS) rowS.style.display = "none";
+   if (rowI) rowI.style.display = "none";
+}
 
     // update line amounts
     document.querySelectorAll("tr[data-inv-line]").forEach(tr => {
@@ -1035,6 +1042,8 @@ if (type === "invoice") {
         <table style="width:100%;border-collapse:collapse;">
           <tr>
             <th align="left">Item</th>
+            <th align="right">HSN/SAC</th>
+            <th align="right">Unit</th>
             <th align="right">Qty</th>
             <th align="right">Rate (₹)</th>
             <th align="right">Amount</th>
@@ -1046,6 +1055,8 @@ if (type === "invoice") {
                 <b>${escapeHtml(it.item_name||"")}</b><br>
                 <span class="dashSmall">${escapeHtml(it.item_id||"")} ${it.unit ? "• "+escapeHtml(it.unit) : ""}</span>
               </td>
+              <td align="right">${escapeHtml(it.hsn_sac || "")}</td>
+              <td align="right">${escapeHtml(it.unit || "")}</td>
               <td align="right">
                 <input data-qty="${idx}" type="number" inputmode="numeric" style="width:90px;" value="${escapeAttr(String(it.qty||0))}">
               </td>
@@ -1098,6 +1109,13 @@ if (type === "invoice") {
       if (id) unitMap[id] = String(x.unit||"").trim();
     });
 
+    const hsnMap = {};
+    invMasterAll.forEach(x=>{
+      const id = String(x.item_id||"").trim();
+      if (id) hsnMap[id] = String(x.hsn_sac||x.hsnSac||"").trim();
+    });
+
+
     currentItems = planned
       .filter(p => String(p.status||"ACTIVE").toUpperCase() === "ACTIVE")
       .map(p => ({
@@ -1105,6 +1123,7 @@ if (type === "invoice") {
         item_name: String(p.item_name||p.item_id||""),
         qty: Number(p.planned_qty||0),
         unit: unitMap[String(p.item_id||"")] || "",
+        hsn_sac: hsnMap[String(p.item_id||"")] || "",
         rate: 0,
         amount: 0
       }));
@@ -1395,12 +1414,14 @@ if (type === "invoice") {
     const item_id = String(opt.value||"");
     const item_name = opt.getAttribute("data-name") || item_id;
     const unit = opt.getAttribute("data-unit") || "";
+    const hsn_sac = opt.getAttribute("data-hsn") || "";
 
     let qty = Number(document.getElementById("inv_new_qty")?.value || 1);
     let rate = Number(document.getElementById("inv_new_rate")?.value || 0);
     if (!(qty > 0)) return alert("Qty must be > 0");
 
-    currentItems.push({ item_id, item_name, qty, unit, rate, amount: round2(qty*rate) });
+    currentItems.push({ item_id, item_name, hsn_sac, qty, unit, rate, amount: round2(qty*rate) });
+
     renderItemsTable();
   });
 
@@ -1465,12 +1486,29 @@ if (type === "invoice") {
         : await api({ action: "addInvoice", ...payload });
 
       if (r && r.error) return alert(String(r.error));
-
+/* if check for this if something goes wrong
       lastSavedInvoiceId = r.invoice_id || editingInvoiceId || "";
       const no = r.invoice_no || "";
       lastSavedInvoiceNo = no || lastSavedInvoiceNo;
       alert(editingInvoiceId ? "Saved" : (doc_type === "QUOTATION" ? ("Quotation saved: " + no) : ("Invoice saved: " + no)));
       loadSection("invoice");
+*/
+     
+lastSavedInvoiceId = r.invoice_id || editingInvoiceId || "";
+lastSavedInvoiceNo = r.invoice_no || "";
+currentHeaderCache = {
+  ...payload,
+  invoice_id: lastSavedInvoiceId,
+  invoice_no: lastSavedInvoiceNo,
+  doc_type,
+  invoice_date
+};
+
+const no = lastSavedInvoiceNo;
+alert(editingInvoiceId ? "Saved" : (doc_type === "QUOTATION" ? ("Quotation saved: " + no) : ("Invoice saved: " + no)));
+loadSection("invoice");
+
+      
     } finally {
       setTimeout(unlock, 450);
     }
@@ -1655,7 +1693,49 @@ if (type === "invoice") {
     window.addEventListener("afterprint", restore);
     window.print();
   }
+  // --- helpers for list actions (Print/WhatsApp)
+  async function getInvoiceFullById(invoice_id){
+    const r = await api({ action: "getInvoiceFull", invoice_id: String(invoice_id) });
+    if (r && r.error) throw new Error(r.error);
+    return r; // {header, items}
+  }
 
+  function formatWhatsAppNumber(raw){
+    let s = String(raw || "").trim();
+    s = s.replace(/[^\d+]/g, "");      // keep digits and +
+    if (s.startsWith("00")) s = s.slice(2);
+    if (!s.startsWith("+")) s = "+" + s.replace(/[^\d]/g, "");
+    return s;
+  }
+
+  async function printFromInvoiceId(invoice_id){
+    const full = await getInvoiceFullById(invoice_id);
+    currentHeaderCache = full.header || null;
+    currentItems = Array.isArray(full.items) ? full.items : [];
+    renderItemsTable(); // keeps UI consistent
+    printSameWindow();  // will now print with real invoice_no
+  }
+
+  async function whatsappFromInvoiceId(invoice_id){
+    const full = await getInvoiceFullById(invoice_id);
+    currentHeaderCache = full.header || null;
+    currentItems = Array.isArray(full.items) ? full.items : [];
+
+    const pdf = await api({ action: "generateInvoicePdf", invoice_id: String(invoice_id) });
+    if (pdf && pdf.error) return alert(String(pdf.error));
+
+    const phonePlus = formatWhatsAppNumber(full.header?.client_phone || "");
+    const waDigits = phonePlus.replace("+",""); // wa.me needs digits only
+
+    const docLabel = (String(full.header?.doc_type || "INVOICE").toUpperCase() === "QUOTATION") ? "Quotation" : "Invoice";
+    const docNo = full.header?.invoice_no || "";
+    const link = pdf.public_url || pdf.file_url || "";
+    const msg = `Please find attached ${docLabel} ${docNo}\n${link}`;
+
+    window.open(`https://wa.me/${encodeURIComponent(waDigits)}?text=${encodeURIComponent(msg)}`, "_blank");
+  }
+
+  
   document.getElementById("btn_inv_print")?.addEventListener("click", printSameWindow);
 
   // WhatsApp PDF
@@ -1745,11 +1825,31 @@ if (type === "invoice") {
             <td>${escapeHtml(prettyISODate(inv.invoice_date||""))}</td>
             <td align="right"><b>₹ ${money(inv.grand_total||0)}</b></td>
             <td align="right" style="white-space:nowrap;">
+<button class="userToggleBtn" data-inv-print="${inv.invoice_id}">Print</button>
+<button class="userToggleBtn" data-inv-wa="${inv.invoice_id}">WhatsApp</button>
+             
               <button class="userToggleBtn" data-view="${escapeAttr(inv.invoice_id||"")}">View</button>
               ${canEdit ? `<button class="userToggleBtn" data-edit="${escapeAttr(inv.invoice_id||"")}">Edit</button>` : ``}
-              ${isSuper ? `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
+              ${inv.status==="CANCELLED" ? "" : `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
             </td>
+
+            
           </tr>`;
+            document.querySelectorAll("[data-inv-print]").forEach(btn=>{
+      btn.addEventListener("click", async ()=>{
+        const id = btn.getAttribute("data-inv-print");
+        await printFromInvoiceId(id);
+      });
+    });
+
+    document.querySelectorAll("[data-inv-wa]").forEach(btn=>{
+      btn.addEventListener("click", async ()=>{
+        const id = btn.getAttribute("data-inv-wa");
+        await whatsappFromInvoiceId(id);
+      });
+    });
+
+        
         }).join("")}
       </table>
     `;
