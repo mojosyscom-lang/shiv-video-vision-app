@@ -433,88 +433,260 @@ if (type === "gst") {
   });
 }
 /* ==========================================================
-   ✅ SUPERADMIN REPORTS SECTION (STABILIZED)
+   ✅ SUPERADMIN REPORTS SECTION
+   - Access: STRICTLY Superadmin only
+   - Features: Monthly/Yearly GST Summary, PDF Export, WhatsApp
    ========================================================== */
 if (type === "reports") {
+
+  // 🔒 Security Gate
   if (role !== "superadmin") {
-    content.innerHTML = `<div class="card"><h2>🚫 Access Denied</h2></div>`;
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
+      <h2 style="color:#d93025;">🚫 Access Denied</h2>
+    </div>`;
     return;
   }
 
-  content.innerHTML = `<div class="card"><h2>Financial Intelligence</h2><p id="rep_status">Connecting to Archive...</p></div>`;
-
+  // ✅ Wrap whole section to avoid loader falling back to "Section not found"
   try {
-    // Attempt to fetch data
-    const invRes = await api({ action: "listInvoices", month: "", q: "" });
-    
-    // If the API failed or returned an error, don't crash, show it!
-    if (!invRes || invRes.error) {
-      content.innerHTML = `<div class="card"><h2>Data Error</h2><p>${invRes?.error || "Archive returned empty data"}</p><button class="primary" onclick="loadSection('reports')">Retry</button></div>`;
-      return;
-    }
 
-    const invListAll = Array.isArray(invRes) ? invRes : [];
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const monthSet = new Set();
-    
-    invListAll.forEach(x => {
-      if (x.invoice_date && x.invoice_date.includes("-")) {
-        const parts = x.invoice_date.split("-");
-        const y = parts[0];
-        const m = parseInt(parts[1], 10);
-        if (!isNaN(m)) monthSet.add(monthNames[m - 1] + "-" + y);
+    // ---- SAFE FALLBACKS (prevents crash if helpers missing) ----
+    const _escapeHtml = (typeof escapeHtml === "function") ? escapeHtml : function (s){
+      return String(s ?? "").replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[m]));
+    };
+
+    const _escapeAttr = (typeof escapeAttr === "function") ? escapeAttr : function (s){
+      return _escapeHtml(s).replace(/"/g, "&quot;");
+    };
+
+    const _money = (typeof money === "function") ? money : function (n){
+      const x = Number(n || 0);
+      return isFinite(x) ? x.toFixed(2) : "0.00";
+    };
+
+    const _monthKey = (typeof monthKey === "function") ? monthKey : function (m){
+      // accepts "Feb-2026" / "February-2026"
+      const s = String(m || "").trim();
+      const parts = s.split("-");
+      if (parts.length !== 2) return 0;
+
+      const mon = parts[0].slice(0,3).toLowerCase();
+      const yr = Number(parts[1]) || 0;
+
+      const map = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+      return (yr * 100) + (map[mon] || 0);
+    };
+
+    const _prettyMonth = (typeof prettyMonth === "function") ? prettyMonth : function (v){
+      // fallback: try to produce "Feb-2026" from ISO date
+      const s = String(v || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const y = s.slice(0,4);
+        const m = Number(s.slice(5,7));
+        const mons = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        return `${mons[(m-1) || 0]}-${y}`;
       }
-    });
-    
-    const monthList = [...monthSet].sort().reverse();
+      return s;
+    };
+
+    const _normMonthLabel = (typeof normMonthLabel === "function") ? normMonthLabel : function (s){
+      return String(s || "").trim();
+    };
+
+    // UI loading
+    content.innerHTML = `<div class="card"><h2>Financial Intelligence</h2><p>Loading Data...</p></div>`;
+
+    // Fetch invoices to build month list
+    const invRes = await api({ action: "listInvoices", month: "", q: "" });
+    const invListAll = Array.isArray(invRes)
+      ? invRes
+      : Array.isArray(invRes?.rows) ? invRes.rows
+      : Array.isArray(invRes?.data) ? invRes.data
+      : [];
+
+    // Build month list from invoice_date
+    const monthSet = new Set(
+      invListAll.map(x => _normMonthLabel(_prettyMonth(x.invoice_date || ""))).filter(Boolean)
+    );
+    const monthList = [...monthSet].sort((a,b)=>(_monthKey(b)||0)-(_monthKey(a)||0));
+
     const currentYear = new Date().getFullYear();
     const years = [currentYear, currentYear - 1, currentYear - 2];
 
-    // Build the UI
+    // --- RENDER UI ---
     content.innerHTML = `
       <div class="card">
         <h2>Financial Intelligence</h2>
-        <div class="card" style="background: #fdf7e3; border: 1px solid #f1d3a1; margin-top:12px;">
+
+        <div class="card" style="background:#fdf7e3; border:1px solid #f1d3a1; margin-top:12px;">
           <h3>GST & Sales Summary</h3>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom:15px;">
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px;">
             <div>
-              <label>Month</label>
-              <select id="rep_month"><option value="">-- All --</option>
-              ${monthList.map(m => '<option value="'+m+'">'+m+'</option>').join("")}</select>
+              <label>Monthly View</label>
+              <select id="rep_month">
+                <option value="">-- Choose Month --</option>
+                ${monthList.map(m => `<option value="${_escapeAttr(m)}">${_escapeHtml(m)}</option>`).join("")}
+              </select>
             </div>
+
             <div>
-              <label>Year</label>
-              <select id="rep_year"><option value="">-- All --</option>
-              ${years.map(y => '<option value="'+y+'">'+y+'</option>').join("")}</select>
+              <label>Yearly View</label>
+              <select id="rep_year">
+                <option value="">-- Choose Year --</option>
+                ${years.map(y => `<option value="${y}">${y}</option>`).join("")}
+              </select>
             </div>
           </div>
+
           <button class="primary" id="btn_gen_report">Generate Report</button>
-          <div id="tax_rep_result" style="display:none; margin-top:20px;">
-             <div id="pdf_export_area">
-               <h4 id="rep_title"></h4>
-               <div style="display:flex;justify-content:space-between;"><span>Total Sales:</span><b id="rep_grand"></b></div>
-             </div>
-             <button class="primary" id="btn_wa_rep" style="background:#25D366; margin-top:10px;">WhatsApp</button>
+
+          <div id="tax_rep_result"
+               style="margin-top:20px; display:none; background:#fff; padding:15px; border-radius:8px; border:1px solid #eee;">
+            <div id="pdf_export_area">
+              <h4 id="rep_title"
+                  style="margin-top:0; color:#111; border-bottom:2px solid #333; padding-bottom:5px;">Summary</h4>
+
+              <div style="display:flex; justify-content:space-between; padding:5px 0;">
+                <span>Active Invoices:</span><b id="rep_count">0</b>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; padding:5px 0;">
+                <span>Taxable Value:</span><b>₹ <span id="rep_sub">0.00</span></b>
+              </div>
+
+              <hr>
+
+              <div style="display:flex; justify-content:space-between; padding:3px 0; color:#555;">
+                <span>CGST:</span><span>₹ <span id="rep_cgst">0.00</span></span>
+              </div>
+              <div style="display:flex; justify-content:space-between; padding:3px 0; color:#555;">
+                <span>SGST:</span><span>₹ <span id="rep_sgst">0.00</span></span>
+              </div>
+              <div style="display:flex; justify-content:space-between; padding:3px 0; color:#555;">
+                <span>IGST:</span><span>₹ <span id="rep_igst">0.00</span></span>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; font-weight:bold; color:#d93025; padding:5px 0; border-top:1px solid #eee;">
+                <span>Total GST:</span><span>₹ <span id="rep_total_gst">0.00</span></span>
+              </div>
+
+              <hr>
+
+              <div style="display:flex; justify-content:space-between; font-size:1.2em; font-weight:bold; color:#188038; background:#e6f4ea; padding:8px; border-radius:4px;">
+                <span>Grand Total:</span><span>₹ <span id="rep_grand">0.00</span></span>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:20px;">
+              <button class="primary" id="btn_pdf_rep" style="flex:1; background:#111;">🖨 PDF</button>
+              <button class="primary" id="btn_wa_rep" style="flex:1; background:#25D366;">📱 WhatsApp</button>
+            </div>
           </div>
         </div>
       </div>
     `;
 
-    // Re-bind click
-    document.getElementById("btn_gen_report").onclick = async () => {
-      const r = await api({ action: "getTaxSummaryReport", month: document.getElementById("rep_month").value, year: document.getElementById("rep_year").value });
-      if(r.ok) {
+    // --- REPORT GENERATION ---
+    document.getElementById("btn_gen_report")?.addEventListener("click", async () => {
+      const month = String(document.getElementById("rep_month")?.value || "");
+      const year  = String(document.getElementById("rep_year")?.value || "");
+
+      if (month && year) return alert("Please select either a Month OR a Year, not both.");
+      if (!month && !year) return alert("Please select a period to generate report.");
+
+      const btn = document.getElementById("btn_gen_report");
+      const unlock = lockButton(btn, "Processing...");
+
+      try {
+        const r = await api({ action: "getTaxSummaryReport", month, year });
+        if (r?.error) return alert(r.error);
+
         document.getElementById("tax_rep_result").style.display = "block";
-        document.getElementById("rep_grand").textContent = "₹ " + r.grand_total;
+        document.getElementById("rep_title").textContent = `Summary: ${r.period}`;
+        document.getElementById("rep_count").textContent = r.invoice_count;
+
+        document.getElementById("rep_sub").textContent = _money(r.subtotal);
+        document.getElementById("rep_cgst").textContent = _money(r.cgst);
+        document.getElementById("rep_sgst").textContent = _money(r.sgst);
+        document.getElementById("rep_igst").textContent = _money(r.igst);
+        document.getElementById("rep_total_gst").textContent = _money(r.total_tax);
+        document.getElementById("rep_grand").textContent = _money(r.grand_total);
+
         window.latestReport = r;
+      } catch (e) {
+        console.error("REPORT API ERROR:", e);
+        alert("Report generation failed. Check console.");
+      } finally {
+        unlock?.();
       }
-    };
+    });
+
+    // --- WHATSAPP SHARING ---
+    document.getElementById("btn_wa_rep")?.addEventListener("click", () => {
+      const r = window.latestReport;
+      if (!r) return alert("Generate a report first.");
+
+      const msg =
+        `📊 *Financial Summary: ${r.period}*\n` +
+        `Total Invoices: ${r.invoice_count}\n` +
+        `Taxable Value: ₹${_money(r.subtotal)}\n` +
+        `--------------------------\n` +
+        `CGST: ₹${_money(r.cgst)}\n` +
+        `SGST: ₹${_money(r.sgst)}\n` +
+        `IGST: ₹${_money(r.igst)}\n` +
+        `Total GST: ₹${_money(r.total_tax)}\n` +
+        `--------------------------\n` +
+        `*Grand Total: ₹${_money(r.grand_total)}*`;
+
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+    });
+
+    // --- PDF PRINT ---
+    document.getElementById("btn_pdf_rep")?.addEventListener("click", () => {
+      const r = window.latestReport;
+      if (!r) return alert("Generate a report first.");
+
+      const company = localStorage.getItem("company") || "Shiv Video Vision";
+      const win = window.open("", "_blank");
+
+      win.document.write(
+        `<html><head><title>Financial Report</title>
+          <style>
+            body{font-family:sans-serif;padding:30px;}
+            .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;}
+          </style>
+        </head><body>` +
+        `<h2 style="margin-bottom:0;">${_escapeHtml(company)}</h2>` +
+        `<p style="margin-top:0; color:#666;">Tax Summary Report</p>` +
+        `<h3>Period: ${_escapeHtml(r.period)}</h3>` +
+        document.getElementById("pdf_export_area").innerHTML +
+        `<div style="margin-top:30px; font-size:12px; color:#999; text-align:center;">
+          Generated on ${_escapeHtml(new Date().toLocaleString())}
+        </div>` +
+        `<script>window.print();</script></body></html>`
+      );
+
+      win.document.close();
+    });
+
+    return;
 
   } catch (err) {
-    console.error("Critical Report Crash:", err);
-    content.innerHTML = `<div class="card"><h2>Critical Error</h2><p>${err.toString()}</p></div>`;
+    console.error("REPORTS SECTION CRASH:", err);
+    content.innerHTML = `
+      <div class="card">
+        <h2 style="color:#d93025;">Reports crashed</h2>
+        <p class="dashSmall">${String(err?.message || err)}</p>
+        <p class="dashSmall">Open DevTools Console and look for: <b>REPORTS SECTION CRASH</b></p>
+      </div>
+    `;
+    return;
   }
 }
+
 
 
     
