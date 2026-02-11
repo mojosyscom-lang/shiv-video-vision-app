@@ -128,6 +128,7 @@
 <button onclick="navTo('userPw'); closeDrawer()">🔑 Edit Password</button>
 <button data-nav="inventory" onclick="navTo('inventory'); closeDrawer()">📦 Inventory Master</button>
       <button data-nav="gst" onclick="navTo('gst'); closeDrawer()">📊 GST</button>
+      ${role === "superadmin" ? `<button data-nav="reports" onclick="navTo('reports'); closeDrawer()">📊 Reports</button>` : ""}
       <button data-nav="export" onclick="navTo('export'); closeDrawer()">📤 Export</button>
     </div>
 
