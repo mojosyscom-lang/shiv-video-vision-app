@@ -485,20 +485,6 @@ if (type === "reports") {
         </div>
         <button class="primary" id="btn_gen_report">Generate Report</button>
         ```
-
----
-
-### Why this happened
-In JavaScript, variables created inside an `if` block (like your `invoice` section) usually stay inside that block. When you clicked the **Reports** button, the app jumped to a new part of the code where `monthList` didn't exist. By fetching the invoices and defining `monthList` immediately after the "Access Denied" check, we provide the data the dropdown needs to grow.
-
-
-
-### Oracle's Checklist:
-1.  **Check Helpers:** Ensure `normMonthLabel`, `prettyMonth`, and `monthKey` are defined as global functions in your `accounting.js` (usually at the very bottom or top of the file).
-2.  **Save & Refresh:** After pasting this, do a hard refresh (Cmd+Shift+R or Ctrl+F5) on your browser.
-
-**Does the Reports section load the "Monthly View" dropdown correctly now?**
-
         <div id="tax_rep_result" style="margin-top: 20px; display: none; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
           <div id="pdf_export_area">
             <h4 id="rep_title" style="margin-top:0; color:#111; border-bottom:2px solid #333; padding-bottom:5px;">Summary</h4>
