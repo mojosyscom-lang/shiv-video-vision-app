@@ -4681,9 +4681,9 @@ if (type === "inventoryTxn") {
     renderTypes();
   }
 
-/*  return;
+return;
 }
-    if something goes wrong this is culprit remove the start and dash */
+    /* if something goes wrong this is culprit remove the start and dash */
 
 // ---- expenses updates end here 
     if (type === "salary") {
@@ -5427,6 +5427,7 @@ window.__lastSalaryMonth = month || "";
   window.loadSection = loadSection;
 
   showDashboard();
+    
 });
 
 /* ---------- Button Lock Helper ---------- */
