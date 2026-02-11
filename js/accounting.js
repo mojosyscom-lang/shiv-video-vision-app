@@ -319,19 +319,32 @@ document.addEventListener("DOMContentLoaded", () => {
    - Upsert GST rates and set defaults
    ========================================================== */
 if (type === "gst") {
+
+  // 🔒 Gate
+  if (!(role === "owner" || role === "superadmin")) {
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
+      <h2 style="color:#d93025;">🚫 Access Denied</h2>
+      <p class="dashSmall">Only Owner / Superadmin can access GST Settings.</p>
+    </div>`;
+    return;
+  }
+
   content.innerHTML = `<div class="card"><h2>GST Settings</h2><p>Loading...</p></div>`;
 
   // Fetch current GST settings
-  const gstRes = await api({ action: "listGST" }); // Ensure you have a listGST function in code.gs
-  const gstList = Array.isArray(gstRes) ? gstRes : [];
+  const gstRes = await api({ action: "listGST" });
+  const gstList = Array.isArray(gstRes) ? gstRes : (Array.isArray(gstRes?.rows) ? gstRes.rows : []);
+
+  // small helper
+  const safe = (x) => escapeHtml(String(x ?? ""));
 
   content.innerHTML = `
     <div class="card">
       <h2>GST Master</h2>
-      
-      <div class="card" style="background: #f9f9f9; border: 1px solid #ddd; margin-bottom: 20px;">
+
+      <div class="card" style="background:#f9f9f9;border:1px solid #ddd;margin-top:12px;">
         <h3 style="margin-top:0;">Add / Update GST Rate</h3>
-        
+
         <label>GST Type</label>
         <select id="gst_type">
           <option value="CGST_SGST">CGST + SGST (Local)</option>
@@ -339,54 +352,74 @@ if (type === "gst") {
           <option value="NONE">None (Exempt)</option>
         </select>
 
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-          <div style="flex: 1;">
+        <div style="display:flex;gap:10px;margin-top:10px;">
+          <div style="flex:1;">
             <label>CGST %</label>
-            <input id="gst_cgst" type="number" step="0.01" value="9">
+            <input id="gst_cgst" type="number" step="0.01" inputmode="decimal" value="9">
           </div>
-          <div style="flex: 1;">
+          <div style="flex:1;">
             <label>SGST %</label>
-            <input id="gst_sgst" type="number" step="0.01" value="9">
+            <input id="gst_sgst" type="number" step="0.01" inputmode="decimal" value="9">
           </div>
         </div>
 
-        <label style="margin-top: 10px;">IGST %</label>
-        <input id="gst_igst" type="number" step="0.01" value="0">
+        <label style="margin-top:10px;">IGST %</label>
+        <input id="gst_igst" type="number" step="0.01" inputmode="decimal" value="0">
 
-        <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
-          <input type="checkbox" id="gst_default" style="width: 20px; height: 20px;">
+        <div style="margin-top:15px;display:flex;align-items:center;gap:10px;">
+          <input type="checkbox" id="gst_default" style="width:20px;height:20px;">
           <label for="gst_default" style="margin:0;">Set as Default for New Invoices</label>
         </div>
 
-        <button class="primary" id="btn_save_gst" style="margin-top: 20px;">💾 Save GST Rate</button>
+        <label style="margin-top:10px;">Status</label>
+        <select id="gst_status">
+          <option value="ACTIVE">ACTIVE</option>
+          <option value="INACTIVE">INACTIVE</option>
+        </select>
+
+        <button class="primary" id="btn_save_gst" style="margin-top:16px;">💾 Save GST Rate</button>
+
+        <p class="dashSmall" style="margin-top:10px;color:#777;">
+          Tip: If GST Type is <b>IGST</b>, CGST/SGST can be 0. If Type is <b>NONE</b>, all rates should be 0.
+        </p>
       </div>
 
-      <div class="card">
-        <h3>Existing Rates</h3>
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Existing Rates</h3>
+
         <div id="gst_list_container">
-          ${gstList.length === 0 ? '<p class="dashSmall">No rates defined yet.</p>' : `
-            <table style="width:100%; border-collapse: collapse;">
+          ${gstList.length === 0 ? `<p class="dashSmall">No rates defined yet.</p>` : `
+            <table style="width:100%;border-collapse:collapse;">
               <thead>
-                <tr style="text-align: left; font-size: 12px; color: #666;">
+                <tr style="text-align:left;font-size:12px;color:#666;">
                   <th>TYPE</th>
                   <th>RATES</th>
-                  <th>DEF</th>
-                  <th>ACTION</th>
+                  <th>DEFAULT</th>
+                  <th>STATUS</th>
+                  <th align="right">ACTION</th>
                 </tr>
               </thead>
               <tbody>
-                ${gstList.map(g => `
-                  <tr style="border-top: 1px solid #eee;">
-                    <td style="padding: 10px 0;"><b>${g.gst_type}</b></td>
-                    <td>
-                      ${g.gst_type === 'IGST' ? `I:${g.igst_rate}%` : `C:${g.cgst_rate}% S:${g.sgst_rate}%`}
-                    </td>
-                    <td>${g.is_default === 'YES' ? '✅' : ''}</td>
-                    <td>
-                      <button class="userToggleBtn" onclick="editGST('${escapeAttr(JSON.stringify(g))}')">Edit</button>
-                    </td>
-                  </tr>
-                `).join('')}
+                ${gstList.map(g => {
+                  const rates = (String(g.gst_type||"") === "IGST")
+                    ? `IGST: ${Number(g.igst_rate||0)}%`
+                    : (String(g.gst_type||"") === "NONE")
+                      ? `GST Exempt`
+                      : `CGST: ${Number(g.cgst_rate||0)}% • SGST: ${Number(g.sgst_rate||0)}%`;
+
+                  const payload = encodeURIComponent(JSON.stringify(g));
+                  return `
+                    <tr style="border-top:1px solid #eee;">
+                      <td style="padding:10px 0;"><b>${safe(g.gst_type)}</b></td>
+                      <td>${safe(rates)}</td>
+                      <td>${String(g.is_default||"") === "YES" ? "✅" : ""}</td>
+                      <td>${safe(g.status || "ACTIVE")}</td>
+                      <td align="right">
+                        <button class="userToggleBtn" data-gst-edit="1" data-g="${payload}">Edit</button>
+                      </td>
+                    </tr>
+                  `;
+                }).join("")}
               </tbody>
             </table>
           `}
@@ -395,43 +428,92 @@ if (type === "gst") {
     </div>
   `;
 
-  // --- Logic ---
-  
-  // Helper to pre-fill form for editing
-  window.editGST = (json) => {
-    const g = JSON.parse(json);
-    document.getElementById("gst_type").value = g.gst_type;
-    document.getElementById("gst_cgst").value = g.cgst_rate;
-    document.getElementById("gst_sgst").value = g.sgst_rate;
-    document.getElementById("gst_igst").value = g.igst_rate;
-    document.getElementById("gst_default").checked = (g.is_default === "YES");
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  // disable fields depending on type
+  function applyTypeUI(){
+    const t = document.getElementById("gst_type")?.value || "CGST_SGST";
+    const cg = document.getElementById("gst_cgst");
+    const sg = document.getElementById("gst_sgst");
+    const ig = document.getElementById("gst_igst");
 
-  document.getElementById("btn_save_gst").addEventListener("click", async () => {
+    if (!cg || !sg || !ig) return;
+
+    if (t === "IGST") {
+      cg.value = "0"; sg.value = "0";
+      cg.disabled = true; sg.disabled = true;
+      ig.disabled = false;
+    } else if (t === "NONE") {
+      cg.value = "0"; sg.value = "0"; ig.value = "0";
+      cg.disabled = true; sg.disabled = true; ig.disabled = true;
+    } else {
+      cg.disabled = false; sg.disabled = false;
+      ig.value = "0";
+      ig.disabled = true;
+    }
+  }
+
+  document.getElementById("gst_type")?.addEventListener("change", applyTypeUI);
+  applyTypeUI();
+
+  // Edit button bind (no global function needed)
+  document.querySelectorAll("button[data-gst-edit]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      try {
+        const g = JSON.parse(decodeURIComponent(btn.getAttribute("data-g") || ""));
+        document.getElementById("gst_type").value = g.gst_type || "CGST_SGST";
+        document.getElementById("gst_cgst").value = Number(g.cgst_rate || 0);
+        document.getElementById("gst_sgst").value = Number(g.sgst_rate || 0);
+        document.getElementById("gst_igst").value = Number(g.igst_rate || 0);
+        document.getElementById("gst_default").checked = (String(g.is_default) === "YES");
+        document.getElementById("gst_status").value = String(g.status || "ACTIVE");
+        applyTypeUI();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (e) {
+        alert("Failed to load GST for edit");
+      }
+    });
+  });
+
+  document.getElementById("btn_save_gst")?.addEventListener("click", async () => {
     const btn = document.getElementById("btn_save_gst");
     const unlock = lockButton(btn, "Saving...");
 
-    const payload = {
-      action: "upsertGST",
-      gst_type: document.getElementById("gst_type").value,
-      cgst_rate: Number(document.getElementById("gst_cgst").value),
-      sgst_rate: Number(document.getElementById("gst_sgst").value),
-      igst_rate: Number(document.getElementById("gst_igst").value),
-      is_default: document.getElementById("gst_default").checked ? "YES" : "NO",
-      status: "ACTIVE"
-    };
-
     try {
+      const gst_type = document.getElementById("gst_type").value;
+      const cgst_rate = Number(document.getElementById("gst_cgst").value || 0);
+      const sgst_rate = Number(document.getElementById("gst_sgst").value || 0);
+      const igst_rate = Number(document.getElementById("gst_igst").value || 0);
+
+      // basic safety
+      if (gst_type === "CGST_SGST" && (cgst_rate <= 0 || sgst_rate <= 0)) {
+        return alert("CGST/SGST must be > 0 for CGST_SGST type");
+      }
+      if (gst_type === "IGST" && igst_rate <= 0) {
+        return alert("IGST must be > 0 for IGST type");
+      }
+
+      const payload = {
+        action: "upsertGST",
+        gst_type,
+        cgst_rate,
+        sgst_rate,
+        igst_rate,
+        is_default: document.getElementById("gst_default").checked ? "YES" : "NO",
+        status: document.getElementById("gst_status").value
+      };
+
       const r = await api(payload);
       if (r && r.error) return alert(r.error);
+
       alert("GST Rate Saved Successfully");
-      loadSection("gst"); // Refresh
+      loadSection("gst"); // refresh
     } finally {
       unlock();
     }
   });
+
+  return;
 }
+
 /* ==========================================================
    ✅ SUPERADMIN REPORTS SECTION
    - Access: STRICTLY Superadmin only
