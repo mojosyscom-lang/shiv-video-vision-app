@@ -472,19 +472,19 @@ if (type === "reports") {
             <label>Monthly View</label>
             <select id="rep_month">
               <option value="">-- Choose Month --</option>
-              ${monthList.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+              ${monthList.map(m => '<option value="' + escapeAttr(m) + '">' + escapeHtml(m) + '</option>').join("")}
             </select>
           </div>
           <div>
             <label>Yearly View</label>
             <select id="rep_year">
               <option value="">-- Choose Year --</option>
-              ${years.map(y => `<option value="${y}">${y}</option>`).join("")}
+              ${years.map(y => '<option value="' + y + '">' + y + '</option>').join("")}
             </select>
           </div>
         </div>
         <button class="primary" id="btn_gen_report">Generate Report</button>
-        ```
+
         <div id="tax_rep_result" style="margin-top: 20px; display: none; background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
           <div id="pdf_export_area">
             <h4 id="rep_title" style="margin-top:0; color:#111; border-bottom:2px solid #333; padding-bottom:5px;">Summary</h4>
