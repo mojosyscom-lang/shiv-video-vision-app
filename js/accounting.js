@@ -772,14 +772,14 @@ if (type === "reports") {
 
 
     
-// --- invoice section starts here -----//
-
 /* ==========================================================
-   ✅ INVOICE (NEW)
+   ✅ INVOICE (UPDATED)
    - Create from Order: auto-fill client + venue + dates + planned items
-   - Add extra inventory rows
-   - GST: NONE / CGST+SGST / IGST
-   - Save + List + View + Edit + PDF/Print + CSV export
+   - Pull FULL client: name, company_name, address, phone1, phone2, gstin
+   - Save as INVOICE or QUOTATION (SVV-INV / SVV-QTN)
+   - WhatsApp: generates PDF via server + opens wa.me with link
+   - Print/PDF: same-window print (iPhone safe)
+   - GST: loads defaults from GST sheet
    ========================================================== */
 if (type === "invoice") {
   content.innerHTML = `<div class="card"><h2>Invoice</h2><p>Loading…</p></div>`;
@@ -788,19 +788,23 @@ if (type === "invoice") {
   const canEdit = (role === "owner" || role === "superadmin");
 
   // Prefetch
-  const [companyRes, clientsRes, ordersRes, invRes, invMasterRes] = await Promise.all([
+  const [companyRes, clientsRes, ordersRes, invRes, invMasterRes, gstListRes, gstDefRes] = await Promise.all([
     api({ action: "getCompanyProfile" }),
     api({ action: "listClients" }),
     api({ action: "listOrders", month: "" }),
     api({ action: "listInvoices", month: "", q: "" }),
-    api({ action: "listInventoryMaster" }) // ✅ if your inventory module uses a different action, change here
+    api({ action: "listInventoryMaster" }),
+    api({ action: "listGST" }).catch(() => []),
+    api({ action: "getDefaultGST" }).catch(() => null)
   ]);
 
-  const company = companyRes && !companyRes.error ? companyRes : {
+  const company = (companyRes && !companyRes.error) ? companyRes : {
     company_name: (localStorage.getItem("company") || ""),
     address: "",
     phone: "",
-    gstin: ""
+    gstin: "",
+    place_of_supply: "",
+    terms: ""
   };
 
   const allClients = Array.isArray(clientsRes) ? clientsRes : [];
@@ -812,82 +816,81 @@ if (type === "invoice") {
   const invListAll = Array.isArray(invRes) ? invRes : [];
   const invMasterAll = Array.isArray(invMasterRes) ? invMasterRes : [];
 
+  const gstList = Array.isArray(gstListRes) ? gstListRes : [];
+  const gstDef = (gstDefRes && !gstDefRes.error) ? gstDefRes : null;
+
   // months for invoice list
   const monthSet = new Set(invListAll.map(x => normMonthLabel(prettyMonth(x.invoice_date || ""))).filter(Boolean));
   const monthList = [...monthSet].sort((a,b)=>(monthKey(b)||0)-(monthKey(a)||0));
 
   // UI state
-  let editingInvoiceId = ""; // if set -> updateInvoice else addInvoice
-  let currentItems = [];     // [{item_id,item_name,qty,unit,rate,amount}]
-  let listModeMonth = "";
-  let listModeQuery = "";
+  let editingInvoiceId = "";     // if set -> updateInvoice else addInvoice
+  let lastSavedInvoiceId = "";   // for WhatsApp/PDF generation after save
+  let currentItems = [];         // [{item_id,item_name,qty,unit,rate,amount}]
+  let currentDocType = "INVOICE"; // "INVOICE" or "QUOTATION"
 
   function norm(s){ return String(s||"").trim().toLowerCase(); }
   function money(n){ return Number(n||0).toFixed(2); }
   function round2(n){ return Math.round((Number(n||0)+Number.EPSILON)*100)/100; }
 
-  /* updated recal function */
-function recalc(){
-    currentItems = currentItems.map(it => {
-      const qty = Number(it.qty||0);
-      const rate = Number(it.rate||0);
-      return { ...it, qty, rate, amount: round2(qty*rate) };
-    });
+  // Build quick lookup for clients
+  const clientById = {};
+  activeClients.forEach(c => {
+    const id = String(c.client_id || "").trim();
+    if (!id) return;
+    clientById[id] = c;
+  });
 
-    const gstType = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST");
-    const gstRate = Number(document.getElementById("inv_gst_rate")?.value || 18);
+  function pickClientFull(client_id){
+    const c = clientById[String(client_id||"").trim()];
+    if (!c) return {
+      client_id: String(client_id||""),
+      client_name: "",
+      client_company: "",
+      phone1: "",
+      phone2: "",
+      address: "",
+      gstin: ""
+    };
 
-    const subtotal = round2(currentItems.reduce((a,it)=>a+Number(it.amount||0),0));
-    
-    // Applying the robust GST logic suggested earlier
-    let cgst=0, sgst=0, igst=0;
-    const totalTax = round2(subtotal * gstRate / 100);
-    if (gstType === "CGST_SGST"){
-      cgst = round2(totalTax / 2);
-      sgst = round2(totalTax - cgst);
-    } else if (gstType === "IGST"){
-      igst = totalTax;
-    }
-    
-    const grand = round2(subtotal + cgst + sgst + igst);
-
-    // Update the UI Labels
-    const elSub = document.getElementById("inv_subtotal");
-    const elCgst = document.getElementById("inv_cgst");
-    const elSgst = document.getElementById("inv_sgst");
-    const elIgst = document.getElementById("inv_igst");
-    const elGrand = document.getElementById("inv_grand");
-
-    if (elSub) elSub.textContent = money(subtotal);
-    if (elCgst) elCgst.textContent = money(cgst);
-    if (elSgst) elSgst.textContent = money(sgst);
-    if (elIgst) elIgst.textContent = money(igst);
-    if (elGrand) elGrand.textContent = money(grand);
-
-    // ✅ NEW: Live words update
-    const wordsInp = document.getElementById("inv_words");
-    if (wordsInp) wordsInp.value = amountInWordsIN(grand) + (grand > 0 ? " Only" : "");
-
-    // show/hide gst rows
-    document.getElementById("row_cgst")?.style && (document.getElementById("row_cgst").style.display = (gstType==="CGST_SGST") ? "" : "none");
-    document.getElementById("row_sgst")?.style && (document.getElementById("row_sgst").style.display = (gstType==="CGST_SGST") ? "" : "none");
-    document.getElementById("row_igst")?.style && (document.getElementById("row_igst").style.display = (gstType==="IGST") ? "" : "none");
-
-    // items table render amounts
-    document.querySelectorAll("tr[data-inv-line]").forEach(tr => {
-      const idx = Number(tr.getAttribute("data-inv-line")||0);
-      const it = currentItems[idx];
-      const amt = tr.querySelector("[data-amt]");
-      if (amt) amt.textContent = money(it?.amount||0);
-    });
+    return {
+      client_id: String(c.client_id||""),
+      client_name: String(c.client_name||""),
+      client_company: String(c.company_name || c.client_company || ""),
+      phone1: String(c.phone1 || c.client_phone || ""),
+      phone2: String(c.phone2 || ""),
+      address: String(c.address || ""),
+      gstin: String(c.gstin || c.gst_number || c.gst || "")
+    };
   }
 
+  function selectedClientFromPick(){
+    const sel = document.getElementById("inv_client_pick");
+    const opt = sel?.selectedOptions?.[0];
+    if (!opt) return null;
 
+    const client_id = String(opt.value||"").trim();
+    return pickClientFull(client_id);
+  }
 
+  function setClientFields(cf){
+    document.getElementById("inv_client_id").textContent = cf?.client_id || "";
+    document.getElementById("inv_client_name").textContent = cf?.client_name || "";
+    document.getElementById("inv_client_company").textContent = cf?.client_company || "";
+    document.getElementById("inv_client_phone1").textContent = cf?.phone1 || "";
+    document.getElementById("inv_client_phone2").textContent = cf?.phone2 || "";
+    document.getElementById("inv_client_address").textContent = cf?.address || "";
+    document.getElementById("inv_client_gstin").textContent = cf?.gstin || "";
+  }
 
+  function setOrderFields(o){
+    document.getElementById("inv_order_id").textContent = o?.order_id || "";
+    document.getElementById("inv_venue").value = o?.venue || "";
+    document.getElementById("inv_setup").value = prettyISODate(o?.setup_date || "");
+    document.getElementById("inv_start").value = prettyISODate(o?.start_date || "");
+    document.getElementById("inv_end").value = prettyISODate(o?.end_date || "");
+  }
 
-
-  
   // Indian number words (simple)
   function amountInWordsIN(num){
     const n = Math.floor(Number(num||0));
@@ -925,12 +928,100 @@ function recalc(){
     return parts.join(" ").replace(/\s+/g," ").trim();
   }
 
+  function getGSTRowByType(type){
+    const t = String(type||"").toUpperCase();
+    return gstList.find(x => String(x.gst_type||"").toUpperCase() === t) || null;
+  }
+
+  function applyGSTDefaultsToUI(){
+    const sel = document.getElementById("inv_gst_type");
+    const rateInp = document.getElementById("inv_gst_rate");
+    if (!sel || !rateInp) return;
+
+    const gstType = String(sel.value || "CGST_SGST").toUpperCase();
+
+    // Use GST sheet values if present
+    const row = getGSTRowByType(gstType);
+    if (gstType === "NONE") {
+      rateInp.value = 0;
+    } else if (row) {
+      if (gstType === "IGST") {
+        rateInp.value = Number(row.igst_rate || row.igst || 18);
+      } else {
+        // CGST+SGST => total percent
+        const c = Number(row.cgst_rate || row.cgst || 9);
+        const s = Number(row.sgst_rate || row.sgst || 9);
+        rateInp.value = Number(c + s);
+      }
+    } else {
+      // fallback
+      rateInp.value = (gstType === "IGST") ? 18 : 18;
+    }
+  }
+
+  function recalc(){
+    currentItems = currentItems.map(it => {
+      const qty = Number(it.qty||0);
+      const rate = Number(it.rate||0);
+      return { ...it, qty, rate, amount: round2(qty*rate) };
+    });
+
+    const gstType = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST").toUpperCase();
+    const gstRate = Number(document.getElementById("inv_gst_rate")?.value || 0);
+
+    const subtotal = round2(currentItems.reduce((a,it)=>a+Number(it.amount||0),0));
+
+    let cgst=0, sgst=0, igst=0;
+    const totalTax = round2(subtotal * gstRate / 100);
+    if (gstType === "CGST_SGST"){
+      cgst = round2(totalTax / 2);
+      sgst = round2(totalTax - cgst);
+    } else if (gstType === "IGST"){
+      igst = totalTax;
+    }
+
+    const grand = round2(subtotal + cgst + sgst + igst);
+
+    const elSub = document.getElementById("inv_subtotal");
+    const elCgst = document.getElementById("inv_cgst");
+    const elSgst = document.getElementById("inv_sgst");
+    const elIgst = document.getElementById("inv_igst");
+    const elGrand = document.getElementById("inv_grand");
+
+    if (elSub) elSub.textContent = money(subtotal);
+    if (elCgst) elCgst.textContent = money(cgst);
+    if (elSgst) elSgst.textContent = money(sgst);
+    if (elIgst) elIgst.textContent = money(igst);
+    if (elGrand) elGrand.textContent = money(grand);
+
+    // live words update
+    const wordsInp = document.getElementById("inv_words");
+    if (wordsInp) wordsInp.value = amountInWordsIN(grand) + (grand > 0 ? " Only" : "");
+
+    // show/hide gst rows
+    const rowC = document.getElementById("row_cgst");
+    const rowS = document.getElementById("row_sgst");
+    const rowI = document.getElementById("row_igst");
+    if (rowC) rowC.style.display = (gstType==="CGST_SGST") ? "" : "none";
+    if (rowS) rowS.style.display = (gstType==="CGST_SGST") ? "" : "none";
+    if (rowI) rowI.style.display = (gstType==="IGST") ? "" : "none";
+
+    // update line amounts
+    document.querySelectorAll("tr[data-inv-line]").forEach(tr => {
+      const idx = Number(tr.getAttribute("data-inv-line")||0);
+      const it = currentItems[idx];
+      const amt = tr.querySelector("[data-amt]");
+      if (amt) amt.textContent = money(it?.amount||0);
+    });
+  }
+
   function renderItemsTable(){
     const box = document.getElementById("inv_items_box");
     if (!box) return;
 
     if (!currentItems.length){
       box.innerHTML = `<p class="dashSmall">No items yet. Select an order or add inventory items.</p>`;
+      recalc();
       return;
     }
 
@@ -966,7 +1057,6 @@ function recalc(){
       </div>
     `;
 
-    // bind qty/rate
     box.querySelectorAll("input[data-qty]").forEach(inp=>{
       inp.addEventListener("input", ()=>{
         const i = Number(inp.getAttribute("data-qty"));
@@ -982,51 +1072,21 @@ function recalc(){
       });
     });
 
-    // delete
     box.querySelectorAll("button[data-del]").forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const i = Number(btn.getAttribute("data-del"));
         currentItems.splice(i,1);
         renderItemsTable();
-        recalc();
       });
     });
 
     recalc();
   }
 
-  function selectedClientFromPick(){
-    const sel = document.getElementById("inv_client_pick");
-    const opt = sel?.selectedOptions?.[0];
-    if (!opt) return null;
-    return {
-      client_id: String(opt.value||"").trim(),
-      client_name: opt.getAttribute("data-name")||"",
-      client_phone: opt.getAttribute("data-phone")||"",
-      client_address: opt.getAttribute("data-address")||""
-    };
-  }
-
-  function setClientFields(c){
-    document.getElementById("inv_client_id").textContent = c?.client_id || "";
-    document.getElementById("inv_client_name").textContent = c?.client_name || "";
-    document.getElementById("inv_client_phone").textContent = c?.client_phone || "";
-    document.getElementById("inv_client_address").textContent = c?.client_address || "";
-  }
-
-  function setOrderFields(o){
-    document.getElementById("inv_order_id").textContent = o?.order_id || "";
-    document.getElementById("inv_venue").value = o?.venue || "";
-    document.getElementById("inv_setup").value = prettyISODate(o?.setup_date || "");
-    document.getElementById("inv_start").value = prettyISODate(o?.start_date || "");
-    document.getElementById("inv_end").value = prettyISODate(o?.end_date || "");
-  }
-
   async function loadPlannedItemsFromOrder(order_id){
     const itemsRes = await api({ action: "listOrderItems", order_id: String(order_id) });
     const planned = Array.isArray(itemsRes) ? itemsRes : [];
 
-    // merge unit from inventory master if exists
     const unitMap = {};
     invMasterAll.forEach(x=>{
       const id = String(x.item_id||"").trim();
@@ -1047,13 +1107,30 @@ function recalc(){
     renderItemsTable();
   }
 
+  function setDocTypeUI(t){
+    currentDocType = String(t||"INVOICE").toUpperCase();
+    const label = document.getElementById("inv_doc_label");
+    if (label) label.textContent = (currentDocType === "QUOTATION") ? "Quotation" : "Invoice";
+  }
+
   // --- UI
+  const defaultGSTType = (gstDef && gstDef.gst_type) ? String(gstDef.gst_type).toUpperCase() : "CGST_SGST";
+  const defaultRate = (() => {
+    if (!gstDef) return 18;
+    const t = String(gstDef.gst_type||"").toUpperCase();
+    if (t === "NONE") return 0;
+    if (t === "IGST") return Number(gstDef.igst_rate || 18);
+    const c = Number(gstDef.cgst_rate || 9);
+    const s = Number(gstDef.sgst_rate || 9);
+    return Number(c + s);
+  })();
+
   content.innerHTML = `
     <div class="card">
-      <h2>Invoice</h2>
+      <h2><span id="inv_doc_label">Invoice</span></h2>
 
       <div class="card" style="margin-top:12px;">
-        <h3 style="margin-top:0;">Create Invoice</h3>
+        <h3 style="margin-top:0;">Create</h3>
 
         <div class="dashSmall">
           <b>${escapeHtml(company.company_name || "")}</b><br>
@@ -1062,18 +1139,21 @@ function recalc(){
           ${company.gstin ? ("GSTIN: " + escapeHtml(company.gstin)) : ""}
         </div>
 
-        <label style="margin-top:12px;">Invoice Date</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="primary" id="btn_doc_invoice">Invoice</button>
+          <button class="primary" id="btn_doc_quote" style="background:#111;">Quotation</button>
+        </div>
+
+        <label style="margin-top:12px;">Date</label>
         <input id="inv_date" type="date" value="${todayISO()}">
 
         <label style="margin-top:10px;">Order Link</label>
         <select id="inv_order_pick">
-          <option value="">-- Select Order (optional) --</option>
+          <option value="">-- Select Order --</option>
           ${activeOrders.map(o=>{
             const label = `${o.order_id} • ${o.client_name} • ${prettyISODate(o.start_date)}→${prettyISODate(o.end_date)}`;
             return `<option value="${escapeAttr(String(o.order_id||""))}"
               data-client_id="${escapeAttr(String(o.client_id||""))}"
-              data-client_name="${escapeAttr(String(o.client_name||""))}"
-              data-client_phone="${escapeAttr(String(o.client_phone||""))}"
               data-venue="${escapeAttr(String(o.venue||""))}"
               data-setup="${escapeAttr(String(prettyISODate(o.setup_date||"")))}"
               data-start="${escapeAttr(String(prettyISODate(o.start_date||"")))}"
@@ -1086,11 +1166,8 @@ function recalc(){
         <select id="inv_client_pick">
           <option value="">-- Select client --</option>
           ${activeClients.map(c=>`
-            <option value="${escapeAttr(String(c.client_id||""))}"
-              data-name="${escapeAttr(String(c.client_name||""))}"
-              data-phone="${escapeAttr(String(c.phone1||c.client_phone||""))}"
-              data-address="${escapeAttr(String(c.address||""))}">
-              ${escapeHtml(c.client_name||"")} • ${escapeHtml(c.phone1||c.client_phone||"")}
+            <option value="${escapeAttr(String(c.client_id||""))}">
+              ${escapeHtml(c.client_name||"")} • ${escapeHtml(String(c.phone1||c.client_phone||""))}
             </option>
           `).join("")}
         </select>
@@ -1099,7 +1176,10 @@ function recalc(){
           <div class="dashSmall"><b>Client Details</b></div>
           <div class="dashSmall">ID: <span id="inv_client_id"></span></div>
           <div class="dashSmall">Name: <span id="inv_client_name"></span></div>
-          <div class="dashSmall">Phone: <span id="inv_client_phone"></span></div>
+          <div class="dashSmall">Company: <span id="inv_client_company"></span></div>
+          <div class="dashSmall">Phone1: <span id="inv_client_phone1"></span></div>
+          <div class="dashSmall">Phone2: <span id="inv_client_phone2"></span></div>
+          <div class="dashSmall">GSTIN: <span id="inv_client_gstin"></span></div>
           <div class="dashSmall">Address: <span id="inv_client_address"></span></div>
         </div>
 
@@ -1167,7 +1247,7 @@ function recalc(){
           </select>
 
           <label style="margin-top:8px;">GST Rate (%)</label>
-          <input id="inv_gst_rate" type="number" inputmode="numeric" value="18">
+          <input id="inv_gst_rate" type="number" inputmode="numeric" value="${escapeAttr(String(defaultRate))}">
 
           <div style="margin-top:12px;">
             <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><b>₹ <span id="inv_subtotal">0.00</span></b></div>
@@ -1178,14 +1258,14 @@ function recalc(){
             <div style="display:flex;justify-content:space-between;"><span><b>Grand Total</b></span><b>₹ <span id="inv_grand">0.00</span></b></div>
           </div>
 
-          <label style="margin-top:10px;">Amount in words (optional)</label>
-          <input id="inv_words" placeholder="Auto (optional)">
-          <button class="userToggleBtn" id="btn_inv_words" style="margin-top:8px;">Auto-fill words</button>
+          <label style="margin-top:10px;">Amount in words</label>
+          <input id="inv_words" placeholder="Auto" readonly>
         </div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          ${canEdit ? `<button class="primary" id="btn_inv_save">💾 Save Invoice</button>` : ``}
+          ${canEdit ? `<button class="primary" id="btn_inv_save">💾 Save</button>` : ``}
           <button class="primary" id="btn_inv_print" style="background:#111;">🖨 Print / PDF</button>
+          <button class="primary" id="btn_inv_wa" style="background:#25D366;">📱 WhatsApp PDF</button>
           ${isSuper ? `<button class="primary" id="btn_inv_export_csv" style="background:#1fa971;">Export CSV (List)</button>` : ``}
         </div>
 
@@ -1216,12 +1296,28 @@ function recalc(){
     </div>
   `;
 
-  // init
+  // init doc type + gst defaults
+  setDocTypeUI("INVOICE");
+  const gstTypeSel = document.getElementById("inv_gst_type");
+  if (gstTypeSel) gstTypeSel.value = defaultGSTType;
+  applyGSTDefaultsToUI();
+
+  document.getElementById("btn_doc_invoice")?.addEventListener("click", ()=>{
+    setDocTypeUI("INVOICE");
+    document.getElementById("inv_status").textContent = "";
+  });
+  document.getElementById("btn_doc_quote")?.addEventListener("click", ()=>{
+    setDocTypeUI("QUOTATION");
+    document.getElementById("inv_status").textContent = "";
+  });
+
+  // client change
   document.getElementById("inv_client_pick")?.addEventListener("change", ()=>{
     const c = selectedClientFromPick();
     if (c) setClientFields(c);
   });
 
+  // order link change => load client fully + order fields + planned items
   document.getElementById("inv_order_pick")?.addEventListener("change", async (e)=>{
     const sel = e.target;
     const opt = sel?.selectedOptions?.[0];
@@ -1230,16 +1326,15 @@ function recalc(){
     const order_id = String(opt.value||"").trim();
     document.getElementById("inv_order_id").textContent = order_id;
 
-    // auto fill client selection (and lock it if you want later)
     const client_id = opt.getAttribute("data-client_id") || "";
-    const client_name = opt.getAttribute("data-client_name") || "";
-    const client_phone = opt.getAttribute("data-client_phone") || "";
 
-    // set client dropdown to this client if exists
+    // set client dropdown to this client
     const clientPick = document.getElementById("inv_client_pick");
     if (clientPick && client_id) clientPick.value = client_id;
 
-    setClientFields({ client_id, client_name, client_phone, client_address: "" });
+    // ✅ FULL client autofill instantly
+    const cf = pickClientFull(client_id);
+    setClientFields(cf);
 
     setOrderFields({
       order_id,
@@ -1249,21 +1344,17 @@ function recalc(){
       end_date: opt.getAttribute("data-end") || ""
     });
 
-    // load planned items as line items
     if (order_id) await loadPlannedItemsFromOrder(order_id);
   });
 
- // Recalculate on any GST change
-  document.getElementById("inv_gst_type")?.addEventListener("change", recalc);
+  // GST change => rate from sheet + recalc
+  document.getElementById("inv_gst_type")?.addEventListener("change", ()=>{
+    applyGSTDefaultsToUI();
+    recalc();
+  });
   document.getElementById("inv_gst_rate")?.addEventListener("input", recalc);
   document.getElementById("inv_gst_rate")?.addEventListener("change", recalc);
 
-  // Recalculate if any global property that affects totals is touched
-  ["inv_gst_type", "inv_gst_rate"].forEach(id => {
-    document.getElementById(id)?.addEventListener("blur", recalc);
-  });
-
-  
   // add row flow
   document.getElementById("btn_inv_add_row")?.addEventListener("click", ()=>{
     const box = document.getElementById("inv_add_row_box");
@@ -1279,39 +1370,26 @@ function recalc(){
     const item_name = opt.getAttribute("data-name") || item_id;
     const unit = opt.getAttribute("data-unit") || "";
 
-   // Use the value from the input, but if it's 0, check if we can suggest the master rate
     let qty = Number(document.getElementById("inv_new_qty")?.value || 1);
     let rate = Number(document.getElementById("inv_new_rate")?.value || 0);
-
-    // If rate is still 0, try to pull from the master list
-    if (rate === 0) {
-      const masterItem = invMasterAll.find(x => String(x.item_id) === item_id);
-      rate = Number(masterItem?.rate || 0);
-    }
     if (!(qty > 0)) return alert("Qty must be > 0");
 
     currentItems.push({ item_id, item_name, qty, unit, rate, amount: round2(qty*rate) });
     renderItemsTable();
   });
 
-  document.getElementById("btn_inv_words")?.addEventListener("click", ()=>{
-    const grand = Number(document.getElementById("inv_grand")?.textContent || 0);
-    const w = amountInWordsIN(grand);
-    document.getElementById("inv_words").value = w ? (w + " Only") : "";
-  });
-
-  // Save invoice
-  document.getElementById("btn_inv_save")?.addEventListener("click", async ()=>{
+  async function saveDoc(){
     if (!canEdit) return;
 
     const btn = document.getElementById("btn_inv_save");
     const unlock = lockButton(btn, "Saving...");
 
     try {
+      const doc_type = currentDocType; // "INVOICE" | "QUOTATION"
       const invoice_date = String(document.getElementById("inv_date")?.value || "").trim();
 
-      const clientPick = selectedClientFromPick();
-      if (!clientPick || !clientPick.client_id) return alert("Select client");
+      const clientFull = selectedClientFromPick();
+      if (!clientFull || !clientFull.client_id) return alert("Select client");
 
       const order_id = String(document.getElementById("inv_order_id")?.textContent || "").trim();
       const venue = String(document.getElementById("inv_venue")?.value || "").trim();
@@ -1322,22 +1400,25 @@ function recalc(){
       if (!venue) return alert("Venue required");
       if (!setup_date || !start_date || !end_date) return alert("Setup/Start/End dates required");
 
-      const gst_type = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST");
-      const gst_rate = Number(document.getElementById("inv_gst_rate")?.value || 18);
+      const gst_type = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST").toUpperCase();
+      const gst_rate = Number(document.getElementById("inv_gst_rate")?.value || 0);
 
-      // validate rates for planned items (you can allow 0, but usually no)
       if (!currentItems.length) return alert("No items");
       const bad = currentItems.find(it => !(Number(it.qty||0) > 0) || !(Number(it.rate||0) >= 0));
       if (bad) return alert("Check qty/rate");
 
       const payload = {
         invoice_id: editingInvoiceId,
+        doc_type,
         invoice_date,
         order_id,
-        client_id: clientPick.client_id,
-        client_name: clientPick.client_name,
-        client_phone: clientPick.client_phone,
-        client_address: clientPick.client_address || "",
+        client_id: clientFull.client_id,
+        client_name: clientFull.client_name,
+        client_phone: clientFull.phone1,
+        client_phone2: clientFull.phone2,
+        client_company: clientFull.client_company,
+        client_address: clientFull.address || "",
+        client_gstin: clientFull.gstin || "",
         venue,
         setup_date,
         start_date,
@@ -1359,32 +1440,129 @@ function recalc(){
 
       if (r && r.error) return alert(String(r.error));
 
-      alert(editingInvoiceId ? "Invoice updated" : ("Invoice saved: " + (r.invoice_no || "")));
+      lastSavedInvoiceId = r.invoice_id || editingInvoiceId || "";
+      const no = r.invoice_no || "";
+      alert(editingInvoiceId ? "Saved" : (doc_type === "QUOTATION" ? ("Quotation saved: " + no) : ("Invoice saved: " + no)));
       loadSection("invoice");
     } finally {
       setTimeout(unlock, 450);
     }
-  });
+  }
 
-  // Print/PDF (browser print)
-  document.getElementById("btn_inv_print")?.addEventListener("click", ()=>{
+  document.getElementById("btn_inv_save")?.addEventListener("click", saveDoc);
+
+  function buildPrintHtml(header, items){
+    const title = (header.doc_type === "QUOTATION") ? "QUOTATION" : "INVOICE";
+    const terms = company.terms || "Terms: 1. Please pay within 7 days. 2. Goods once rented are the responsibility of the client.";
+
+    return `
+      <div class="printWrap">
+        <div class="hdr">
+          <div class="hdrLeft">
+            <div class="brand">${escapeHtml(company.company_name || "")}</div>
+            <div class="sub">${escapeHtml(company.short_desc || "")}</div>
+            <div class="small">${escapeHtml(company.address || "")}</div>
+            <div class="small">${company.phone ? ("Phone: " + escapeHtml(company.phone)) : ""}${company.gstin ? (" • GSTIN: " + escapeHtml(company.gstin)) : ""}</div>
+          </div>
+          <div class="hdrRight">
+            <div class="docTitle">${title}</div>
+            <div class="meta"><b>No:</b> ${escapeHtml(header.invoice_no || "(Preview)")}</div>
+            <div class="meta"><b>Date:</b> ${escapeHtml(header.invoice_date || "")}</div>
+            <div class="meta"><b>Order:</b> ${escapeHtml(header.order_id || "")}</div>
+            <div class="meta"><b>Place:</b> ${escapeHtml(company.place_of_supply || company.address || "")}</div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="box">
+            <div class="boxT">Bill To</div>
+            <div><b>${escapeHtml(header.client_name||"")}</b></div>
+            ${header.client_company ? `<div>${escapeHtml(header.client_company)}</div>` : ``}
+            <div>${escapeHtml(header.client_phone||"")}${header.client_phone2 ? (" , " + escapeHtml(header.client_phone2)) : ""}</div>
+            ${header.client_gstin ? `<div>GSTIN: ${escapeHtml(header.client_gstin)}</div>` : ``}
+            <div>${escapeHtml(header.client_address||"")}</div>
+          </div>
+          <div class="box">
+            <div class="boxT">Event Details</div>
+            <div><b>Venue:</b> ${escapeHtml(header.venue||"")}</div>
+            <div><b>Setup:</b> ${escapeHtml(header.setup_date||"")}</div>
+            <div><b>Start:</b> ${escapeHtml(header.start_date||"")}</div>
+            <div><b>End:</b> ${escapeHtml(header.end_date||"")}</div>
+          </div>
+        </div>
+
+        <table class="t">
+          <thead>
+            <tr>
+              <th style="width:5%;">#</th>
+              <th>Description</th>
+              <th style="width:12%;text-align:right;">Qty</th>
+              <th style="width:16%;text-align:right;">Rate</th>
+              <th style="width:16%;text-align:right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map((it,i)=>`
+              <tr>
+                <td>${i+1}</td>
+                <td>${escapeHtml(it.item_name||"")} ${it.unit ? `<span class="u">(${escapeHtml(it.unit)})</span>` : ""}</td>
+                <td style="text-align:right;">${Number(it.qty||0)}</td>
+                <td style="text-align:right;">₹${money(it.rate||0)}</td>
+                <td style="text-align:right;">₹${money(it.amount||0)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+
+        <div class="totals">
+          <div class="totBox">
+            <div class="r"><span>Subtotal</span><b>₹${escapeHtml(header.subtotal||"0.00")}</b></div>
+            ${header.gst_type === "CGST_SGST" ? `
+              <div class="r"><span>CGST</span><span>₹${escapeHtml(header.cgst||"0.00")}</span></div>
+              <div class="r"><span>SGST</span><span>₹${escapeHtml(header.sgst||"0.00")}</span></div>
+            ` : ``}
+            ${header.gst_type === "IGST" ? `
+              <div class="r"><span>IGST</span><span>₹${escapeHtml(header.igst||"0.00")}</span></div>
+            ` : ``}
+            <div class="r gt"><span>Total</span><b>₹${escapeHtml(header.grand||"0.00")}</b></div>
+          </div>
+        </div>
+
+        <div class="foot">
+          <div><b>Amount in Words:</b> ${escapeHtml(header.words||"")}</div>
+          <div style="margin-top:8px;"><b>Terms:</b> ${escapeHtml(terms)}</div>
+
+          <div class="sig">
+            <div>For ${escapeHtml(company.company_name||"")}</div>
+            <div class="line"></div>
+            <div>Authorized Signatory</div>
+          </div>
+        </div>
+
+        <div class="footerBar">
+          Generated on ${escapeHtml(new Date().toLocaleString())}
+        </div>
+      </div>
+    `;
+  }
+
+  function printSameWindow(){
     const header = {
-      company_name: company.company_name || "",
-      address: company.address || "",
-      phone: company.phone || "",
-      gstin: company.gstin || "",
+      doc_type: currentDocType,
       invoice_no: editingInvoiceId ? "(Preview)" : "(Preview)",
       invoice_date: document.getElementById("inv_date")?.value || "",
-      client_name: document.getElementById("inv_client_name")?.textContent || "",
-      client_phone: document.getElementById("inv_client_phone")?.textContent || "",
-      client_address: document.getElementById("inv_client_address")?.textContent || "",
       order_id: document.getElementById("inv_order_id")?.textContent || "",
       venue: document.getElementById("inv_venue")?.value || "",
       setup_date: document.getElementById("inv_setup")?.value || "",
       start_date: document.getElementById("inv_start")?.value || "",
       end_date: document.getElementById("inv_end")?.value || "",
+      client_name: document.getElementById("inv_client_name")?.textContent || "",
+      client_company: document.getElementById("inv_client_company")?.textContent || "",
+      client_phone: document.getElementById("inv_client_phone1")?.textContent || "",
+      client_phone2: document.getElementById("inv_client_phone2")?.textContent || "",
+      client_address: document.getElementById("inv_client_address")?.textContent || "",
+      client_gstin: document.getElementById("inv_client_gstin")?.textContent || "",
       gst_type: document.getElementById("inv_gst_type")?.value || "",
-      gst_rate: document.getElementById("inv_gst_rate")?.value || 0,
       subtotal: document.getElementById("inv_subtotal")?.textContent || "0.00",
       cgst: document.getElementById("inv_cgst")?.textContent || "0.00",
       sgst: document.getElementById("inv_sgst")?.textContent || "0.00",
@@ -1393,142 +1571,107 @@ function recalc(){
       words: document.getElementById("inv_words")?.value || ""
     };
 
-    const html = `
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Invoice</title>
-        <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
-  body { font-family: 'Inter', sans-serif; padding: 40px; color: #1a1a1b; line-height: 1.5; }
-  
-  /* Header Section */
-  .invoice-header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
-  .company-info .brand { font-size: 28px; font-weight: 700; color: #000; text-transform: uppercase; letter-spacing: 1px; }
-  .company-info div { font-size: 13px; color: #444; }
-  
-  /* Meta Box (Invoice No/Date) */
-  .invoice-meta { text-align: right; }
-  .invoice-meta h1 { font-size: 32px; margin: 0; color: #e5e7eb; position: absolute; right: 40px; top: 20px; z-index: -1; }
-  .meta-item { margin-bottom: 4px; font-size: 14px; }
-  .meta-label { font-weight: 700; color: #666; width: 100px; display: inline-block; }
+    const printArea = document.getElementById("inv_print_area");
+    if (!printArea) return alert("Print area missing");
 
-  /* Details Grid */
-  .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
-  .detail-box h3 { font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; }
-  .detail-content { font-size: 14px; }
-
-  /* Table Style */
-  table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-  th { background: #f9fafb; padding: 12px 8px; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #eee; text-align: left; }
-  td { padding: 12px 8px; border-bottom: 1px solid #eee; font-size: 14px; }
-  .text-right { text-align: right; }
-
-  /* Totals Section */
-  .totals-area { display: flex; justify-content: flex-end; }
-  .totals-table { width: 300px; }
-  .totals-table div { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
-  .grand-total { border-top: 2px solid #000; margin-top: 10px; padding-top: 10px !important; font-weight: 700; font-size: 18px !important; }
-
-  /* Footer & Signature */
-  .footer { margin-top: 50px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 20px; }
-  .signature-block { text-align: right; margin-top: 40px; }
-  .sig-line { display: inline-block; width: 200px; border-top: 1px solid #000; margin-top: 50px; }
-  
-  @media print {
-    body { padding: 0; }
-    .no-print { display: none; }
-  }
-</style>
-      </head>
-      <body>
-  <div class="invoice-header">
-    <div class="company-info">
-      <div class="brand">${escapeHtml(header.company_name)}</div>
-      <div>${escapeHtml(header.address)}</div>
-      <div>Phone: ${escapeHtml(header.phone)} | GSTIN: ${escapeHtml(header.gstin)}</div>
-    </div>
-    <div class="invoice-meta">
-      <h1>INVOICE</h1>
-      <div class="meta-item"><span class="meta-label">Invoice No:</span> ${escapeHtml(header.invoice_no)}</div>
-      <div class="meta-item"><span class="meta-label">Date:</span> ${escapeHtml(header.invoice_date)}</div>
-      <div class="meta-item"><span class="meta-label">Order ID:</span> ${escapeHtml(header.order_id)}</div>
-    </div>
-  </div>
-
-  <div class="details-grid">
-    <div class="detail-box">
-      <h3>Bill To</h3>
-      <div class="detail-content">
-        <strong>${escapeHtml(header.client_name)}</strong><br>
-        ${escapeHtml(header.client_phone)}<br>
-        ${escapeHtml(header.client_address)}
-      </div>
-    </div>
-    <div class="detail-box">
-      <h3>Event Details</h3>
-      <div class="detail-content">
-        <strong>Venue:</strong> ${escapeHtml(header.venue)}<br>
-        <strong>Dates:</strong> ${escapeHtml(header.start_date)} to ${escapeHtml(header.end_date)}
-      </div>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th width="5%">#</th>
-        <th width="55%">Item Description</th>
-        <th width="10%" class="text-right">Qty</th>
-        <th width="15%" class="text-right">Rate</th>
-        <th width="15%" class="text-right">Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${currentItems.map((it, i) => `
-        <tr>
-          <td>${i + 1}</td>
-          <td>${escapeHtml(it.item_name)} <small style="color:#888">(${escapeHtml(it.unit)})</small></td>
-          <td class="text-right">${it.qty}</td>
-          <td class="text-right">₹${money(it.rate)}</td>
-          <td class="text-right">₹${money(it.amount)}</td>
-        </tr>
-      `).join("")}
-    </tbody>
-  </table>
-
-  <div class="totals-area">
-    <div class="totals-table">
-      <div><span>Subtotal</span><span>₹${header.subtotal}</span></div>
-      ${header.gst_type === "CGST_SGST" ? `
-        <div><span>CGST</span><span>₹${header.cgst}</span></div>
-        <div><span>SGST</span><span>₹${header.sgst}</span></div>
-      ` : ""}
-      ${header.gst_type === "IGST" ? `<div><span>IGST</span><span>₹${header.igst}</span></div>` : ""}
-      <div class="grand-total"><span>Total</span><span>₹${header.grand}</span></div>
-    </div>
-  </div>
-
-  <div class="footer">
-    <strong>Amount in Words:</strong> ${escapeHtml(header.words)}<br><br>
-    <strong>Terms:</strong> 1. Please pay within 7 days. 2. Goods once rented are the responsibility of the client.
-    <div class="signature-block">
-      <div>For ${escapeHtml(header.company_name)}</div>
-      <div class="sig-line"></div>
-      <div>Authorized Signatory</div>
-    </div>
-  </div>
-
-  <script>window.print();</script>
-</body>
-      </html>
+    const css = `
+      <style>
+        body.printing { background:#fff !important; }
+        .printWrap { font-family: Inter, system-ui, -apple-system, Arial, sans-serif; color:#111; padding:18px; }
+        .hdr { display:flex; justify-content:space-between; gap:14px; border-bottom:2px solid #111; padding-bottom:12px; }
+        .brand { font-size:22px; font-weight:800; letter-spacing:.3px; }
+        .sub { font-size:12px; color:#444; margin-top:2px; }
+        .small { font-size:12px; color:#444; margin-top:2px; }
+        .hdrRight { text-align:right; }
+        .docTitle { font-size:18px; font-weight:800; }
+        .meta { font-size:12px; color:#333; margin-top:2px; }
+        .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+        .box { border:1px solid #eee; border-radius:10px; padding:10px; }
+        .boxT { font-size:12px; font-weight:800; color:#333; border-bottom:1px solid #eee; padding-bottom:6px; margin-bottom:6px; text-transform:uppercase; }
+        .t { width:100%; border-collapse:collapse; margin-top:12px; }
+        .t th { background:#f8fafc; font-size:12px; text-transform:uppercase; border-bottom:2px solid #eee; padding:10px 8px; text-align:left; }
+        .t td { border-bottom:1px solid #eee; padding:10px 8px; font-size:13px; }
+        .u { color:#777; font-size:12px; }
+        .totals { display:flex; justify-content:flex-end; margin-top:12px; }
+        .totBox { width:320px; border:1px solid #eee; border-radius:10px; padding:10px; }
+        .r { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
+        .gt { border-top:2px solid #111; margin-top:6px; padding-top:8px; font-size:16px; }
+        .foot { margin-top:14px; border-top:1px solid #eee; padding-top:10px; font-size:12px; color:#444; }
+        .sig { margin-top:16px; text-align:right; }
+        .line { margin-top:36px; border-top:1px solid #111; width:220px; display:inline-block; }
+        .footerBar { margin-top:10px; font-size:11px; color:#777; text-align:center; }
+        @page { margin: 10mm; }
+        @media print {
+          .no-print { display:none !important; }
+          body { margin:0; }
+        }
+      </style>
     `;
 
-    const w = window.open("", "_blank");
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
+    printArea.innerHTML = css + buildPrintHtml(header, currentItems);
+
+    // show only print area
+    const old = content.innerHTML;
+    const scrollY = window.scrollY;
+
+    document.body.classList.add("printing");
+    content.innerHTML = printArea.innerHTML;
+
+    const restore = () => {
+      document.body.classList.remove("printing");
+      content.innerHTML = old;
+      loadSection("invoice"); // restore fully (safe)
+      window.scrollTo(0, scrollY);
+      window.removeEventListener("afterprint", restore);
+    };
+
+    window.addEventListener("afterprint", restore);
+    window.print();
+  }
+
+  document.getElementById("btn_inv_print")?.addEventListener("click", printSameWindow);
+
+  // WhatsApp PDF
+  document.getElementById("btn_inv_wa")?.addEventListener("click", async ()=>{
+    const clientFull = selectedClientFromPick();
+    if (!clientFull || !clientFull.phone1) return alert("Client phone missing");
+
+    // must be saved to generate PDF properly
+    if (!editingInvoiceId && !lastSavedInvoiceId) {
+      return alert("Please Save first, then WhatsApp PDF.");
+    }
+
+    const invoice_id = editingInvoiceId || lastSavedInvoiceId;
+
+    const btn = document.getElementById("btn_inv_wa");
+    const unlock = lockButton(btn, "Generating PDF...");
+
+    try {
+      const r = await api({ action: "generateInvoicePdf", invoice_id });
+      if (r && r.error) return alert(String(r.error));
+
+      const url = r.file_url || r.url || "";
+      if (!url) return alert("PDF URL missing");
+
+      const docLabel = (r.doc_type === "QUOTATION") ? "Quotation" : "Invoice";
+      const msg =
+        `*${docLabel}* ${r.invoice_no || ""}\n` +
+        `Client: ${r.client_name || ""}\n` +
+        `Venue: ${r.venue || ""}\n` +
+        `Total: ₹${money(r.grand_total || 0)}\n\n` +
+        `PDF: ${url}`;
+
+      const phone = String(clientFull.phone1 || "").replace(/\D+/g,"");
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+    } finally {
+      unlock();
+    }
+  });
+
+  // add row flow
+  document.getElementById("btn_inv_add_row")?.addEventListener("click", ()=>{
+    const box = document.getElementById("inv_add_row_box");
+    if (box) box.style.display = (box.style.display === "none" ? "" : "none");
   });
 
   // List render
@@ -1553,15 +1696,19 @@ function recalc(){
     listBox.innerHTML = `
       <table style="width:100%;border-collapse:collapse;">
         <tr>
-          <th align="left">Invoice</th>
+          <th align="left">No</th>
           <th align="left">Client</th>
           <th align="left">Date</th>
           <th align="right">Total</th>
           <th align="right">Actions</th>
         </tr>
-        ${list.map(inv=>`
+        ${list.map(inv=>{
+          const badge = (String(inv.doc_type||"INVOICE").toUpperCase()==="QUOTATION")
+            ? `<span style="font-size:11px;background:#111;color:#fff;padding:2px 6px;border-radius:6px;">QTN</span>`
+            : `<span style="font-size:11px;background:#1fa971;color:#fff;padding:2px 6px;border-radius:6px;">INV</span>`;
+          return `
           <tr style="border-top:1px solid #eee;vertical-align:top;">
-            <td><b>${escapeHtml(inv.invoice_no||"")}</b><br><span class="dashSmall">${escapeHtml(inv.order_id||"")}</span></td>
+            <td><b>${escapeHtml(inv.invoice_no||"")}</b> ${badge}<br><span class="dashSmall">${escapeHtml(inv.order_id||"")}</span></td>
             <td>${escapeHtml(inv.client_name||"")}<br><span class="dashSmall">${escapeHtml(inv.client_phone||"")}</span></td>
             <td>${escapeHtml(prettyISODate(inv.invoice_date||""))}</td>
             <td align="right"><b>₹ ${money(inv.grand_total||0)}</b></td>
@@ -1570,8 +1717,8 @@ function recalc(){
               ${canEdit ? `<button class="userToggleBtn" data-edit="${escapeAttr(inv.invoice_id||"")}">Edit</button>` : ``}
               ${isSuper ? `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
             </td>
-          </tr>
-        `).join("")}
+          </tr>`;
+        }).join("")}
       </table>
     `;
 
@@ -1584,14 +1731,13 @@ function recalc(){
           const full = await api({ action: "getInvoiceFull", invoice_id: id });
           if (full && full.error) return alert(String(full.error));
           const h = full.header;
-          const items = full.items || [];
-          const msg = [
-            `${h.invoice_no} (${prettyISODate(h.invoice_date)})`,
-            `Client: ${h.client_name} ${h.client_phone}`,
-            `Venue: ${h.venue}`,
+          alert(
+            `${h.invoice_no} (${prettyISODate(h.invoice_date)})\n` +
+            `${(h.doc_type||"INVOICE")==="QUOTATION" ? "Quotation" : "Invoice"}\n` +
+            `Client: ${h.client_name} ${h.client_phone}\n` +
+            `Venue: ${h.venue}\n` +
             `Total: ₹ ${money(h.grand_total)}`
-          ].join("\n");
-          alert(msg);
+          );
         } finally { setTimeout(unlock, 350); }
       });
     });
@@ -1604,8 +1750,11 @@ function recalc(){
         if (full && full.error) return alert(String(full.error));
 
         editingInvoiceId = id;
+        lastSavedInvoiceId = id;
 
         const h = full.header;
+        setDocTypeUI(String(h.doc_type||"INVOICE"));
+
         currentItems = (full.items || []).map(it=>({
           item_id: it.item_id || "",
           item_name: it.item_name || "",
@@ -1617,20 +1766,31 @@ function recalc(){
 
         document.getElementById("inv_date").value = prettyISODate(h.invoice_date||todayISO());
 
-        // set client dropdown
+        // ✅ Fix: set order dropdown selected (not showing "optional")
+        const op = document.getElementById("inv_order_pick");
+        if (op) op.value = String(h.order_id||"");
+
+        // set client dropdown + full details
         const cp = document.getElementById("inv_client_pick");
         if (cp) cp.value = String(h.client_id||"");
-        setClientFields({ client_id: h.client_id, client_name: h.client_name, client_phone: h.client_phone, client_address: h.client_address });
+        setClientFields({
+          client_id: h.client_id,
+          client_name: h.client_name,
+          client_company: h.client_company || "",
+          phone1: h.client_phone,
+          phone2: h.client_phone2 || "",
+          address: h.client_address,
+          gstin: h.client_gstin || ""
+        });
 
-        // order
         document.getElementById("inv_order_id").textContent = String(h.order_id||"");
         document.getElementById("inv_venue").value = String(h.venue||"");
         document.getElementById("inv_setup").value = prettyISODate(h.setup_date||"");
         document.getElementById("inv_start").value = prettyISODate(h.start_date||"");
         document.getElementById("inv_end").value = prettyISODate(h.end_date||"");
 
-        document.getElementById("inv_gst_type").value = String(h.gst_type||"CGST_SGST");
-        document.getElementById("inv_gst_rate").value = Number(h.gst_rate||18);
+        document.getElementById("inv_gst_type").value = String(h.gst_type||"CGST_SGST").toUpperCase();
+        document.getElementById("inv_gst_rate").value = Number(h.gst_rate||0);
 
         renderItemsTable();
 
@@ -1659,10 +1819,7 @@ function recalc(){
 
   document.getElementById("btn_inv_refresh")?.addEventListener("click", renderInvoiceList);
   document.getElementById("inv_month")?.addEventListener("change", renderInvoiceList);
-  document.getElementById("inv_search")?.addEventListener("input", ()=> {
-    // small debounce not required; keep simple
-    renderInvoiceList();
-  });
+  document.getElementById("inv_search")?.addEventListener("input", ()=>renderInvoiceList());
 
   // export CSV of list (superadmin)
   document.getElementById("btn_inv_export_csv")?.addEventListener("click", async ()=>{
@@ -1675,14 +1832,14 @@ function recalc(){
     if (!list.length) return alert("No invoices to export.");
 
     const header = [
-      "invoice_no","invoice_date","order_id","client_name","client_phone","venue",
+      "doc_type","invoice_no","invoice_date","order_id","client_name","client_phone","venue",
       "gst_type","gst_rate","subtotal","cgst","sgst","igst","grand_total","status"
     ];
     const lines = [header.join(",")];
 
     list.forEach(x=>{
       const cols = [
-        x.invoice_no, prettyISODate(x.invoice_date),
+        x.doc_type, x.invoice_no, prettyISODate(x.invoice_date),
         x.order_id, x.client_name, x.client_phone, x.venue,
         x.gst_type, x.gst_rate, x.subtotal, x.cgst, x.sgst, x.igst, x.grand_total, x.status
       ].map(v => csvEscape(String(v ?? "")));
@@ -1701,14 +1858,17 @@ function recalc(){
 
   // initial renders
   renderItemsTable();
+  recalc();
   renderInvoiceList();
 
   return;
 }
 
-    
-    //--- invoice section ends here ------//
 
+    // invoice section ends here 
+
+
+    
     if (type === "workers") {
       if (!(role === "superadmin" || role === "owner")) {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
