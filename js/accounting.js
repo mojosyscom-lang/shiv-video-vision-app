@@ -313,7 +313,125 @@ document.addEventListener("DOMContentLoaded", () => {
       location.href = "invoice.html";
       return;
     } */
+/* ==========================================================
+   📊 GST SETTINGS SECTION
+   - Access: Superadmin / Owner
+   - Upsert GST rates and set defaults
+   ========================================================== */
+if (type === "gst") {
+  content.innerHTML = `<div class="card"><h2>GST Settings</h2><p>Loading...</p></div>`;
 
+  // Fetch current GST settings
+  const gstRes = await api({ action: "listGST" }); // Ensure you have a listGST function in code.gs
+  const gstList = Array.isArray(gstRes) ? gstRes : [];
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>GST Master</h2>
+      
+      <div class="card" style="background: #f9f9f9; border: 1px solid #ddd; margin-bottom: 20px;">
+        <h3 style="margin-top:0;">Add / Update GST Rate</h3>
+        
+        <label>GST Type</label>
+        <select id="gst_type">
+          <option value="CGST_SGST">CGST + SGST (Local)</option>
+          <option value="IGST">IGST (Inter-state)</option>
+          <option value="NONE">None (Exempt)</option>
+        </select>
+
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <div style="flex: 1;">
+            <label>CGST %</label>
+            <input id="gst_cgst" type="number" step="0.01" value="9">
+          </div>
+          <div style="flex: 1;">
+            <label>SGST %</label>
+            <input id="gst_sgst" type="number" step="0.01" value="9">
+          </div>
+        </div>
+
+        <label style="margin-top: 10px;">IGST %</label>
+        <input id="gst_igst" type="number" step="0.01" value="0">
+
+        <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+          <input type="checkbox" id="gst_default" style="width: 20px; height: 20px;">
+          <label for="gst_default" style="margin:0;">Set as Default for New Invoices</label>
+        </div>
+
+        <button class="primary" id="btn_save_gst" style="margin-top: 20px;">💾 Save GST Rate</button>
+      </div>
+
+      <div class="card">
+        <h3>Existing Rates</h3>
+        <div id="gst_list_container">
+          ${gstList.length === 0 ? '<p class="dashSmall">No rates defined yet.</p>' : `
+            <table style="width:100%; border-collapse: collapse;">
+              <thead>
+                <tr style="text-align: left; font-size: 12px; color: #666;">
+                  <th>TYPE</th>
+                  <th>RATES</th>
+                  <th>DEF</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${gstList.map(g => `
+                  <tr style="border-top: 1px solid #eee;">
+                    <td style="padding: 10px 0;"><b>${g.gst_type}</b></td>
+                    <td>
+                      ${g.gst_type === 'IGST' ? `I:${g.igst_rate}%` : `C:${g.cgst_rate}% S:${g.sgst_rate}%`}
+                    </td>
+                    <td>${g.is_default === 'YES' ? '✅' : ''}</td>
+                    <td>
+                      <button class="userToggleBtn" onclick="editGST('${escapeAttr(JSON.stringify(g))}')">Edit</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // --- Logic ---
+  
+  // Helper to pre-fill form for editing
+  window.editGST = (json) => {
+    const g = JSON.parse(json);
+    document.getElementById("gst_type").value = g.gst_type;
+    document.getElementById("gst_cgst").value = g.cgst_rate;
+    document.getElementById("gst_sgst").value = g.sgst_rate;
+    document.getElementById("gst_igst").value = g.igst_rate;
+    document.getElementById("gst_default").checked = (g.is_default === "YES");
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  document.getElementById("btn_save_gst").addEventListener("click", async () => {
+    const btn = document.getElementById("btn_save_gst");
+    const unlock = lockButton(btn, "Saving...");
+
+    const payload = {
+      action: "upsertGST",
+      gst_type: document.getElementById("gst_type").value,
+      cgst_rate: Number(document.getElementById("gst_cgst").value),
+      sgst_rate: Number(document.getElementById("gst_sgst").value),
+      igst_rate: Number(document.getElementById("gst_igst").value),
+      is_default: document.getElementById("gst_default").checked ? "YES" : "NO",
+      status: "ACTIVE"
+    };
+
+    try {
+      const r = await api(payload);
+      if (r.error) return alert(r.error);
+      alert("GST Rate Saved Successfully");
+      loadSection("gst"); // Refresh
+    } finally {
+      unlock();
+    }
+  });
+}
 /* ==========================================================
    ✅ SUPERADMIN REPORTS SECTION
    - Access: STRICTLY Superadmin only
