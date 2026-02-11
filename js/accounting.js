@@ -424,7 +424,7 @@ if (type === "gst") {
 
     try {
       const r = await api(payload);
-      if (r.error) return alert(r.error);
+      if (r && r.error) return alert(r.error);
       alert("GST Rate Saved Successfully");
       loadSection("gst"); // Refresh
     } finally {
