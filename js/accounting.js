@@ -1401,12 +1401,21 @@ if (type === "invoice") {
   document.getElementById("inv_gst_rate")?.addEventListener("change", recalc);
 
   // add row flow
-  document.getElementById("btn_inv_add_row")?.addEventListener("click", ()=>{
-    const box = document.getElementById("inv_add_row_box");
-    if (box) box.style.display = (box.style.display === "none" ? "" : "none");
-  });
+  // ✅ Always works even if UI re-renders
+document.addEventListener("click", (e)=>{
+  const t = e.target;
 
-  document.getElementById("btn_inv_add_confirm")?.addEventListener("click", ()=>{
+  // Toggle add row box
+  if (t && t.id === "btn_inv_add_row") {
+    const box = document.getElementById("inv_add_row_box");
+    if (!box) return;
+    const isHidden = window.getComputedStyle(box).display === "none";
+    box.style.display = isHidden ? "block" : "none";
+    return;
+  }
+
+  // Confirm add item
+  if (t && t.id === "btn_inv_add_confirm") {
     const sel = document.getElementById("inv_item_pick");
     const opt = sel?.selectedOptions?.[0];
     if (!opt || !opt.value) return alert("Select inventory item");
@@ -1421,9 +1430,10 @@ if (type === "invoice") {
     if (!(qty > 0)) return alert("Qty must be > 0");
 
     currentItems.push({ item_id, item_name, hsn_sac, qty, unit, rate, amount: round2(qty*rate) });
-
     renderItemsTable();
-  });
+    return;
+  }
+});
 
   async function saveDoc(){
     if (!canEdit) return;
@@ -1531,7 +1541,7 @@ loadSection("invoice");
           </div>
           <div class="hdrRight">
             <div class="docTitle">${title}</div>
-            <div class="meta"><b>No:</b> ${escapeHtml(header.invoice_no || "(Preview)")}</div>
+            <div class="meta"><b>No:</b> ${escapeHtml(header.invoice_no || "(DRAFT)")}</div>
             <div class="meta"><b>Date:</b> ${escapeHtml(header.invoice_date || "")}</div>
             <div class="meta"><b>Order:</b> ${escapeHtml(header.order_id || "")}</div>
             <div class="meta"><b>Place:</b> ${escapeHtml(company.place_of_supply || company.address || "")}</div>
@@ -1614,7 +1624,7 @@ loadSection("invoice");
   function printSameWindow(){
     const header = {
       doc_type: currentDocType,
-      invoice_no: lastSavedInvoiceNo || "(Preview)",
+      invoice_no: lastSavedInvoiceNo || "(DRAFT)",
       invoice_date: document.getElementById("inv_date")?.value || "",
       order_id: document.getElementById("inv_order_id")?.textContent || "",
       venue: document.getElementById("inv_venue")?.value || "",
