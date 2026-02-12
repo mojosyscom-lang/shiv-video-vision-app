@@ -1785,14 +1785,7 @@ loadSection("invoice");
     }
   });
 
-  // add row flow
-document.getElementById("btn_inv_add_row")?.addEventListener("click", ()=>{
-  const box = document.getElementById("inv_add_row_box");
-  if (!box) return;
-
-  const isHidden = window.getComputedStyle(box).display === "none";
-  box.style.display = isHidden ? "block" : "none";
-});
+ 
 
   // List render
   async function renderInvoiceList(){
