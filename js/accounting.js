@@ -1830,8 +1830,8 @@ loadSection("invoice");
      
               <button class="userToggleBtn" data-view="${escapeAttr(inv.invoice_id||"")}">View</button>
               ${canEdit ? `<button class="userToggleBtn" data-edit="${escapeAttr(inv.invoice_id||"")}">Edit</button>` : ``}
-              ${inv.status==="CANCELLED" ? `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
-            </td>
+           ${(isSuper && inv.status !== "CANCELLED") ? `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
+ </td>
 
             
           </tr>`;
