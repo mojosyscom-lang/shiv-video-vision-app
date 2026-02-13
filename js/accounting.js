@@ -5563,12 +5563,16 @@ function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
  * Updated to match the IDs in your Expenses Section:
  * exp_category, exp_desc, exp_amount, exp_date
  */
+/**
+ * Updated handleAddExpense
+ * Pattern: Add environment check for 'google' object
+ */
 async function handleAddExpense() {
   const btn = document.getElementById("btn_exp");
   
-  // 1. Capture the data using the correct IDs from your HTML
+  // 1. Capture Data (Using your specific exp_ IDs)
   const expenseObj = {
-    company: localStorage.getItem("company") || "Default Company",
+    company: localStorage.getItem("company") || "Company",
     date: document.getElementById('exp_date').value, 
     category: document.getElementById('exp_category').value,
     description: document.getElementById('exp_desc').value,
@@ -5576,30 +5580,37 @@ async function handleAddExpense() {
     addedBy: localStorage.getItem("user_email") || "User"
   };
 
-  // 2. Simple Validation
-  if (!expenseObj.category || !expenseObj.amount || !expenseObj.date) {
-    alert("Please fill in Category, Amount, and Date.");
+  // 2. Validation
+  if (!expenseObj.date || !expenseObj.amount) {
+    alert("Please enter both Date and Amount.");
     return;
   }
 
-  // 3. Trigger the Oracle's Duplicate Check & Save
-  const unlock = lockButton(btn, "Checking..."); // Using your lockButton utility
-  
+  // 3. Environment Check
+  if (typeof google === 'undefined' || !google.script) {
+    console.error("Oracle Error: Google Script environment not detected.");
+    alert("System Error: Could not connect to Google Sheets. Please refresh the page.");
+    return;
+  }
+
+  // 4. Execution
+  const unlock = typeof lockButton === 'function' ? lockButton(btn, "Checking...") : () => {};
+
   google.script.run
     .withSuccessHandler(function(res) {
-      unlock();
-      if (res.success) {
-        alert("Success: Expense recorded.");
-        // Clear fields
+      if (unlock) unlock();
+      if (res && res.success) {
+        alert("Entry Successful.");
+        // Clear inputs
         document.getElementById('exp_desc').value = "";
         document.getElementById('exp_amount').value = "";
-      } else if (res.status === 'cancelled') {
-        console.log("Duplicate entry cancelled by user.");
+        // Reload summary if function exists
+        if (typeof loadExpenseSummary === 'function') loadExpenseSummary();
       }
     })
     .withFailureHandler(function(err) {
-      unlock();
-      alert("System Error: " + err.message);
+      if (unlock) unlock();
+      alert("Oracle Error: " + err.message);
     })
     .checkDuplicateAndSave(expenseObj);
 }
