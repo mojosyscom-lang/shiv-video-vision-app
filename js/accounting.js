@@ -4400,7 +4400,8 @@ if (type === "inventoryTxn") {
 
         <label style="margin-top:10px;">Amount</label>
         <input id="exp_amount" type="number" inputmode="decimal" pattern="[0-9]*"  placeholder="Amount">
-
+        <label>Date</label>
+        <input id="exp_date" type="date" value="${todayISO()}" max="${todayISO()}">
         <button class="primary" id="btn_exp" style="margin-top:14px;">Add Expense</button>
       </div>
 
@@ -4558,7 +4559,10 @@ if (type === "inventoryTxn") {
             const cur = lastExpenseRows.find(x => String(x.rowIndex) === String(row));
             if (!cur) return alert("Row not found");
 
-            const keepDate = prettyISODate(cur.date || todayISO());
+            const oldDate = prettyISODate(cur.date || todayISO());
+            const newDate = prompt("Date (YYYY-MM-DD):", oldDate);
+            if (newDate === null) return;
+             if (newDate > todayISO()) return alert("Future dates are not allowed");
 
             const newCat = prompt("Type:", String(cur.category || ""));
             if (newCat === null) return;
@@ -4582,7 +4586,7 @@ if (type === "inventoryTxn") {
               const r = await api({
                 action: "updateExpense",
                 rowIndex: Number(row),
-                date: keepDate,
+                date: newDate,
                 category: String(newCat).trim(),
                 description: String(newDesc || "").trim(), // ✅ match your sheet header
                 desc: String(newDesc || "").trim(),        // ✅ keep compatibility
@@ -5073,10 +5077,12 @@ const r = await apiSafe({
       const amount = Number(document.getElementById("exp_amount").value || 0);
 
       if (!desc || !amount) return alert("Enter description and amount");
-
+      const selectedDate = document.getElementById("exp_date").value || todayISO();
+      if (selectedDate > todayISO()) return alert("Future dates are not allowed");
+      
       const r = await apiSafe({
   action: "addExpense",
-  date: todayISO(),
+  date: selectedDate,
   category,
   description: desc, // ✅ new correct key
   desc,              // ✅ keep old key so nothing breaks
