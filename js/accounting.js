@@ -5559,29 +5559,46 @@ function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
 /**
  * Pattern: Submit handler with feedback logic
  */
-function handleAddExpense() {
+/**
+ * Updated to match the IDs in your Expenses Section:
+ * exp_category, exp_desc, exp_amount, exp_date
+ */
+async function handleAddExpense() {
+  const btn = document.getElementById("btn_exp");
+  
+  // 1. Capture the data using the correct IDs from your HTML
   const expenseObj = {
-    company: document.getElementById('session.company').value,
+    company: localStorage.getItem("company") || "Default Company",
     date: document.getElementById('exp_date').value, 
     category: document.getElementById('exp_category').value,
     description: document.getElementById('exp_desc').value,
     amount: document.getElementById('exp_amount').value,
-    addedBy: "session.username" // Your dynamic user variable
+    addedBy: localStorage.getItem("user_email") || "User"
   };
 
-  // Visual feedback: notify the user the system is checking
-  console.log("Oracle is verifying data...");
+  // 2. Simple Validation
+  if (!expenseObj.category || !expenseObj.amount || !expenseObj.date) {
+    alert("Please fill in Category, Amount, and Date.");
+    return;
+  }
 
+  // 3. Trigger the Oracle's Duplicate Check & Save
+  const unlock = lockButton(btn, "Checking..."); // Using your lockButton utility
+  
   google.script.run
     .withSuccessHandler(function(res) {
+      unlock();
       if (res.success) {
-        alert("Success: Data committed to ledger.");
-        // clearForm(); 
-      } else {
-        console.log("Data entry declined by user.");
+        alert("Success: Expense recorded.");
+        // Clear fields
+        document.getElementById('exp_desc').value = "";
+        document.getElementById('exp_amount').value = "";
+      } else if (res.status === 'cancelled') {
+        console.log("Duplicate entry cancelled by user.");
       }
     })
     .withFailureHandler(function(err) {
+      unlock();
       alert("System Error: " + err.message);
     })
     .checkDuplicateAndSave(expenseObj);
