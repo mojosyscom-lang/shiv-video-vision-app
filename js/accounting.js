@@ -2217,10 +2217,10 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
             </select>
 
             <label style="margin-top:10px;">Amount</label>
-            <input id="upad_amount" type="number" placeholder="Amount">
+           <input id="upad_amount" type="number" inputmode="decimal" pattern="[0-9]*" placeholder="Amount">
 
             <label style="margin-top:10px;">Date</label>
-<input id="upad_date" type="date" value="${todayISO()}">
+<input id="upad_date" type="date" value="${todayISO()}" max="${todayISO()}">
 
             <button class="primary" id="btn_upad" style="margin-top:14px;">Add Upad</button>
           </div>
@@ -4959,7 +4959,12 @@ document.getElementById("btn_sal_export")?.addEventListener("click", () => {
       const amount = Number(document.getElementById("upad_amount").value || 0);
             // 1. Get the date from the calendar (fallback to today if empty)
 const selectedDate = document.getElementById("upad_date").value || todayISO();
-
+// Safety check for future dates
+    if (selectedDate > todayISO()) {
+        alert("Future dates are not allowed!");
+        unlock(); // make sure to call your unlock function
+        return;
+    }
 // 2. Convert that date (2026-02-13) into the Month label (Feb-2026)
 const monthLabel = monthLabelFromAny(selectedDate);
 
