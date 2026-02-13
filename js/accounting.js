@@ -5567,40 +5567,47 @@ async function handleAddExpense() {
   const btn = document.getElementById("btn_exp");
   
   const payload = {
-    action: "addExpenseWithCheck",
-    company: localStorage.getItem("company") || "",
-    date: document.getElementById('exp_date').value,
-    category: document.getElementById('exp_category').value,
-    description: document.getElementById('exp_desc').value,
-    amount: document.getElementById('exp_amount').value
+    action: "addExpenseWithCheckAction",
+    date: document.getElementById("exp_date")?.value || todayISO(),
+    category: document.getElementById("exp_category").value,
+    description: document.getElementById("exp_desc").value.trim(),
+    amount: document.getElementById("exp_amount").value,
+    forceSave: false // First attempt is always a check
   };
 
-  if (!payload.date || !payload.amount) return alert("Please fill Date and Amount.");
+  if (!payload.description || !payload.amount) return alert("Enter description and amount");
 
-  const unlock = typeof lockButton === 'function' ? lockButton(btn, "Checking...") : () => {};
+  const unlock = lockButton(btn, "Checking...");
 
   try {
-    let res = await api(payload);
+    let r = await api(payload);
 
-    // If server finds a duplicate
-    if (res && res.duplicate) {
-      const msg = `Entry already exists: ${payload.category}, ₹${payload.amount} on ${payload.date}.\n\nAdd it anyway?`;
-      if (confirm(msg)) {
-        payload.forceSave = true; // Tell server to ignore duplicate check
-        res = await api(payload);
-      } else {
-        return; // User cancelled
+    // 🛡️ THE GATEKEEPER LOGIC
+    if (r && r.duplicate) {
+      unlock(); // Unlock so the user can click again if they choose
+      
+      const proceed = confirm("⚠️ Duplicate Alert!\nAn expense with the same date, type, and amount already exists.\n\nDo you want to save it anyway?");
+      
+      if (!proceed) {
+        // 🛑 User clicked CANCEL. We stop here. 
+        console.log("Save cancelled by user.");
+        return; 
       }
+
+      // 🚀 User clicked OK. We send the request again with forceSave: true
+      lockButton(btn, "Saving anyway...");
+      payload.forceSave = true;
+      r = await api(payload);
     }
 
-    if (res && res.success) {
-      alert("Expense Added.");
-      document.getElementById('exp_desc').value = "";
-      document.getElementById('exp_amount').value = "";
-      if (typeof loadExpenseSummary === 'function') loadExpenseSummary();
+    if (r && r.success) {
+      alert("Expense added successfully!");
+      document.getElementById("exp_desc").value = "";
+      document.getElementById("exp_amount").value = "";
+      loadSection("expenses"); // Refresh the list
     }
   } catch (err) {
-    alert("Network error. Try again.");
+    alert("Error: " + err.message);
   } finally {
     unlock();
   }
