@@ -2219,15 +2219,8 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
             <label style="margin-top:10px;">Amount</label>
             <input id="upad_amount" type="number" placeholder="Amount">
 
-            <label style="margin-top:10px;">Month</label>
-            <input id="upad_month" list="monthList" placeholder="Month (e.g. Feb-2026)" value="${escapeAttr(current)}">
-            <datalist id="monthList">
-              ${(meta.months || [])
-                .map(m => monthLabelFromAny(m))
-                .filter(Boolean)
-                .map(m => `<option value="${escapeAttr(m)}"></option>`)
-                .join("")}
-            </datalist>
+            <label style="margin-top:10px;">Date</label>
+<input id="upad_date" type="date" value="${todayISO()}">
 
             <button class="primary" id="btn_upad" style="margin-top:14px;">Add Upad</button>
           </div>
@@ -4950,7 +4943,7 @@ document.getElementById("btn_sal_export")?.addEventListener("click", () => {
   }
 
   /* =========================
-     Actions
+     Actions Functions async functions
   ========================== */
 
   async function addUpad() {
@@ -4960,17 +4953,21 @@ document.getElementById("btn_sal_export")?.addEventListener("click", () => {
     try {
       const worker = document.getElementById("upad_worker").value.trim();
       const amount = Number(document.getElementById("upad_amount").value || 0);
-      const month = document.getElementById("upad_month").value.trim() || monthLabelNow();
+            // 1. Get the date from the calendar (fallback to today if empty)
+const selectedDate = document.getElementById("upad_date").value || todayISO();
 
-      if (!worker || !amount) return alert("Enter worker and amount");
+// 2. Convert that date (2026-02-13) into the Month label (Feb-2026)
+const monthLabel = monthLabelFromAny(selectedDate);
 
-      const r = await apiSafe({
-        action: "addUpad",
-        date: todayISO(),
-        worker,
-        amount,
-        month
-      });
+if (!worker || !amount) return alert("Enter worker and amount");
+
+const r = await apiSafe({
+  action: "addUpad",
+  date: selectedDate, // Now uses the date you actually picked
+  worker,
+  amount,
+  month: monthLabel // Now uses the converted "MMM-YYYY" format
+});
 
       if (r && r.queued) alert("Saved offline. Will sync when online.");
       else alert("Upad added");
