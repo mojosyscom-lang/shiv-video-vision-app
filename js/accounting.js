@@ -5566,60 +5566,41 @@ function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
 async function handleAddExpense() {
   const btn = document.getElementById("btn_exp");
   
-  // 1. Collect data using the exp_ IDs from your HTML
-  const expenseData = {
-    action: "addExpenseWithCheck", // Custom action for the server
-    company: localStorage.getItem("company") || "Default",
+  const payload = {
+    action: "addExpenseWithCheck",
+    company: localStorage.getItem("company") || "",
     date: document.getElementById('exp_date').value,
     category: document.getElementById('exp_category').value,
     description: document.getElementById('exp_desc').value,
-    amount: document.getElementById('exp_amount').value,
-    addedBy: localStorage.getItem("username") || "User"
+    amount: document.getElementById('exp_amount').value
   };
 
-  // 2. Basic Validation
-  if (!expenseData.date || !expenseData.amount) {
-    alert("Date and Amount are required.");
-    return;
-  }
+  if (!payload.date || !payload.amount) return alert("Please fill Date and Amount.");
 
-  // 3. Lock Button (using your existing utility)
-  const unlock = typeof lockButton === 'function' ? lockButton(btn, "Processing...") : () => {};
+  const unlock = typeof lockButton === 'function' ? lockButton(btn, "Checking...") : () => {};
 
   try {
-    // First attempt: The server will check for duplicates
-    let response = await api(expenseData);
+    let res = await api(payload);
 
-    // 4. Handle Duplicate Logic
-    if (response && response.duplicate) {
-      const msg = `Duplicate entry found: ${expenseData.category}, ₹${expenseData.amount} on ${expenseData.date}.\n\nDo you want to add it anyway?`;
-      
+    // If server finds a duplicate
+    if (res && res.duplicate) {
+      const msg = `Entry already exists: ${payload.category}, ₹${payload.amount} on ${payload.date}.\n\nAdd it anyway?`;
       if (confirm(msg)) {
-        // User clicked "OK" (Yes) -> Force save
-        expenseData.forceSave = true;
-        response = await api(expenseData); 
+        payload.forceSave = true; // Tell server to ignore duplicate check
+        res = await api(payload);
       } else {
-        // User clicked "Cancel" (No)
-        console.log("Duplicate entry cancelled by user.");
-        return;
+        return; // User cancelled
       }
     }
 
-    // 5. Final Result
-    if (response && response.success) {
-      alert("Expense added successfully!");
-      // Reset only description and amount
+    if (res && res.success) {
+      alert("Expense Added.");
       document.getElementById('exp_desc').value = "";
       document.getElementById('exp_amount').value = "";
-      // Refresh summary if visible
       if (typeof loadExpenseSummary === 'function') loadExpenseSummary();
-    } else if (response.error) {
-      alert("Error: " + response.error);
     }
-
   } catch (err) {
-    alert("Network Error: Could not connect to server.");
-    console.error(err);
+    alert("Network error. Try again.");
   } finally {
     unlock();
   }
