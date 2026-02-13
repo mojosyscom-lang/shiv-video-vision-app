@@ -5030,77 +5030,169 @@ document.getElementById("btn_sal_export")?.addEventListener("click", () => {
   /* =========================
      Actions Functions async functions
   ========================== */
+async function isDuplicateUpad({ company, date, worker, amount, month }) {
+  const rows = await api({ action: "listUpad", month, worker });
+  if (!Array.isArray(rows)) return false;
 
-  async function addUpad() {
-    const btn = document.getElementById("btn_upad");
-    const unlock = lockButton(btn, "Saving...");
+  return rows.some(r => {
+    const rCompany = String((r.company ?? r[0] ?? "")).trim();
+    const rDate    = prettyISODate(r.date || r[1] || "");
+    const rWorker  = String(r.worker || r[2] || "").trim();
+    const rAmt     = Number(r.amount || r[3] || 0);
+    const rMonth   = normMonthLabel(prettyMonth(r.month || r[4] || ""));
 
-    try {
-      const worker = document.getElementById("upad_worker").value.trim();
-      const amount = Number(document.getElementById("upad_amount").value || 0);
-            // 1. Get the date from the calendar (fallback to today if empty)
-const selectedDate = document.getElementById("upad_date").value || todayISO();
-// Safety check for future dates
+    return (
+      rCompany === String(company || "").trim() &&
+      rDate === prettyISODate(date) &&
+      rWorker === String(worker || "").trim() &&
+      rAmt === Number(amount) &&
+      rMonth === normMonthLabel(month)
+    );
+  });
+}
+
+
+ async function addUpad() {
+  const btn = document.getElementById("btn_upad");
+  const unlock = lockButton(btn, "Saving...");
+
+  try {
+    const company = localStorage.getItem("company") || "";
+    const worker = document.getElementById("upad_worker").value.trim();
+    const amount = Number(document.getElementById("upad_amount").value || 0);
+
+    if (!worker || !amount) {
+      alert("Enter worker and amount");
+      return;
+    }
+
+    const selectedDate = document.getElementById("upad_date").value || todayISO();
     if (selectedDate > todayISO()) {
-        alert("Future dates are not allowed!");
-        unlock(); // make sure to call your unlock function
-        return;
+      alert("Future dates are not allowed!");
+      return;
     }
-// 2. Convert that date (2026-02-13) into the Month label (Feb-2026)
-const monthLabel = monthLabelFromAny(selectedDate);
 
-if (!worker || !amount) return alert("Enter worker and amount");
+    const month = monthLabelFromAny(selectedDate);
 
-const r = await apiSafe({
-  action: "addUpad",
-  date: selectedDate, // Now uses the date you actually picked
-  worker,
-  amount,
-  month: monthLabel // Now uses the converted "MMM-YYYY" format
-});
+    const duplicate = await isDuplicateUpad({
+      company,
+      date: selectedDate,
+      worker,
+      amount,
+      month
+    });
 
-      if (r && r.queued) alert("Saved offline. Will sync when online.");
-      else alert("Upad added");
-
-      document.getElementById("upad_amount").value = "";
-      invalidateCache(["upadMeta", "monthsMerged"]);
-    } finally {
-      setTimeout(unlock, 600);
+    if (duplicate) {
+      const proceed = confirm("⚠ Same UPAD entry already exists.\nDo you want to add anyway?");
+      if (!proceed) return;
     }
+
+    const r = await apiSafe({
+      action: "addUpad",
+      company,               // keep if your backend stores company
+      date: selectedDate,
+      worker,
+      amount,
+      month
+    });
+
+    if (r && r.queued) alert("Saved offline. Will sync when online.");
+    else alert("Upad added");
+
+    document.getElementById("upad_amount").value = "";
+    invalidateCache(["upadMeta", "monthsMerged"]);
+  } finally {
+    setTimeout(unlock, 600);
   }
+}
 
+async function isDuplicateExpense({ company, date, category, description, amount, month }) {
+  const rows = await api({ action: "listExpenses", month, category });
+  if (!Array.isArray(rows)) return false;
+
+  const descNorm = String(description || "").trim();
+
+  return rows.some(r => {
+    const rCompany = String(r.company || "").trim();
+    const rDate    = prettyISODate(r.date || "");
+    const rCat     = String(r.category || "").trim();
+    const rDesc    = String((r.description ?? r.desc ?? "")).trim();
+    const rAmt     = Number(r.amount || 0);
+    const rMonth   = normMonthLabel(prettyMonth(r.month || ""));
+
+    return (
+      rCompany === String(company || "").trim() &&
+      rDate === prettyISODate(date) &&
+      rCat === String(category || "").trim() &&
+      rDesc === descNorm &&
+      rAmt === Number(amount) &&
+      rMonth === normMonthLabel(month)
+    );
+  });
+}
+
+
+
+
+
+  
   async function addExpense() {
-    const btn = document.getElementById("btn_exp");
-    const unlock = lockButton(btn, "Saving...");
+  const btn = document.getElementById("btn_exp");
+  const unlock = lockButton(btn, "Saving...");
 
-    try {
-      const category = document.getElementById("exp_category").value;
-      const desc = document.getElementById("exp_desc").value.trim();
-      const amount = Number(document.getElementById("exp_amount").value || 0);
+  try {
+    const company = localStorage.getItem("company") || "";
+    const category = document.getElementById("exp_category").value;
+    const desc = document.getElementById("exp_desc").value.trim();
+    const amount = Number(document.getElementById("exp_amount").value || 0);
 
-      if (!desc || !amount) return alert("Enter description and amount");
-      const selectedDate = document.getElementById("exp_date").value || todayISO();
-      if (selectedDate > todayISO()) return alert("Future dates are not allowed");
-      
-      const r = await apiSafe({
-  action: "addExpense",
-  date: selectedDate,
-  category,
-  description: desc, // ✅ new correct key
-  desc,              // ✅ keep old key so nothing breaks
-  amount
-});
-
-
-      if (r && r.queued) alert("Saved offline. Will sync when online.");
-      else alert("Expense added");
-
-      document.getElementById("exp_desc").value = "";
-      document.getElementById("exp_amount").value = "";
-    } finally {
-      setTimeout(unlock, 600);
+    if (!desc || !amount) {
+      alert("Enter description and amount");
+      return;
     }
+
+    const selectedDate = document.getElementById("exp_date").value || todayISO();
+    if (selectedDate > todayISO()) {
+      alert("Future dates are not allowed");
+      return;
+    }
+
+    const month = monthLabelFromAny(selectedDate);
+
+    const duplicate = await isDuplicateExpense({
+      company,
+      date: selectedDate,
+      category,
+      description: desc,
+      amount,
+      month
+    });
+
+    if (duplicate) {
+      const proceed = confirm("⚠ Same EXPENSE entry already exists.\nDo you want to add anyway?");
+      if (!proceed) return;
+    }
+
+    const r = await apiSafe({
+      action: "addExpense",
+      company,              // keep if your backend stores company
+      date: selectedDate,
+      month,                // include if your sheet expects it
+      category,
+      description: desc,    // new key
+      desc,                 // old key (compat)
+      amount
+    });
+
+    if (r && r.queued) alert("Saved offline. Will sync when online.");
+    else alert("Expense added");
+
+    document.getElementById("exp_desc").value = "";
+    document.getElementById("exp_amount").value = "";
+  } finally {
+    setTimeout(unlock, 600);
   }
+}
 
   async function loadSalarySummary() {
     const btn = document.getElementById("btn_sal_load");
