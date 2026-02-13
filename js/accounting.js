@@ -5563,56 +5563,63 @@ function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
  * Updated to match the IDs in your Expenses Section:
  * exp_category, exp_desc, exp_amount, exp_date
  */
-/**
- * Pattern: Use api() instead of google.script.run
- */
 async function handleAddExpense() {
   const btn = document.getElementById("btn_exp");
   
-  const expenseObj = {
-    company: localStorage.getItem("company") || "Company",
-    date: document.getElementById('exp_date').value, 
+  // 1. Collect data using the exp_ IDs from your HTML
+  const expenseData = {
+    action: "addExpenseWithCheck", // Custom action for the server
+    company: localStorage.getItem("company") || "Default",
+    date: document.getElementById('exp_date').value,
     category: document.getElementById('exp_category').value,
     description: document.getElementById('exp_desc').value,
     amount: document.getElementById('exp_amount').value,
-    addedBy: localStorage.getItem("user_email") || "User"
+    addedBy: localStorage.getItem("username") || "User"
   };
 
-  if (!expenseObj.date || !expenseObj.amount) {
-    alert("Please enter Date and Amount.");
+  // 2. Basic Validation
+  if (!expenseData.date || !expenseData.amount) {
+    alert("Date and Amount are required.");
     return;
   }
 
-  // Use your lockButton utility if available
-  const unlock = typeof lockButton === 'function' ? lockButton(btn, "Checking...") : () => {};
+  // 3. Lock Button (using your existing utility)
+  const unlock = typeof lockButton === 'function' ? lockButton(btn, "Processing...") : () => {};
 
   try {
-    // We send a custom action 'addExpenseWithCheck' to your API
-    const res = await api({ 
-      action: "addExpenseWithCheck", 
-      ...expenseObj 
-    });
+    // First attempt: The server will check for duplicates
+    let response = await api(expenseData);
 
-    if (res && res.duplicate && !res.confirmed) {
-       // If backend finds a duplicate, it sends a flag
-       const proceed = confirm(`Duplicate entry detected for ${expenseObj.category} (${expenseObj.amount} rs) on ${expenseObj.date}. \n\nDo you want to add it anyway?`);
-       
-       if (proceed) {
-         // Re-run with a confirmation flag
-         const resRetry = await api({ 
-           action: "addExpenseWithCheck", 
-           ...expenseObj, 
-           forceSave: true 
-         });
-         if (resRetry.success) alert("Expense Saved.");
-       }
-    } else if (res && res.success) {
-      alert("Expense Saved.");
+    // 4. Handle Duplicate Logic
+    if (response && response.duplicate) {
+      const msg = `Duplicate entry found: ${expenseData.category}, ₹${expenseData.amount} on ${expenseData.date}.\n\nDo you want to add it anyway?`;
+      
+      if (confirm(msg)) {
+        // User clicked "OK" (Yes) -> Force save
+        expenseData.forceSave = true;
+        response = await api(expenseData); 
+      } else {
+        // User clicked "Cancel" (No)
+        console.log("Duplicate entry cancelled by user.");
+        return;
+      }
+    }
+
+    // 5. Final Result
+    if (response && response.success) {
+      alert("Expense added successfully!");
+      // Reset only description and amount
       document.getElementById('exp_desc').value = "";
       document.getElementById('exp_amount').value = "";
+      // Refresh summary if visible
+      if (typeof loadExpenseSummary === 'function') loadExpenseSummary();
+    } else if (response.error) {
+      alert("Error: " + response.error);
     }
+
   } catch (err) {
-    alert("Error: " + err.message);
+    alert("Network Error: Could not connect to server.");
+    console.error(err);
   } finally {
     unlock();
   }
