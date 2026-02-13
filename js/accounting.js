@@ -4402,7 +4402,7 @@ if (type === "inventoryTxn") {
         <input id="exp_amount" type="number" inputmode="decimal" pattern="[0-9]*"  placeholder="Amount">
         <label>Date</label>
         <input id="exp_date" type="date" value="${todayISO()}" max="${todayISO()}">
-        <button class="primary" id="btn_exp" style="margin-top:14px;">Add Expense</button>
+        <button onclick="handleAddExpense()" class="primary" id="btn_exp" style="margin-top:14px;">Add Expense</button>
       </div>
 
       <div class="card" style="margin-top:12px;">
@@ -5556,21 +5556,33 @@ function escapeHtml(s){
 }
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-function processExpenseSubmission() {
-  const amountRaw = document.getElementById('amount').value;
-  
+/**
+ * Pattern: Submit handler with feedback logic
+ */
+function handleAddExpense() {
   const expenseObj = {
-    company: document.getElementById('company').value,
-    date: document.getElementById('date').value,
-    category: document.getElementById('category').value,
-    description: document.getElementById('description').value,
-    amount: amountRaw, // Sent as string, parsed as Float in code.gs
-    addedBy: "User_Session"
+    company: document.getElementById('session.company').value,
+    date: document.getElementById('exp_date').value, 
+    category: document.getElementById('exp_category').value,
+    description: document.getElementById('exp_desc').value,
+    amount: document.getElementById('exp_amount').value,
+    addedBy: "session.username" // Your dynamic user variable
   };
 
+  // Visual feedback: notify the user the system is checking
+  console.log("Oracle is verifying data...");
+
   google.script.run
-    .withSuccessHandler(res => {
-      if(res.success) alert("Ledger Updated.");
+    .withSuccessHandler(function(res) {
+      if (res.success) {
+        alert("Success: Data committed to ledger.");
+        // clearForm(); 
+      } else {
+        console.log("Data entry declined by user.");
+      }
+    })
+    .withFailureHandler(function(err) {
+      alert("System Error: " + err.message);
     })
     .checkDuplicateAndSave(expenseObj);
 }
