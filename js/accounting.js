@@ -187,65 +187,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return (meta.months || []).map(monthLabelFromAny);
   }
 
-/**
- * Pattern: Submit handler with feedback logic
- */
-/**
- * Updated to match the IDs in your Expenses Section:
- * exp_category, exp_desc, exp_amount, exp_date
- */
-async function handleAddExpense() {
-  const btn = document.getElementById("btn_exp");
-  
-  const payload = {
-    action: "addExpenseWithCheckAction",
-    date: document.getElementById("exp_date")?.value || todayISO(),
-    category: document.getElementById("exp_category").value,
-    description: document.getElementById("exp_desc").value.trim(),
-    amount: document.getElementById("exp_amount").value,
-    forceSave: false // First attempt is always a check
-  };
-
-  if (!payload.description || !payload.amount) return alert("Enter description and amount");
-
-  const unlock = lockButton(btn, "Checking...");
-
-  try {
-    let r = await api(payload);
-
-    // 🛡️ THE GATEKEEPER LOGIC
-    if (r && r.duplicate) {
-      unlock(); // Unlock so the user can click again if they choose
-      
-      const proceed = confirm("⚠️ Duplicate Alert!\nAn expense with the same date, type, and amount already exists.\n\nDo you want to save it anyway?");
-      
-      if (!proceed) {
-        // 🛑 User clicked CANCEL. We stop here. 
-        console.log("Save cancelled by user.");
-        return; 
-      }
-
-      // 🚀 User clicked OK. We send the request again with forceSave: true
-      lockButton(btn, "Saving anyway...");
-      payload.forceSave = true;
-      r = await api(payload);
-    }
-
-    if (r && r.success) {
-      alert("Expense added successfully!");
-      document.getElementById("exp_desc").value = "";
-      document.getElementById("exp_amount").value = "";
-      loadSection("expenses"); // Refresh the list
-    }
-  } catch (err) {
-    alert("Error: " + err.message);
-  } finally {
-    unlock();
-  }
-}
-
-
-  /* ends here handle function*/
 
   
   async function getMonthsFromHolidays() {
@@ -5617,3 +5558,81 @@ function escapeHtml(s){
 }
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
 
+/**
+ * Pattern: Submit handler with feedback logic
+ */
+/**
+ * Updated to match the IDs in your Expenses Section:
+ * exp_category, exp_desc, exp_amount, exp_date
+ */
+/* --- ATTACH TO WINDOW SO HTML BUTTON CAN SEE IT --- */
+window.handleAddExpense = async function() {
+  const btn = document.getElementById("btn_exp");
+  
+  // 1. Gather Data from the UI
+  const category = document.getElementById("exp_category")?.value;
+  const desc = document.getElementById("exp_desc")?.value.trim();
+  const amount = document.getElementById("exp_amount")?.value;
+  const dateInp = document.getElementById("exp_date")?.value;
+  
+  // Fallback to today if date input is missing
+  const date = (dateInp && dateInp !== "") ? dateInp : todayISO();
+
+  // 2. Initial Validation
+  if (!desc || !amount) {
+    alert("Please enter both Description and Amount.");
+    return;
+  }
+
+  const payload = {
+    action: "addExpenseWithCheckAction",
+    date,
+    category,
+    description: desc,
+    amount,
+    forceSave: false // First attempt checks for duplicates
+  };
+
+  // 3. Trigger Async Flow
+  const unlock = lockButton(btn, "Checking...");
+
+  try {
+    console.log("Checking for duplicates...");
+    let r = await api(payload);
+
+    // 🛡️ Duplicate Gatekeeper logic
+    if (r && r.duplicate) {
+      unlock(); // Release button so user can think
+      
+      const proceed = confirm("⚠️ Duplicate Found!\n\nAn entry with this Date, Type, and Amount already exists.\n\nDo you want to save it anyway?");
+      
+      if (!proceed) {
+        console.log("User cancelled the duplicate save.");
+        return; 
+      }
+
+      // Re-lock and send with forceSave: true
+      lockButton(btn, "Saving anyway...");
+      payload.forceSave = true;
+      r = await api(payload);
+    }
+
+    // 4. Final Result Handling
+    if (r && (r.success || r.ok)) {
+      alert("Expense recorded successfully.");
+      document.getElementById("exp_desc").value = "";
+      document.getElementById("exp_amount").value = "";
+      loadSection("expenses"); // Refresh the summary list
+    } else if (r && r.error) {
+      alert("Archive Error: " + r.error);
+    }
+
+  } catch (err) {
+    console.error("Critical Failure in handleAddExpense:", err);
+    alert("Connection Error: Check your internet and try again.");
+  } finally {
+    unlock();
+  }
+};
+
+  /* ends here handle function*/
