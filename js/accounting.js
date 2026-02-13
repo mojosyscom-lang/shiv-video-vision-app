@@ -2943,8 +2943,12 @@ if (type === "clients") {
           <label style="margin-top:10px;">Total Qty</label>
           <input id="inv_qty" type="number" inputmode="numeric" placeholder="e.g. 334">
 
-          <label style="margin-top:10px;">Unit (optional)</label>
+          <label style="margin-top:10px;">Unit</label>
           <input id="inv_unit" placeholder="e.g. pcs, box, set">
+
+                  
+<label style="margin-top:10px;">HSN/SAC Code <span style="color:#e33;">*</span></label>
+<input id="inv_hsn" placeholder="e.g. 9987 or 8525">
 
           <button class="primary" id="btn_inv_add" style="margin-top:14px;">➕ Add Item</button>
 
@@ -3019,6 +3023,7 @@ if (type === "clients") {
       <table style="width:100%;border-collapse:collapse;">
         <tr>
           <th align="left">Item</th>
+          <th align="left">HSN/SAC</th>
           <th align="right">Total</th>
           <th align="left">Unit</th>
           ${isSuper ? `<th align="left">Status</th>` : ``}
@@ -3033,6 +3038,7 @@ if (type === "clients") {
                 <b>${escapeHtml(it.item_name || "")}</b><br>
                 <span class="dashSmall">${escapeHtml(it.item_id || "")}</span>
               </td>
+              <td>${escapeHtml(it.hsn_sac || "")}</td>
               <td align="right">${Number(it.total_qty || 0).toFixed(0)}</td>
               <td>${escapeHtml(it.unit || "")}</td>
               ${isSuper ? `<td><b>${escapeHtml(status)}</b></td>` : ``}
@@ -3074,7 +3080,8 @@ if (type === "clients") {
 
           const newUnit = prompt("Unit (optional):", String(cur.unit || ""));
           if (newUnit === null) return;
-
+          const newHsn = prompt("HSN/SAC Code:", String(cur.hsn_sac || ""));
+          if (newHsn === null) return;
           if (!String(newName).trim() || !(newQty >= 0)) {
             return alert("Item name required and qty must be >= 0");
           }
@@ -3086,8 +3093,13 @@ if (type === "clients") {
               rowIndex: Number(row),
               item_name: String(newName).trim(),
               total_qty: newQty,
-              unit: String(newUnit || "").trim()
+              unit: String(newUnit || "").trim(),
+              hsn_sac: String(newHsn || "").trim() // Pass the updated HSN
             });
+
+   
+
+            
             if (r && r.error) return alert(String(r.error));
             alert("Item updated");
             loadSection("inventory");
@@ -3149,16 +3161,18 @@ if (type === "clients") {
       const name = (document.getElementById("inv_name")?.value || "").trim();
       const qty = Number(document.getElementById("inv_qty")?.value || 0);
       const unit = (document.getElementById("inv_unit")?.value || "").trim();
-
+      const hsn_sac = (document.getElementById("inv_hsn")?.value || "").trim();
+      if (!hsn_sac) return alert("HSN/SAC code is required for tax compliance");
       if (!name) return alert("Item name required");
       if (!(qty >= 0)) return alert("Qty must be >= 0");
-
-      const r = await api({
-        action: "addInventoryItem",
-        item_name: name,
-        total_qty: qty,
-        unit
-      });
+const r = await api({
+  action: "addInventoryItem",
+  item_name: name,
+  total_qty: qty,
+  unit,
+  hsn_sac // ✅ Pass it to the backend
+});
+     
       if (r && r.error) return alert(String(r.error));
 
       alert("Item added");
