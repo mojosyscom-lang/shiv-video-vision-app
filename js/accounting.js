@@ -4324,7 +4324,7 @@ if (type === "inventoryTxn") {
         <input id="exp_desc" placeholder="Description">
 
         <label style="margin-top:10px;">Amount</label>
-        <input id="exp_amount" type="number" placeholder="Amount">
+        <input id="exp_amount" type="number" inputmode="decimal" pattern="[0-9]*"  placeholder="Amount">
 
         <button class="primary" id="btn_exp" style="margin-top:14px;">Add Expense</button>
       </div>
