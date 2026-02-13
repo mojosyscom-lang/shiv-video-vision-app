@@ -5564,13 +5564,11 @@ function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
  * exp_category, exp_desc, exp_amount, exp_date
  */
 /**
- * Updated handleAddExpense
- * Pattern: Add environment check for 'google' object
+ * Pattern: Use api() instead of google.script.run
  */
 async function handleAddExpense() {
   const btn = document.getElementById("btn_exp");
   
-  // 1. Capture Data (Using your specific exp_ IDs)
   const expenseObj = {
     company: localStorage.getItem("company") || "Company",
     date: document.getElementById('exp_date').value, 
@@ -5580,37 +5578,42 @@ async function handleAddExpense() {
     addedBy: localStorage.getItem("user_email") || "User"
   };
 
-  // 2. Validation
   if (!expenseObj.date || !expenseObj.amount) {
-    alert("Please enter both Date and Amount.");
+    alert("Please enter Date and Amount.");
     return;
   }
 
-  // 3. Environment Check
-  if (typeof google === 'undefined' || !google.script) {
-    console.error("Oracle Error: Google Script environment not detected.");
-    alert("System Error: Could not connect to Google Sheets. Please refresh the page.");
-    return;
-  }
-
-  // 4. Execution
+  // Use your lockButton utility if available
   const unlock = typeof lockButton === 'function' ? lockButton(btn, "Checking...") : () => {};
 
-  google.script.run
-    .withSuccessHandler(function(res) {
-      if (unlock) unlock();
-      if (res && res.success) {
-        alert("Entry Successful.");
-        // Clear inputs
-        document.getElementById('exp_desc').value = "";
-        document.getElementById('exp_amount').value = "";
-        // Reload summary if function exists
-        if (typeof loadExpenseSummary === 'function') loadExpenseSummary();
-      }
-    })
-    .withFailureHandler(function(err) {
-      if (unlock) unlock();
-      alert("Oracle Error: " + err.message);
-    })
-    .checkDuplicateAndSave(expenseObj);
+  try {
+    // We send a custom action 'addExpenseWithCheck' to your API
+    const res = await api({ 
+      action: "addExpenseWithCheck", 
+      ...expenseObj 
+    });
+
+    if (res && res.duplicate && !res.confirmed) {
+       // If backend finds a duplicate, it sends a flag
+       const proceed = confirm(`Duplicate entry detected for ${expenseObj.category} (${expenseObj.amount} rs) on ${expenseObj.date}. \n\nDo you want to add it anyway?`);
+       
+       if (proceed) {
+         // Re-run with a confirmation flag
+         const resRetry = await api({ 
+           action: "addExpenseWithCheck", 
+           ...expenseObj, 
+           forceSave: true 
+         });
+         if (resRetry.success) alert("Expense Saved.");
+       }
+    } else if (res && res.success) {
+      alert("Expense Saved.");
+      document.getElementById('exp_desc').value = "";
+      document.getElementById('exp_amount').value = "";
+    }
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    unlock();
+  }
 }
