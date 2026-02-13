@@ -5555,3 +5555,22 @@ function escapeHtml(s){
   }[m]));
 }
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
+
+function processExpenseSubmission() {
+  const amountRaw = document.getElementById('amount').value;
+  
+  const expenseObj = {
+    company: document.getElementById('company').value,
+    date: document.getElementById('date').value,
+    category: document.getElementById('category').value,
+    description: document.getElementById('description').value,
+    amount: amountRaw, // Sent as string, parsed as Float in code.gs
+    addedBy: "User_Session"
+  };
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if(res.success) alert("Ledger Updated.");
+    })
+    .checkDuplicateAndSave(expenseObj);
+}
