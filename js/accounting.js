@@ -4471,9 +4471,9 @@ if (type === "inventoryTxn") {
   // default selection (no auto-load)
   const mSel = document.getElementById("exp_filter_month");
   if (mSel && hasCurrent) mSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
-
+/* the culprit handleaddexpense
   document.getElementById("btn_exp").addEventListener("click", addExpense);
-
+*/
   const listBox = document.getElementById("exp_list");
   const totalBox = document.getElementById("exp_total");
 
