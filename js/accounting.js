@@ -187,6 +187,67 @@ document.addEventListener("DOMContentLoaded", () => {
     return (meta.months || []).map(monthLabelFromAny);
   }
 
+/**
+ * Pattern: Submit handler with feedback logic
+ */
+/**
+ * Updated to match the IDs in your Expenses Section:
+ * exp_category, exp_desc, exp_amount, exp_date
+ */
+async function handleAddExpense() {
+  const btn = document.getElementById("btn_exp");
+  
+  const payload = {
+    action: "addExpenseWithCheckAction",
+    date: document.getElementById("exp_date")?.value || todayISO(),
+    category: document.getElementById("exp_category").value,
+    description: document.getElementById("exp_desc").value.trim(),
+    amount: document.getElementById("exp_amount").value,
+    forceSave: false // First attempt is always a check
+  };
+
+  if (!payload.description || !payload.amount) return alert("Enter description and amount");
+
+  const unlock = lockButton(btn, "Checking...");
+
+  try {
+    let r = await api(payload);
+
+    // 🛡️ THE GATEKEEPER LOGIC
+    if (r && r.duplicate) {
+      unlock(); // Unlock so the user can click again if they choose
+      
+      const proceed = confirm("⚠️ Duplicate Alert!\nAn expense with the same date, type, and amount already exists.\n\nDo you want to save it anyway?");
+      
+      if (!proceed) {
+        // 🛑 User clicked CANCEL. We stop here. 
+        console.log("Save cancelled by user.");
+        return; 
+      }
+
+      // 🚀 User clicked OK. We send the request again with forceSave: true
+      lockButton(btn, "Saving anyway...");
+      payload.forceSave = true;
+      r = await api(payload);
+    }
+
+    if (r && r.success) {
+      alert("Expense added successfully!");
+      document.getElementById("exp_desc").value = "";
+      document.getElementById("exp_amount").value = "";
+      loadSection("expenses"); // Refresh the list
+    }
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    unlock();
+  }
+}
+
+
+  /* ends here handle function*/
+
+  
   async function getMonthsFromHolidays() {
     const rows = await cachedApi("holidaysAll", 60000, () => api({ action: "listHolidays", month: "" }));
     const months = (rows || []).map(r => normMonthLabel(monthLabelFromAny(r.month)));
@@ -5556,59 +5617,3 @@ function escapeHtml(s){
 }
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-/**
- * Pattern: Submit handler with feedback logic
- */
-/**
- * Updated to match the IDs in your Expenses Section:
- * exp_category, exp_desc, exp_amount, exp_date
- */
-async function handleAddExpense() {
-  const btn = document.getElementById("btn_exp");
-  
-  const payload = {
-    action: "addExpenseWithCheckAction",
-    date: document.getElementById("exp_date")?.value || todayISO(),
-    category: document.getElementById("exp_category").value,
-    description: document.getElementById("exp_desc").value.trim(),
-    amount: document.getElementById("exp_amount").value,
-    forceSave: false // First attempt is always a check
-  };
-
-  if (!payload.description || !payload.amount) return alert("Enter description and amount");
-
-  const unlock = lockButton(btn, "Checking...");
-
-  try {
-    let r = await api(payload);
-
-    // 🛡️ THE GATEKEEPER LOGIC
-    if (r && r.duplicate) {
-      unlock(); // Unlock so the user can click again if they choose
-      
-      const proceed = confirm("⚠️ Duplicate Alert!\nAn expense with the same date, type, and amount already exists.\n\nDo you want to save it anyway?");
-      
-      if (!proceed) {
-        // 🛑 User clicked CANCEL. We stop here. 
-        console.log("Save cancelled by user.");
-        return; 
-      }
-
-      // 🚀 User clicked OK. We send the request again with forceSave: true
-      lockButton(btn, "Saving anyway...");
-      payload.forceSave = true;
-      r = await api(payload);
-    }
-
-    if (r && r.success) {
-      alert("Expense added successfully!");
-      document.getElementById("exp_desc").value = "";
-      document.getElementById("exp_amount").value = "";
-      loadSection("expenses"); // Refresh the list
-    }
-  } catch (err) {
-    alert("Error: " + err.message);
-  } finally {
-    unlock();
-  }
-}
