@@ -2358,14 +2358,18 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
 
                 const cur = lastUpadRows.find(x => getUpadRowId(x) === row);
                 const curWorker = String(cur?.worker || "");
-                const curMonth = monthLabelFromAny(cur?.month || "");
+                // 1. Get the current date (as YYYY-MM-DD) for the prompt default
+const curDate = prettyISODate(cur?.date || todayISO());
                 const curAmt = Number(cur?.amount || 0);
 
                 const newWorker = prompt("Worker:", curWorker);
                 if (newWorker === null) return;
 
-                const newMonth = prompt("Month (e.g. Feb-2026):", curMonth);
-                if (newMonth === null) return;
+                // 2. Ask for the Date instead of the Month label
+const newDate = prompt("Date (YYYY-MM-DD):", curDate);
+if (newDate === null) return;
+                // 3. Convert the user's input into the Month Label (e.g., Feb-2026)
+const newMonth = monthLabelFromAny(newDate);
 
                 const newAmountStr = prompt("Amount:", String(curAmt || 0));
                 if (newAmountStr === null) return;
@@ -2380,7 +2384,7 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
 const r = await api({
   action: "updateUpad",
   rowIndex: Number(row),
-  date: keepDate, // ✅ REQUIRED by backend
+  date: newDate, // ✅ REQUIRED by backend
   worker: String(newWorker).trim(),
   month: String(newMonth).trim(),
   amount: newAmount
