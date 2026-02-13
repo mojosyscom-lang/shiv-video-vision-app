@@ -317,6 +317,67 @@ document.addEventListener("DOMContentLoaded", () => {
       location.href = "invoice.html";
       return;
     } */
+
+/* change my password section Add this inside the loadSection(type) function in accounting.js */
+
+if (type === "myAccount") {
+  const userRole = localStorage.getItem("role");
+  const userName = localStorage.getItem("username");
+
+  if (!(userRole === "owner" || userRole === "superadmin")) {
+    content.innerHTML = `<div class="card"><h2>Access Denied</h2></div>`;
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>My Account</h2>
+      <p class="dashSmall">Manage your personal security settings.</p>
+      
+      <div class="card" style="margin-top:15px; background:#f9f9f9;">
+        <label>Username</label>
+        <input type="text" value="${userName}" disabled style="background:#eee;">
+        
+        <label style="margin-top:15px;">New Password</label>
+        <input id="my_new_pw" type="password" placeholder="Enter new password">
+        
+        <button class="primary" id="btn_update_my_pw" style="margin-top:20px;">
+          🔐 Update My Password
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("btn_update_my_pw").addEventListener("click", async () => {
+    const newPw = document.getElementById("my_new_pw").value.trim();
+    if (!newPw) return alert("Please enter a new password");
+
+    const btn = document.getElementById("btn_update_my_pw");
+    const unlock = lockButton(btn, "Updating...");
+
+    try {
+      const r = await api({
+        action: "changeMyPassword",
+        new_password: newPw
+      });
+
+      if (r && r.ok) {
+        alert("Password updated successfully!");
+        document.getElementById("my_new_pw").value = "";
+      } else {
+        alert(r.error || "Failed to update password");
+      }
+    } finally {
+      unlock();
+    }
+  });
+  return;
+}
+
+
+
+    
+    
 /* ==========================================================
    📊 GST SETTINGS SECTION
    - Access: Superadmin / Owner
