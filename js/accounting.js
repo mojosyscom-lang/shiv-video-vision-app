@@ -3233,6 +3233,38 @@ const r = await api({
    - plan items: fixed dates payload + booked_qty field
    ========================================================== */
 if (type === "orders") {
+
+ 
+  // --- LED CALCULATOR LOGIC START ---
+  // ⚠️ IMPORTANT: Replace "P3.9" with the EXACT Item ID of your cabinet in your Inventory Sheet
+  const LED_CABINET_ITEM_ID = "IT-260213181906-687"; 
+  const CABINET_FT = 1.64042;
+  const CABINETS_PER_PETI = 6;
+
+  function roundCabinets(raw) {
+    const base = Math.floor(raw);
+    const frac = raw - base;
+    return base + (frac >= 0.5 ? 1 : 0);
+  }
+
+  function calcLedWall(widthFt, heightFt) {
+    const Wraw = widthFt / CABINET_FT;
+    const Hraw = heightFt / CABINET_FT;
+    const W = roundCabinets(Wraw);
+    const H = roundCabinets(Hraw);
+    const neededCabinets = W * H;
+    const petiExact = neededCabinets / CABINETS_PER_PETI;
+    const petiBase = Math.ceil(petiExact);
+    const frac = petiExact - Math.floor(petiExact);
+    const addExtra = (frac === 0) || (frac >= 0.5);
+    const petiCarry = petiBase + (addExtra ? 1 : 0);
+    const carryCabinets = petiCarry * CABINETS_PER_PETI;
+    return { W, H, neededCabinets, petiBase, petiCarry, carryCabinets, powerCable: carryCabinets, signalCable: carryCabinets };
+  }
+  // --- LED CALCULATOR LOGIC END ---
+
+  
+
   content.innerHTML = `<div class="card"><h2>Orders</h2><p>Loading…</p></div>`;
 
   const isSuper = (role === "superadmin");
@@ -3300,6 +3332,25 @@ if (type === "orders") {
 
           <label style="margin-top:10px;">End Date <span style="color:#e33;">*</span></label>
           <input id="ord_end" type="date" value="${todayISO()}">
+
+
+          <div id="led_calc_block" style="margin-top:14px; border:1px solid #eee; border-radius:8px; padding:12px; background:#fafafa;">
+             <div style="font-weight:700; margin-bottom:10px; font-size:14px; color:#333;">🖥️ LED Wall Size</div>
+             <div style="display:flex; gap:10px;">
+               <div style="flex:1;">
+                 <label style="display:block; font-size:11px; opacity:0.7;">Width (ft)</label>
+                 <input id="led_w_ft" type="number" step="0.01" placeholder="16" style="width:100%; margin-top:4px;">
+               </div>
+               <div style="flex:1;">
+                 <label style="display:block; font-size:11px; opacity:0.7;">Height (ft)</label>
+                 <input id="led_h_ft" type="number" step="0.01" placeholder="12" style="width:100%; margin-top:4px;">
+               </div>
+             </div>
+             <div id="led_calc_out" style="margin-top:10px; font-size:13px; line-height:1.4; color:#333;"></div>
+             <button id="btn_check_led_avail" class="secondary" style="margin-top:10px; width:100%; font-size:13px;">Check Availability</button>
+             <div id="led_avail_out" style="margin-top:8px;"></div>
+          </div>
+         
 
           <button class="primary" id="btn_ord_add" style="margin-top:14px;">➕ Create Order</button>
 
@@ -3826,6 +3877,119 @@ if (type === "orders") {
     }
   });
 
+
+// --- LED CALCULATOR EVENTS START ---
+  (function initLedCalc() {
+    const wEl = document.getElementById("led_w_ft");
+    const hEl = document.getElementById("led_h_ft");
+    const outEl = document.getElementById("led_calc_out");
+    const availOut = document.getElementById("led_avail_out");
+    const btnAvail = document.getElementById("btn_check_led_avail");
+    const block = document.getElementById("led_calc_block");
+
+    if (!wEl || !hEl) return;
+
+    function computeLive() {
+      availOut.innerHTML = "";
+      const w = Number(wEl.value || 0);
+      const h = Number(hEl.value || 0);
+      if (!w || !h || w <= 0 || h <= 0) {
+        outEl.innerHTML = "";
+        return null;
+      }
+      const r = calcLedWall(w, h);
+      outEl.innerHTML = `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
+          <div>Layout: <b>${r.W} × ${r.H}</b></div>
+          <div>Cabinets: <b>${r.neededCabinets}</b></div>
+          <div style="grid-column: span 2; border-top:1px solid #ddd; margin-top:4px; padding-top:4px;">
+            Carry: <b>${r.petiCarry} Peti</b> (${r.carryCabinets} cabs)
+          </div>
+        </div>
+      `;
+      if(block) {
+          block.dataset.carryCabinets = r.carryCabinets;
+          block.dataset.petiCarry = r.petiCarry;
+      }
+      return r;
+    }
+
+    ["input", "change"].forEach(evt => {
+      wEl.addEventListener(evt, computeLive);
+      hEl.addEventListener(evt, computeLive);
+    });
+
+    btnAvail?.addEventListener("click", async (e) => {
+      e.preventDefault(); 
+      const r = computeLive();
+      if (!r) return alert("Enter width and height first");
+
+      // Use the IDs from your existing Order form
+      const setupDate = document.getElementById("ord_setup")?.value;
+      const startDate = document.getElementById("ord_start")?.value;
+      const endDate   = document.getElementById("ord_end")?.value;
+
+      if (!setupDate || !startDate || !endDate) {
+        return alert("Please select Setup, Start, and End dates above first.");
+      }
+
+      btnAvail.disabled = true;
+      btnAvail.textContent = "Checking Inventory...";
+      availOut.innerHTML = "";
+
+      try {
+        // Reuse existing backend function "listAvailableInventory"
+        const resp = await api({ 
+          action: "listAvailableInventory", 
+          setup_date: setupDate,
+          start_date: startDate,
+          end_date: endDate
+        });
+
+        if (!Array.isArray(resp)) {
+           availOut.innerHTML = `<div style="color:#b00; font-size:12px;">Error checking availability.</div>`;
+           return;
+        }
+
+        // Find the LED Cabinet item in the full inventory list
+        // It matches by checking if item_id contains the ID defined at the top
+        const item = resp.find(x => String(x.item_id).trim() === LED_CABINET_ITEM_ID) 
+                     || resp.find(x => String(x.item_id).toLowerCase().includes("cabinet")); // Fallback partial match
+
+        if (item) {
+           const availableQty = Number(item.available_qty || 0);
+           const requiredQty = r.carryCabinets;
+           const isEnough = availableQty >= requiredQty;
+
+           if (isEnough) {
+             availOut.innerHTML = `
+               <div style="color:green; font-weight:700; font-size:12px;">✅ Available</div>
+               <div style="font-size:11px; opacity:0.8;">Stock: ${availableQty} | Need: ${requiredQty}</div>
+               <div style="font-size:11px; opacity:0.8;">${item.item_id}</div>
+             `;
+           } else {
+             availOut.innerHTML = `
+               <div style="color:#d00; font-weight:700; font-size:12px;">❌ Shortage</div>
+               <div style="font-size:11px; opacity:0.8;">Stock: ${availableQty} | Need: ${requiredQty}</div>
+               <div style="font-size:11px; opacity:0.8;">${item.item_id}</div>
+             `;
+           }
+        } else {
+           availOut.innerHTML = `<div style="color:#b00; font-size:12px;">Item ID "${LED_CABINET_ITEM_ID}" not found in inventory.</div>`;
+        }
+
+      } catch (err) {
+        availOut.innerHTML = `<div style="color:#b00;">Err: ${err.message}</div>`;
+      } finally {
+        btnAvail.disabled = false;
+        btnAvail.textContent = "Check Availability";
+      }
+    });
+  })();
+  // --- LED CALCULATOR EVENTS END ---
+
+ 
+  
   // export CSV
   document.getElementById("btn_ord_export")?.addEventListener("click", () => {
     if (!isSuper) return;
