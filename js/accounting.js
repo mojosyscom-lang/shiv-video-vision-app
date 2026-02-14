@@ -1687,7 +1687,7 @@ loadSection("invoice");
   function printSameWindow(){
     const header = {
       doc_type: currentDocType,
-      invoice_no: lastSavedInvoiceNo || "(DRAFT)",
+      invoice_no: lastSavedInvoiceNo || "",
       invoice_date: document.getElementById("inv_date")?.value || "",
       order_id: document.getElementById("inv_order_id")?.textContent || "",
       venue: document.getElementById("inv_venue")?.value || "",
@@ -3879,26 +3879,26 @@ if (type === "orders") {
   });
 
 // --- LED CALCULATOR EVENTS START ---
-  (function initLedCalc() {
-    const wEl = document.getElementById("led_w_ft");
-    const hEl = document.getElementById("led_h_ft");
-    const outEl = document.getElementById("led_calc_out");
-    const availOut = document.getElementById("led_avail_out");
-    const btnAvail = document.getElementById("btn_check_led_avail");
-    const block = document.getElementById("led_calc_block");
+(function initLedCalc() {
+  const wEl = document.getElementById("led_w_ft");
+  const hEl = document.getElementById("led_h_ft");
+  const outEl = document.getElementById("led_calc_out");
+  const availOut = document.getElementById("led_avail_out");
+  const btnAvail = document.getElementById("btn_check_led_avail");
+  const block = document.getElementById("led_calc_block");
 
-    if (!wEl || !hEl) return;
+  if (!wEl || !hEl) return;
 
-    function computeLive() {
-      availOut.innerHTML = "";
-      const w = Number(wEl.value || 0);
-      const h = Number(hEl.value || 0);
-      if (!w || !h || w <= 0 || h <= 0) {
-        outEl.innerHTML = "";
-        return null;
-      }
-      const r = calcLedWall(w, h);
-      outEl.innerHTML = `
+  function computeLive() {
+    availOut.innerHTML = "";
+    const w = Number(wEl.value || 0);
+    const h = Number(hEl.value || 0);
+    if (!w || !h || w <= 0 || h <= 0) {
+      outEl.innerHTML = "";
+      return null;
+    }
+    const r = calcLedWall(w, h);
+    outEl.innerHTML = `
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
           <div>Layout: <b>${r.W} × ${r.H}</b></div>
           <div>Cabinets: <b>${r.neededCabinets}</b></div>
@@ -3907,93 +3907,104 @@ if (type === "orders") {
           </div>
         </div>
       `;
-      if(block) {
-          block.dataset.carryCabinets = r.carryCabinets;
-          block.dataset.petiCarry = r.petiCarry;
-      }
-      return r;
+    if (block) {
+      block.dataset.carryCabinets = r.carryCabinets;
+      block.dataset.petiCarry = r.petiCarry;
     }
+    return r;
+  }
 
-    ["input", "change"].forEach(evt => {
-      wEl.addEventListener(evt, computeLive);
-      hEl.addEventListener(evt, computeLive);
-    });
+  ["input", "change"].forEach(evt => {
+    wEl.addEventListener(evt, computeLive);
+    hEl.addEventListener(evt, computeLive);
+  });
 
-   // --- UPDATED LED CALCULATOR Logic inside accounting.js ---
-btnAvail?.addEventListener("click", async (e) => {
-  e.preventDefault(); 
-  const r = computeLive(); // Gets {carryCabinets, petiCarry, etc.}
-  if (!r) return alert("Enter width and height first");
+  btnAvail?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const r = computeLive();
+    if (!r) return alert("Enter width and height first");
 
- const order_id = String(document.getElementById("order_id")?.textContent || "").trim() || "";
+    // ✅ ROBUST ORDER ID CHECK
+    // Looks in the "Plan Items" span first, then the "Invoice" span, then the "Order Picker"
+    const order_id = (
+      document.getElementById("inv_order_id")?.textContent || 
+      document.getElementById("ord_order_id")?.textContent || 
+      document.getElementById("inv_order_pick")?.value || 
+      ""
+    ).trim();
 
-  const setupDate = document.getElementById("ord_setup")?.value;
-  const startDate = document.getElementById("ord_start")?.value;
-  const endDate   = document.getElementById("ord_end")?.value;
+    const setupDate = document.getElementById("ord_setup")?.value || document.getElementById("inv_setup")?.value;
+    const startDate = document.getElementById("ord_start")?.value || document.getElementById("inv_start")?.value;
+    const endDate   = document.getElementById("ord_end")?.value || document.getElementById("inv_end")?.value;
 
-  if (!setupDate || !endDate) return alert("Select Order Dates first.");
+    if (!setupDate || !endDate) return alert("Select Order Dates first.");
 
-  btnAvail.disabled = true;
-  btnAvail.textContent = "Checking Inventory...";
+    btnAvail.disabled = true;
+    const originalText = btnAvail.textContent;
+    btnAvail.textContent = "Checking Inventory...";
 
-  try {
-    const resp = await api({ 
-      action: "listAvailableInventory", 
-      order_id: order_id, // Exclude current order to see true stock
-      setup_date: setupDate,
-      start_date: startDate,
-      end_date: endDate 
-    });
+    try {
+      const resp = await api({
+        action: "listAvailableInventory",
+        order_id: order_id, 
+        setup_date: setupDate,
+        start_date: startDate,
+        end_date: endDate
+      });
 
       if (!Array.isArray(resp)) {
-           availOut.innerHTML = `<div style="color:#b00; font-size:12px;">Error checking availability.</div>`;
-           return;
-        }
-
-    // 1. Find the LED Cabinet in the availability list
-    const cabinetItem = resp.find(x => String(x.item_id).trim() === LED_CABINET_ITEM_ID);
-
-    if (cabinetItem) {
-      const avail = Number(cabinetItem.available_qty || 0);
-      const needed = r.carryCabinets;
-      
-      const isEnough = avail >= needed;
-
-  const dateMsg = `<div style="font-size:10px; color:#666; margin:3px 0;">${setupDate} → ${endDate}</div>`;
-
-      availOut.innerHTML = `
-        <div style="color:${isEnough ? 'green' : 'red'}; font-weight:bold;">
-          ${isEnough ? '✅ Stock Available' : '❌ Shortage'} (${avail} free)
-        </div>
-      `;
-
-      if (isEnough) {
-        // 2. AUTO-FILL the input field in the planning table
-        const rowInput = document.querySelector(`input[data-item="${LED_CABINET_ITEM_ID}"]`);
-        if (rowInput) {
-          rowInput.value = needed;
-          rowInput.style.backgroundColor = "#e6f4ea"; // Flash green for feedback
-          setTimeout(() => rowInput.style.backgroundColor = "", 1000);
-          console.log(`Auto-filled ${needed} cabinets.`);
-        } else {
-          availOut.innerHTML += `<div class="dashSmall">⚠️ Item found in stock, but not in the planning table below.</div>`;
-        }
+        availOut.innerHTML = `<div style="color:#b00; font-size:12px;">Error checking availability.</div>`;
+        return;
       }
-    } else {
-      availOut.innerHTML = `<div style="color:red;">Item ${LED_CABINET_ITEM_ID} not found in Master Inventory.</div>`;
+
+      // ⚠️ IMPORTANT: Ensure LED_CABINET_ITEM_ID is defined globally or at the top of accounting.js
+      const cabinetItem = resp.find(x => String(x.item_id).trim() === LED_CABINET_ITEM_ID);
+
+      if (cabinetItem) {
+        const avail = Number(cabinetItem.available_qty || 0);
+        const needed = r.carryCabinets;
+        const isEnough = avail >= needed;
+
+        availOut.innerHTML = `
+          <div style="color:${isEnough ? 'green' : 'red'}; font-weight:bold; margin-top:5px;">
+            ${isEnough ? '✅ Stock Available' : '❌ Shortage'} (${avail} free)
+          </div>
+          <div style="font-size:10px; color:#666;">Range: ${setupDate} to ${endDate}</div>
+        `;
+
+        if (isEnough) {
+          // ✅ TARGETING THE RIGHT INPUT
+          // We look for the input in the "Plan Items" table that matches our LED cabinet ID
+          const rowInput = document.querySelector(`input[data-item="${LED_CABINET_ITEM_ID}"]`);
+          if (rowInput) {
+            rowInput.value = needed;
+            rowInput.style.border = "2px solid green";
+            rowInput.style.backgroundColor = "#e6f4ea";
+            
+            // Auto-trigger change event if you have other live listeners
+            rowInput.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            setTimeout(() => {
+                rowInput.style.backgroundColor = "";
+                rowInput.style.border = "";
+            }, 2000);
+          } else {
+            availOut.innerHTML += `<div style="font-size:11px; color:#666;">⚠️ Note: Item available, but not found in the current planning table.</div>`;
+          }
+        }
+      } else {
+        availOut.innerHTML = `<div style="color:red; font-size:12px;">Item ${LED_CABINET_ITEM_ID} not found in Inventory.</div>`;
+      }
+    } catch (err) {
+      console.error(err);
+      availOut.innerHTML = `<div style="color:red;">Error: ${err.message}</div>`;
+    } finally {
+      btnAvail.disabled = false;
+      btnAvail.textContent = originalText;
     }
-
-  } catch (err) {
-    availOut.innerHTML = `<div style="color:red;">Error: ${err.message}</div>`;
-  } finally {
-    btnAvail.disabled = false;
-    btnAvail.textContent = "Check & Apply to Plan";
-  }
-});
-})(); // ✅ CLOSES 
-
-
-  // --- LED CALCULATOR EVENTS END ---
+  });
+})();
+// --- LED CALCULATOR EVENTS END ---
  
 
  
