@@ -3919,72 +3919,76 @@ if (type === "orders") {
       hEl.addEventListener(evt, computeLive);
     });
 
-    btnAvail?.addEventListener("click", async (e) => {
-      e.preventDefault(); 
-      const r = computeLive();
-      if (!r) return alert("Enter width and height first");
+   // --- UPDATED LED CALCULATOR Logic inside accounting.js ---
+btnAvail?.addEventListener("click", async (e) => {
+  e.preventDefault(); 
+  const r = computeLive(); // Gets {carryCabinets, petiCarry, etc.}
+  if (!r) return alert("Enter width and height first");
 
-      const setupDate = document.getElementById("ord_setup")?.value;
-      const startDate = document.getElementById("ord_start")?.value;
-      const endDate   = document.getElementById("ord_end")?.value;
+  const order_id = String(document.getElementById("inv_order_id")?.textContent || "").trim();
+  const setupDate = document.getElementById("ord_setup")?.value;
+  const startDate = document.getElementById("ord_start")?.value;
+  const endDate   = document.getElementById("ord_end")?.value;
 
-      if (!setupDate || !startDate || !endDate) {
-        return alert("Please select Setup, Start, and End dates above first.");
-      }
+  if (!setupDate || !endDate) return alert("Select Order Dates first.");
 
-      btnAvail.disabled = true;
-      btnAvail.textContent = "Checking Inventory...";
-      availOut.innerHTML = "";
+  btnAvail.disabled = true;
+  btnAvail.textContent = "Checking Inventory...";
 
-      try {
-        const resp = await api({ 
-          action: "listAvailableInventory", 
-          setup_date: setupDate,
-          start_date: startDate,
-          end_date: endDate
-        });
+  try {
+    const resp = await api({ 
+      action: "listAvailableInventory", 
+      order_id: order_id, // Exclude current order to see true stock
+      setup_date: setupDate,
+      start_date: startDate,
+      end_date: endDate 
+    });
 
-        if (!Array.isArray(resp)) {
+      if (!Array.isArray(resp)) {
            availOut.innerHTML = `<div style="color:#b00; font-size:12px;">Error checking availability.</div>`;
            return;
         }
 
-        // ⚠️ LOGIC: Uses "LED_CABINET_ITEM_ID" defined at top of module, or partial match "cabinet"
-        const item = resp.find(x => String(x.item_id).trim() === LED_CABINET_ITEM_ID) 
-                     || resp.find(x => String(x.item_id).toLowerCase().includes("cabinet"));
+    // 1. Find the LED Cabinet in the availability list
+    const cabinetItem = resp.find(x => String(x.item_id).trim() === LED_CABINET_ITEM_ID);
 
-        if (item) {
-           const availableQty = Number(item.available_qty || 0);
-           const requiredQty = r.carryCabinets;
-           const isEnough = availableQty >= requiredQty;
-           
-           const dateMsg = `<div style="font-size:10px; color:#666; margin:3px 0;">${setupDate} → ${endDate}</div>`;
+    if (cabinetItem) {
+      const avail = Number(cabinetItem.available_qty || 0);
+      const needed = r.carryCabinets;
+      
+      const isEnough = avail >= needed;
 
-           if (isEnough) {
-             availOut.innerHTML = `
-               <div style="color:green; font-weight:700; font-size:12px;">✅ Available</div>
-               ${dateMsg}
-               <div style="font-size:11px; opacity:0.9;">Stock: <b>${availableQty}</b> • Need: <b>${requiredQty}</b></div>
-             `;
-           } else {
-             availOut.innerHTML = `
-               <div style="color:#d00; font-weight:700; font-size:12px;">❌ Shortage</div>
-               ${dateMsg}
-               <div style="font-size:11px; opacity:0.9;">Stock: <b>${availableQty}</b> • Need: <b>${requiredQty}</b></div>
-             `;
-           }
+  const dateMsg = `<div style="font-size:10px; color:#666; margin:3px 0;">${setupDate} → ${endDate}</div>`;
+
+      availOut.innerHTML = `
+        <div style="color:${isEnough ? 'green' : 'red'}; font-weight:bold;">
+          ${isEnough ? '✅ Stock Available' : '❌ Shortage'} (${avail} free)
+        </div>
+      `;
+
+      if (isEnough) {
+        // 2. AUTO-FILL the input field in the planning table
+        const rowInput = document.querySelector(`input[data-item="${LED_CABINET_ITEM_ID}"]`);
+        if (rowInput) {
+          rowInput.value = needed;
+          rowInput.style.backgroundColor = "#e6f4ea"; // Flash green for feedback
+          setTimeout(() => rowInput.style.backgroundColor = "", 1000);
+          console.log(`Auto-filled ${needed} cabinets.`);
         } else {
-           availOut.innerHTML = `<div style="color:#b00; font-size:12px;">Item ID "${LED_CABINET_ITEM_ID}" not found in inventory.</div>`;
+          availOut.innerHTML += `<div class="dashSmall">⚠️ Item found in stock, but not in the planning table below.</div>`;
         }
-
-      } catch (err) {
-        availOut.innerHTML = `<div style="color:#b00;">Err: ${err.message}</div>`;
-      } finally {
-        btnAvail.disabled = false;
-        btnAvail.textContent = "Check Availability";
       }
-    });
-  })();
+    } else {
+      availOut.innerHTML = `<div style="color:red;">Item ${LED_CABINET_ITEM_ID} not found in Master Inventory.</div>`;
+    }
+
+  } catch (err) {
+    availOut.innerHTML = `<div style="color:red;">Error: ${err.message}</div>`;
+  } finally {
+    btnAvail.disabled = false;
+    btnAvail.textContent = "Check & Apply to Plan";
+  }
+});
   // --- LED CALCULATOR EVENTS END ---
 
  
