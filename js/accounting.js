@@ -3925,7 +3925,8 @@ btnAvail?.addEventListener("click", async (e) => {
   const r = computeLive(); // Gets {carryCabinets, petiCarry, etc.}
   if (!r) return alert("Enter width and height first");
 
-  const order_id = String(document.getElementById("inv_order_id")?.textContent || "").trim();
+ const order_id = String(document.getElementById("order_id")?.textContent || "").trim() || "";
+
   const setupDate = document.getElementById("ord_setup")?.value;
   const startDate = document.getElementById("ord_start")?.value;
   const endDate   = document.getElementById("ord_end")?.value;
@@ -3989,8 +3990,10 @@ btnAvail?.addEventListener("click", async (e) => {
     btnAvail.textContent = "Check & Apply to Plan";
   }
 });
-  // --- LED CALCULATOR EVENTS END ---
+})(); // ✅ CLOSES 
 
+
+  // --- LED CALCULATOR EVENTS END ---
  
 
  
