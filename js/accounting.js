@@ -3877,7 +3877,6 @@ if (type === "orders") {
     }
   });
 
-
 // --- LED CALCULATOR EVENTS START ---
   (function initLedCalc() {
     const wEl = document.getElementById("led_w_ft");
@@ -3924,7 +3923,6 @@ if (type === "orders") {
       const r = computeLive();
       if (!r) return alert("Enter width and height first");
 
-      // Use the IDs from your existing Order form
       const setupDate = document.getElementById("ord_setup")?.value;
       const startDate = document.getElementById("ord_start")?.value;
       const endDate   = document.getElementById("ord_end")?.value;
@@ -3938,7 +3936,6 @@ if (type === "orders") {
       availOut.innerHTML = "";
 
       try {
-        // Reuse existing backend function "listAvailableInventory"
         const resp = await api({ 
           action: "listAvailableInventory", 
           setup_date: setupDate,
@@ -3951,27 +3948,28 @@ if (type === "orders") {
            return;
         }
 
-        // Find the LED Cabinet item in the full inventory list
-        // It matches by checking if item_id contains the ID defined at the top
+        // ⚠️ LOGIC: Uses "LED_CABINET_ITEM_ID" defined at top of module, or partial match "cabinet"
         const item = resp.find(x => String(x.item_id).trim() === LED_CABINET_ITEM_ID) 
-                     || resp.find(x => String(x.item_id).toLowerCase().includes("cabinet")); // Fallback partial match
+                     || resp.find(x => String(x.item_id).toLowerCase().includes("cabinet"));
 
         if (item) {
            const availableQty = Number(item.available_qty || 0);
            const requiredQty = r.carryCabinets;
            const isEnough = availableQty >= requiredQty;
+           
+           const dateMsg = `<div style="font-size:10px; color:#666; margin:3px 0;">${setupDate} → ${endDate}</div>`;
 
            if (isEnough) {
              availOut.innerHTML = `
                <div style="color:green; font-weight:700; font-size:12px;">✅ Available</div>
-               <div style="font-size:11px; opacity:0.8;">Stock: ${availableQty} | Need: ${requiredQty}</div>
-               <div style="font-size:11px; opacity:0.8;">${item.item_id}</div>
+               ${dateMsg}
+               <div style="font-size:11px; opacity:0.9;">Stock: <b>${availableQty}</b> • Need: <b>${requiredQty}</b></div>
              `;
            } else {
              availOut.innerHTML = `
                <div style="color:#d00; font-weight:700; font-size:12px;">❌ Shortage</div>
-               <div style="font-size:11px; opacity:0.8;">Stock: ${availableQty} | Need: ${requiredQty}</div>
-               <div style="font-size:11px; opacity:0.8;">${item.item_id}</div>
+               ${dateMsg}
+               <div style="font-size:11px; opacity:0.9;">Stock: <b>${availableQty}</b> • Need: <b>${requiredQty}</b></div>
              `;
            }
         } else {
@@ -3987,6 +3985,8 @@ if (type === "orders") {
     });
   })();
   // --- LED CALCULATOR EVENTS END ---
+
+ 
 
  
   
