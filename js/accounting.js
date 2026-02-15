@@ -4753,6 +4753,7 @@ box.innerHTML = `
     const plannedRes = await api({ action: "listOrderItems", order_id: o.order_id });
     const planned = Array.isArray(plannedRes) ? plannedRes : [];
     const rows = planned.filter(p => String(p.status || "ACTIVE").toUpperCase() === "ACTIVE");
+    const BG_URL = "https://mojosyscom-lang.github.io/assets/print-bg.png"; 
 
     if (!rows.length) {
       w.document.body.innerHTML = `<p>No planned items found.</p>`;
@@ -4766,24 +4767,58 @@ box.innerHTML = `
           <meta name="viewport" content="width=device-width,initial-scale=1">
           <title>Planned Items - ${escapeHtml(o.order_id)}</title>
           <style>
-            body{font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; padding:16px; color:#111;}
-            .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
-            h2{margin:0;font-size:18px;}
-            .meta{margin-top:8px;font-size:12px;line-height:1.4;color:#333;}
-            .pill{display:inline-block;padding:4px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px;}
-            table{width:100%;border-collapse:collapse;margin-top:14px;}
-            th,td{border:1px solid #ddd;padding:10px;font-size:12px;}
-            th{background:#f5f5f5;text-align:left;}
-            td.qty, th.qty{text-align:right; width:90px;}
-            .footer{margin-top:14px;font-size:11px;color:#666;}
-            @media print{
-              body{padding:0;}
-              .noPrint{display:none;}
-            }
-          </style>
+  /* A4 page */
+  @page { size: A4; margin: 0; }
+
+  html, body { height: 100%; }
+  body{
+    margin:0;
+    font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    color:#111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Background image as full page */
+  .printBg{
+    position: fixed;
+    inset: 0;
+    width: 210mm;
+    height: 297mm;
+    object-fit: cover;   /* fill full A4 */
+    z-index: -1;
+  }
+
+  /* Page content area */
+  .page{
+    width: 210mm;
+    min-height: 297mm;
+    box-sizing: border-box;
+    padding: 18mm 14mm;  /* adjust spacing on top of background */
+  }
+
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+  h2{margin:0;font-size:18px;}
+  .meta{margin-top:8px;font-size:12px;line-height:1.4;color:#333;}
+  .pill{display:inline-block;padding:4px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px;background:rgba(255,255,255,0.75);}
+  table{width:100%;border-collapse:collapse;margin-top:14px;background:rgba(255,255,255,0.85);}
+  th,td{border:1px solid #ddd;padding:10px;font-size:12px;}
+  th{background:rgba(245,245,245,0.95);text-align:left;}
+  td.qty, th.qty{text-align:right; width:90px;}
+  .footer{margin-top:14px;font-size:11px;color:#666;}
+
+  @media print{
+    .noPrint{display:none;}
+    .page{page-break-after: always;}
+  }
+</style>
+
         </head>
         <body>
-          <div class="top">
+  <img class="printBg" src="${BG_URL}" alt="">
+  <div class="page">
+    <div class="top">
+
             <div>
               <h2>Planned Item List</h2>
               <div class="meta">
@@ -4814,6 +4849,7 @@ box.innerHTML = `
           <div class="footer noPrint">
             If print dialog doesn’t open on iPhone: use Share → Print.
           </div>
+</div>
 
           <script>
             // iOS is picky. Delay helps.
