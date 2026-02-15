@@ -4407,7 +4407,7 @@ if (type === "inventoryTxn") {
         <div id="inv_ord_meta" class="dashSmall" style="margin-top:10px;"></div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="primary" id="btn_inv_load" style="background:#111;">Load Items</button>
+          
           <button class="primary" id="btn_inv_print" style="background:#1fa971;">🖨 Print Planned List</button>
         </div>
 
@@ -4461,7 +4461,12 @@ if (type === "inventoryTxn") {
     `;
   }
 
-  sel?.addEventListener("change", () => renderMeta(selectedOrderObj()));
+  sel?.addEventListener("change", async () => {
+  const o = selectedOrderObj();
+  renderMeta(o);
+  if (o) await loadOrderItemsUI();
+});
+
   renderMeta(selectedOrderObj());
 
   async function loadOrderItemsUI(){
@@ -4528,78 +4533,138 @@ if (type === "inventoryTxn") {
         };
       });
 
-    box.innerHTML = `
-      <div style="overflow:auto;">
-        <table style="width:100%;border-collapse:collapse;">
-          <tr>
-            <th align="left">Item</th>
-            <th align="right">Planned</th>
-            <th align="right">Avail</th>
-            <th align="right">OUT</th>
-            <th align="right">RETURN</th>
-            <th align="right">LOST</th>
-            <th align="right">DAMAGED</th>
-            <th align="right">Outstanding</th>
-          </tr>
+    const hasAnyOut = rows.some(r => r.out > 0);
 
-          ${rows.map(r => `
-            <tr style="border-top:1px solid #eee;vertical-align:top;">
-              <td>
-                <b>${escapeHtml(r.item_name)}</b><br>
-                <span class="dashSmall">${escapeHtml(r.item_id)}</span>
-              </td>
-              <td align="right">${r.planned_qty}</td>
-              <td align="right">${r.available_qty}</td>
-              <td align="right">${r.out}</td>
-              <td align="right">${r.ret}</td>
-              <td align="right">${r.lost}</td>
-              <td align="right">${r.damaged}</td>
-              <td align="right"><b>${r.outstanding}</b></td>
-            </tr>
+if (!hasAnyOut) {
 
-            <tr style="border-top:0;">
-              <td colspan="8" style="padding:10px 0 12px;">
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                  ${actionMini(r, o, "OUT", r.available_qty)}
-                  ${actionMini(r, o, "RETURN", r.outstanding)}
-                  ${actionMini(r, o, "LOST", r.outstanding)}
-                  ${actionMini(r, o, "DAMAGED", r.outstanding)}
-                </div>
-                ${
-                  (r.out > r.planned_qty)
-                    ? `<div class="dashSmall" style="margin-top:6px;color:#b07b00;">
-                        ⚠ OUT is greater than Planned (allowed).
-                      </div>`
-                    : ``
-                }
-              </td>
-            </tr>
-          `).join("")}
-        </table>
+  // FIRST STATE — Only OUT
+  box.innerHTML = `
+    <div class="invTable">
+  ${rows.map(r => `
+    <div class="invRow">
+      <div class="invTitle">${escapeHtml(r.item_name)}</div>
+
+      <div class="invMeta">
+        <span>Planned: <b>${r.planned_qty}</b></span>
+        <span>Available: <b>${r.available_qty}</b></span>
       </div>
 
-      <div class="card" style="margin-top:12px;">
-        <h3 style="margin-top:0;">Lost / Damaged Summary</h3>
-        ${
-          rows.filter(x => x.lost > 0 || x.damaged > 0).length
-            ? `<ul style="margin:0;padding-left:18px;">
-                ${rows.filter(x => x.lost>0 || x.damaged>0).map(x => `
-                  <li>
-                    ${escapeHtml(x.item_name)} —
-                    Lost: <b>${x.lost}</b>, Damaged: <b>${x.damaged}</b>
-                  </li>
-                `).join("")}
-              </ul>`
-            : `<p class="dashSmall" style="margin:0;">No lost/damaged recorded for this order.</p>`
-        }
-        <p class="dashSmall" style="margin-top:10px;">
-          Note: LOST/DAMAGED reduce inventory_master only after Owner/Superadmin allows it.
-        </p>
+      <div class="invInput">
+        <label>OUT</label>
+        <input type="number"
+               inputmode="numeric"
+               min="0"
+               max="${Math.min(r.available_qty, r.planned_qty + 10)}"
+               data-out-item="${escapeAttr(r.item_id)}">
       </div>
-    `;
+    </div>
+  `).join("")}
+</div>
+
+<button class="primary" id="btn_save_out" style="width:100%;margin-top:14px;">
+  Save OUT
+</button>
+
+  `;
+
+ document.getElementById("btn_save_out")?.addEventListener("click", async () => {
+  const inputs = box.querySelectorAll("input[data-out-item]");
+
+  for (const inp of inputs) {
+    const item_id = inp.getAttribute("data-out-item");
+    const qty = Number(inp.value || 0);
+
+    if (qty <= 0) continue;
+
+    const row = rows.find(r => r.item_id === item_id);
+    const maxAllowed = Math.min(row.available_qty, row.planned_qty + 10);
+
+    if (qty > maxAllowed) {
+      return alert(`Max allowed for ${row.item_name} is ${maxAllowed}`);
+    }
+
+    await api({
+      action: "addInventoryTxn",
+      order_id: o.order_id,
+      item_id,
+      txn_type: "OUT",
+      qty
+    });
+  }
+
+  alert("OUT saved");
+  await loadOrderItemsUI();
+});
+
+
+  return;
+}
+// SECOND STATE — OUT already exists
+
+box.innerHTML = `
+  <div class="invTable">
+  ${rows.map(r => `
+    <div class="invRow">
+      <div class="invTitle">${escapeHtml(r.item_name)}</div>
+
+      <div class="invMeta">
+        <span>Planned: <b>${r.planned_qty}</b></span>
+        <span>OUT: <b>${r.out}</b></span>
+      </div>
+
+      <div class="invGrid">
+        <div>
+          <label>Return</label>
+          <input type="number" inputmode="numeric"
+            min="0"
+            max="${r.outstanding}"
+            data-ret-item="${escapeAttr(r.item_id)}">
+        </div>
+
+        <div>
+          <label>Lost</label>
+          <input type="number" inputmode="numeric"
+            min="0"
+            max="${r.outstanding}"
+            data-lost-item="${escapeAttr(r.item_id)}">
+        </div>
+
+        <div>
+          <label>Damaged</label>
+          <input type="number" inputmode="numeric"
+            min="0"
+            max="${r.outstanding}"
+            data-dam-item="${escapeAttr(r.item_id)}">
+        </div>
+      </div>
+    </div>
+  `).join("")}
+</div>
+
+<button class="primary" id="btn_save_all" style="width:100%;margin-top:14px;">
+  Save Returns
+</button>
+
+  <div class="card" style="margin-top:12px;">
+    <h3 style="margin-top:0;">Lost / Damaged Summary</h3>
+    ${
+      rows.filter(x => x.lost > 0 || x.damaged > 0).length
+        ? `<ul style="margin:0;padding-left:18px;">
+            ${rows.filter(x => x.lost>0 || x.damaged>0).map(x => `
+              <li>
+                ${escapeHtml(x.item_name)} —
+                Lost: <b>${x.lost}</b>, Damaged: <b>${x.damaged}</b>
+              </li>
+            `).join("")}
+          </ul>`
+        : `<p class="dashSmall" style="margin:0;">No lost/damaged recorded for this order.</p>`
+    }
+  </div>
+`;
 
     // bind mini action buttons
-    box.querySelectorAll("button[data-inv-act]").forEach(btn => {
+   
+   /* box.querySelectorAll("button[data-inv-act]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const txn_type = btn.getAttribute("data-type");
         const item_id = btn.getAttribute("data-item");
@@ -4636,7 +4701,9 @@ if (type === "inventoryTxn") {
           setTimeout(unlock, 350);
         }
       });
-    });
+    }); */
+
+    
   }
 
   function actionMini(r, o, type, max){
@@ -4726,10 +4793,12 @@ if (type === "inventoryTxn") {
     w.document.close();
   });
 
+  /* 
   // Load Items
   document.getElementById("btn_inv_load")?.addEventListener("click", async () => {
     await loadOrderItemsUI();
   });
+  */
 
   // --- Admin approvals UI
   async function renderPendingBox(){
