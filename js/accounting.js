@@ -380,6 +380,21 @@ document.addEventListener("DOMContentLoaded", () => {
     loadSection("workers");
     return;
   }
+  // SALARY
+  if (action.includes("salary")) {
+    // ref examples could be:
+    // "Vipul Feb-2026"  OR  "Vipul"  OR  "Vipul → Paid" etc.
+    const workerName =
+      ref.split("→")[0].trim().split(/\s+/)[0].trim(); // safest: first word before arrow
+
+    sessionStorage.setItem("activity_jump", JSON.stringify({
+      type: "salary",
+      name: workerName
+    }));
+
+    loadSection("salary");
+    return;
+  }
 
   // UPAD
   if (action.includes("upad")) {
@@ -419,7 +434,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // fallback
-  loadSection("dashboard");
+ // fallback
+showDashboard();
+
 }
 
 
@@ -2197,6 +2214,11 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
     // invoice section ends here 
 
 
+
+
+
+    
+//Workers section starts here
     
     if (type === "workers") {
       if (!(role === "superadmin" || role === "owner")) {
@@ -2238,7 +2260,7 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
 
             ${(workers || []).length ? `
               ${(workers || []).map(w => `
-                <div style="padding:10px 0;border-top:1px solid #eee;">
+                <div class="wkRow" data-worker-row="${escapeAttr(String(w.worker || ""))}" style="padding:10px 0;border-top:1px solid #eee;">
                   <strong>${escapeHtml(w.worker)}</strong><br>
                   Salary: ₹${Number(w.monthly_salary || 0).toFixed(0)}<br>
                   Start: ${escapeHtml(w.start_date || "")}<br>
@@ -2257,6 +2279,41 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
         </div>
       `;
 
+
+      /* === STEP 5: Activity Jump Auto Highlight (Workers) === */
+(function applyActivityJump_Workers() {
+  const raw = sessionStorage.getItem("activity_jump");
+  if (!raw) return;
+
+  try {
+    const jump = JSON.parse(raw);
+    if (!jump || jump.type !== "worker" || !jump.name) return;
+
+    const target = String(jump.name).trim().toLowerCase();
+
+    const rows = Array.from(document.querySelectorAll(".wkRow"));
+    const el = rows.find(x =>
+      String(x.getAttribute("data-worker-row") || "").trim().toLowerCase() === target
+    );
+
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.outline = "2px solid #1fa971";
+      el.style.borderRadius = "8px";
+      el.style.background = "#e6f4ea";
+
+      setTimeout(() => {
+        el.style.outline = "";
+        el.style.borderRadius = "";
+        el.style.background = "";
+      }, 1600);
+    }
+
+    sessionStorage.removeItem("activity_jump");
+  } catch (e) {}
+})();
+
+
       document.getElementById("btn_wk_add").addEventListener("click", addWorker);
       document.getElementById("btn_wk_update").addEventListener("click", updateWorker);
 
@@ -2274,6 +2331,15 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
       return;
     }
 
+
+    // workers section ends here
+
+
+
+    
+
+    // holidays section here
+    
     if (type === "holidays") {
       content.innerHTML = `<div class="card"><h2>Holidays</h2><p>Loading…</p></div>`;
 
@@ -2526,6 +2592,36 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
               }).join("")}
             </table>
           `;
+          /* === STEP 5: Activity Jump Auto Highlight (Upad) === */
+(function applyActivityJump_Upad() {
+  const raw = sessionStorage.getItem("activity_jump");
+  if (!raw) return;
+
+  try {
+    const jump = JSON.parse(raw);
+    if (!jump || jump.type !== "upad" || !jump.name) return;
+
+    const target = String(jump.name).trim().toLowerCase();
+
+    // find first row containing worker name
+    const trs = listBox.querySelectorAll("tr");
+    for (const tr of trs) {
+      if (String(tr.textContent || "").toLowerCase().includes(target)) {
+        tr.scrollIntoView({ behavior: "smooth", block: "center" });
+        tr.style.outline = "2px solid #1fa971";
+        tr.style.borderRadius = "6px";
+        setTimeout(() => {
+          tr.style.outline = "";
+          tr.style.borderRadius = "";
+        }, 1500);
+        break;
+      }
+    }
+
+    sessionStorage.removeItem("activity_jump");
+  } catch (e) {}
+})();
+
 
           if (role === "superadmin") {
             listBox.querySelectorAll("button[data-upad-edit]").forEach(btn => {
@@ -2609,6 +2705,35 @@ const r = await api({
         upadSummaryEnabled = true;
         loadUpadSummary();
       }
+
+
+
+
+      /* Auto-load Upad summary if coming from Dashboard activity jump */
+(function autoLoadFromActivity_Upad() {
+  const raw = sessionStorage.getItem("activity_jump");
+  if (!raw) return;
+
+  try {
+    const jump = JSON.parse(raw);
+    if (!jump || jump.type !== "upad" || !jump.name) return;
+
+    // set filter worker to jumped name (if exists in dropdown)
+    const wSel = document.getElementById("upad_filter_worker");
+    if (wSel) {
+      const target = String(jump.name).trim().toLowerCase();
+      const opt = Array.from(wSel.options).find(o => String(o.value).trim().toLowerCase() === target);
+      if (opt) wSel.value = opt.value;
+    }
+
+    upadSummaryEnabled = true;
+    loadUpadSummary();
+  } catch (e) {}
+})();
+
+
+
+      
 
       loadBtn?.addEventListener("click", enableAndLoad);
 
@@ -3029,6 +3154,12 @@ if (type === "clients") {
 
 
     // ----- clients module loadsection ends here
+
+
+
+
+
+    
     // ----- inventory master starts here
      if (type === "inventory") {
   content.innerHTML = `<div class="card"><h2>Inventory</h2><p>Loading…</p></div>`;
@@ -3149,7 +3280,11 @@ if (type === "clients") {
           const rowId = it.rowIndex ?? "";
           const status = String(it.status || "ACTIVE").toUpperCase();
           return `
-            <tr style="border-top:1px solid #eee;">
+            <tr class="invRow"
+    data-inv-name="${escapeAttr(String(it.item_name || ""))}"
+    data-inv-id="${escapeAttr(String(it.item_id || ""))}"
+    style="border-top:1px solid #eee;">
+
               <td>
                 <b>${escapeHtml(it.item_name || "")}</b><br>
                 <span class="dashSmall">${escapeHtml(it.item_id || "")}</span>
@@ -3177,6 +3312,48 @@ if (type === "clients") {
       </table>
     `;
 
+
+
+/* === STEP 5: Activity Jump Auto Highlight (Inventory) === */
+(function applyActivityJump_Inventory() {
+  const raw = sessionStorage.getItem("activity_jump");
+  if (!raw) return;
+
+  try {
+    const jump = JSON.parse(raw);
+    if (!jump || jump.type !== "inventory" || !jump.name) return;
+
+    const target = String(jump.name).trim().toLowerCase();
+
+    // Try match by item name first
+    let el = Array.from(document.querySelectorAll(".invRow"))
+      .find(r => String(r.getAttribute("data-inv-name") || "").trim().toLowerCase() === target);
+
+    // Fallback: "contains" match (helps if ref is partial)
+    if (!el) {
+      el = Array.from(document.querySelectorAll(".invRow"))
+        .find(r => String(r.getAttribute("data-inv-name") || "").toLowerCase().includes(target));
+    }
+
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.outline = "2px solid #1fa971";
+      el.style.borderRadius = "8px";
+      el.style.background = "#e6f4ea";
+
+      setTimeout(() => {
+        el.style.outline = "";
+        el.style.borderRadius = "";
+        el.style.background = "";
+      }, 1600);
+    }
+
+    sessionStorage.removeItem("activity_jump");
+  } catch (e) {}
+})();
+
+
+    
     // Bind superadmin actions
     if (isSuper) {
       listBox.querySelectorAll("button[data-inv-edit]").forEach(btn => {
@@ -3337,6 +3514,11 @@ const r = await api({
 }
 
     // ----- inventory masters end here 
+
+
+
+
+       
 
   // ----- orders module starts here
 /* ==========================================================
@@ -4828,7 +5010,12 @@ if (type === "inventoryTxn") {
             const by = String(r.added_by || "");
 
             return `
-              <tr style="border-top:1px solid #eee;">
+              <tr class="expRow"
+    data-exp-type="${escapeAttr(String(cat || ""))}"
+    data-exp-desc="${escapeAttr(String(desc || ""))}"
+    data-exp-row="${escapeAttr(String(rowId || ""))}"
+    style="border-top:1px solid #eee;">
+
                 <td>${escapeHtml(date)}</td>
                 <td>${escapeHtml(cat)}</td>
                 <td>${escapeHtml(desc)}</td>
@@ -4922,24 +5109,47 @@ if (type === "inventoryTxn") {
 
 
 
-      (function applyActivityJump() {
+   /* === STEP 5: Activity Jump Auto Highlight (Expenses) === */
+(function applyActivityJump_Expenses() {
   const raw = sessionStorage.getItem("activity_jump");
   if (!raw) return;
 
-  const jump = JSON.parse(raw);
-  if (!jump?.name) return;
+  try {
+    const jump = JSON.parse(raw);
+    if (!jump || jump.type !== "expense" || !jump.name) return;
 
-  const rows = document.querySelectorAll("tr, .card, .row");
-  rows.forEach(el => {
-    if (el.textContent?.toLowerCase().includes(jump.name.toLowerCase())) {
+    const target = String(jump.name).trim().toLowerCase();
+
+    // Match by Type OR Description contains target
+    const rows = Array.from(document.querySelectorAll(".expRow"));
+    let el = rows.find(r =>
+      String(r.getAttribute("data-exp-type") || "").toLowerCase() === target
+    );
+
+    if (!el) {
+      el = rows.find(r =>
+        String(r.getAttribute("data-exp-desc") || "").toLowerCase().includes(target) ||
+        String(r.getAttribute("data-exp-type") || "").toLowerCase().includes(target)
+      );
+    }
+
+    if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       el.style.outline = "2px solid #1fa971";
-      setTimeout(() => el.style.outline = "", 1500);
+      el.style.borderRadius = "8px";
+      el.style.background = "#e6f4ea";
+      setTimeout(() => {
+        el.style.outline = "";
+        el.style.borderRadius = "";
+        el.style.background = "";
+      }, 1600);
     }
-  });
 
-  sessionStorage.removeItem("activity_jump");
+    // ✅ IMPORTANT: clear after highlight so it doesn't repeat
+    sessionStorage.removeItem("activity_jump");
+  } catch (e) {}
 })();
+
 
 
       
@@ -4954,18 +5164,19 @@ if (type === "inventoryTxn") {
   }
 
      /* Auto-load if coming from activity jump */
-  (function autoLoadFromActivity() {
-    const raw = sessionStorage.getItem("activity_jump");
-    if (!raw) return;
+ (function autoLoadFromActivity() {
+  const raw = sessionStorage.getItem("activity_jump");
+  if (!raw) return;
 
-    try {
-      const jump = JSON.parse(raw);
-      if (jump?.type === "expense") {
-        expSummaryEnabled = true;
-        loadExpenseSummary();
-      }
-    } catch (e) {}
-  })();
+  try {
+    const jump = JSON.parse(raw);
+    if (jump?.type === "expense") {
+      expSummaryEnabled = true;
+      loadExpenseSummary();
+    }
+  } catch (e) {}
+})();
+
 
 
   document.getElementById("btn_exp_load")?.addEventListener("click", enableAndLoad);
@@ -5105,6 +5316,12 @@ return;
     /* if something goes wrong this is culprit remove the start and dash */
 
 // ---- expenses updates end here 
+
+
+
+
+// salary section starts here
+    
     if (type === "salary") {
       content.innerHTML = `<div class="card"><h2>Salary</h2><p>Loading…</p></div>`;
 
@@ -5178,6 +5395,22 @@ return;
       if (payMonth && hasCurrent) payMonth.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || payMonth.value;
 
       document.getElementById("btn_sal_load").addEventListener("click", loadSalarySummary);
+      /* === STEP 5: Auto-load Salary summary if coming from dashboard activity === */
+(function autoLoadFromActivity_Salary() {
+  const raw = sessionStorage.getItem("activity_jump");
+  if (!raw) return;
+
+  try {
+    const jump = JSON.parse(raw);
+    if (jump?.type === "salary" || jump?.type === "worker_salary") {
+      // optional: if activity has month info later, we can set salMonth here
+      loadSalarySummary();
+    }
+  } catch (e) {}
+})();
+      
+//ends here
+      
       document.getElementById("btn_sal_pay").addEventListener("click", addSalaryPayment);
       // --- new export salary function
 
@@ -5251,6 +5484,12 @@ document.getElementById("btn_sal_export")?.addEventListener("click", () => {
       return;
     }
 
+
+    // salary section ends here
+
+
+    // user management starts here
+    
     if (type === "userMgmt") {
       if (role !== "superadmin") {
         content.innerHTML = `<div class="card">Unauthorized</div>`;
@@ -5568,7 +5807,8 @@ window.__lastSalaryMonth = month || "";
             );
 
             return `
-              <tr style="border-top:1px solid #eee;">
+              <tr class="salRow" data-sal-worker="${escapeAttr(String(r.worker || ""))}">
+
                 <td>${escapeHtml(r.worker)}</td>
                 <td align="right">₹${Number(r.monthly_salary || 0).toFixed(0)}</td>
                 <td align="right">₹${Number(r.prorated_salary || 0).toFixed(0)}</td>
@@ -5582,6 +5822,43 @@ window.__lastSalaryMonth = month || "";
           }).join("")}
         </table>
       `;
+
+/* === STEP 5: Activity Jump Auto Highlight (Salary) === */
+(function applyActivityJump_Salary() {
+  const raw = sessionStorage.getItem("activity_jump");
+  if (!raw) return;
+
+  try {
+    const jump = JSON.parse(raw);
+   if (!jump || !jump.name) return;
+if (jump.type !== "salary" && jump.type !== "worker_salary") return;
+
+
+    const target = String(jump.name).trim().toLowerCase();
+
+    const rowEls = Array.from(document.querySelectorAll(".salRow"));
+const el = rowEls.find(r =>
+
+      String(r.getAttribute("data-sal-worker") || "").toLowerCase() === target
+    );
+
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.outline = "2px solid #1fa971";
+      el.style.borderRadius = "8px";
+      el.style.background = "#e6f4ea";
+      setTimeout(() => {
+        el.style.outline = "";
+        el.style.borderRadius = "";
+        el.style.background = "";
+      }, 1600);
+    }
+
+    sessionStorage.removeItem("activity_jump");
+  } catch (e) {}
+})();
+
+      
     } finally {
       setTimeout(unlock, 400);
     }
