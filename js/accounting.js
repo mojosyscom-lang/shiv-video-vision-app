@@ -1033,6 +1033,36 @@ if (type === "invoice") {
   function money(n){ return Number(n||0).toFixed(2); }
   function round2(n){ return Math.round((Number(n||0)+Number.EPSILON)*100)/100; }
 
+  // helpers starts here
+const INVOICE_BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/print-bg.png";
+
+function parseISODate(d){
+  const s = String(d || "").trim();
+  if (!s) return null;
+  // expects YYYY-MM-DD
+  const dt = new Date(s + "T00:00:00");
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+function diffDaysInclusive(startISO, endISO){
+  const a = parseISODate(startISO);
+  const b = parseISODate(endISO);
+  if (!a || !b) return 0;
+  const ms = b.getTime() - a.getTime();
+  const days = Math.floor(ms / 86400000) + 1; // inclusive
+  return days > 0 ? days : 0;
+}
+
+// ✅ setup = 0.5 + (start..end full days)
+function calcEventDays(setupISO, startISO, endISO){
+  const full = diffDaysInclusive(startISO, endISO);
+  const half = String(setupISO || "").trim() ? 0.5 : 0;
+  const total = half + full;
+  return total > 0 ? total : 0;
+}
+
+  // helpers ends here
+
   // Build quick lookup for clients
   const clientById = {};
   activeClients.forEach(c => {
@@ -1161,10 +1191,12 @@ if (type === "invoice") {
 
   function recalc(){
     currentItems = currentItems.map(it => {
-      const qty = Number(it.qty||0);
-      const rate = Number(it.rate||0);
-      return { ...it, qty, rate, amount: round2(qty*rate) };
-    });
+  const qty = Number(it.qty||0);
+  const rate = Number(it.rate||0);
+  const days = Number(it.days ?? 1);
+  return { ...it, qty, rate, days, amount: round2(qty * rate * days) };
+});
+
 
     const gstType = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST").toUpperCase();
     const gstRate = Number(document.getElementById("inv_gst_rate")?.value || 0);
@@ -1239,8 +1271,10 @@ if (type === "invoice") {
             <th align="right">HSN/SAC</th>
             <th align="right">Unit</th>
             <th align="right">Qty</th>
-            <th align="right">Rate (₹)</th>
-            <th align="right">Amount</th>
+<th align="right">Days</th>
+<th align="right">Rate (₹)</th>
+<th align="right">Amount</th>
+
             <th></th>
           </tr>
           ${currentItems.map((it, idx)=>`
@@ -1252,11 +1286,23 @@ if (type === "invoice") {
               <td align="right">${escapeHtml(it.hsn_sac || "")}</td>
               <td align="right">${escapeHtml(it.unit || "")}</td>
               <td align="right">
-                <input data-qty="${idx}" type="number" inputmode="numeric" style="width:90px;" value="${escapeAttr(String(it.qty||0))}">
-              </td>
-              <td align="right">
-                <input data-rate="${idx}" type="number" inputmode="numeric" style="width:110px;" value="${escapeAttr(String(it.rate||0))}">
-              </td>
+  <input data-qty="${idx}" type="number" inputmode="numeric" style="width:90px;" value="${escapeAttr(String(it.qty||0))}">
+</td>
+
+<td align="right">
+  <input data-days="${idx}"
+         type="number"
+         inputmode="decimal"
+         step="0.5"
+         min="0"
+         style="width:80px;"
+         value="${escapeAttr(String(it.days ?? 1))}">
+</td>
+
+<td align="right">
+  <input data-rate="${idx}" type="number" inputmode="numeric" style="width:110px;" value="${escapeAttr(String(it.rate||0))}">
+</td>
+
               <td align="right"><span data-amt>${money(it.amount||0)}</span></td>
               <td align="right">
                 ${canEdit ? `<button class="userToggleBtn" data-del="${idx}">✖</button>` : ``}
@@ -1274,6 +1320,16 @@ if (type === "invoice") {
         recalc();
       });
     });
+
+    box.querySelectorAll("input[data-days]").forEach(inp=>{
+  inp.addEventListener("input", ()=>{
+    const i = Number(inp.getAttribute("data-days"));
+    currentItems[i].days = Number(inp.value || 0);
+    currentItems[i].manual_days = true; // ✅ user edited
+    recalc();
+  });
+});
+
     box.querySelectorAll("input[data-rate]").forEach(inp=>{
       inp.addEventListener("input", ()=>{
         const i = Number(inp.getAttribute("data-rate"));
@@ -1310,17 +1366,25 @@ if (type === "invoice") {
     });
 
 
-    currentItems = planned
-      .filter(p => String(p.status||"ACTIVE").toUpperCase() === "ACTIVE")
-      .map(p => ({
-        item_id: String(p.item_id||""),
-        item_name: String(p.item_name||p.item_id||""),
-        qty: Number(p.planned_qty||0),
-        unit: unitMap[String(p.item_id||"")] || "",
-        hsn_sac: hsnMap[String(p.item_id||"")] || "",
-        rate: 0,
-        amount: 0
-      }));
+    const dSetup = document.getElementById("inv_setup")?.value || "";
+const dStart = document.getElementById("inv_start")?.value || "";
+const dEnd   = document.getElementById("inv_end")?.value || "";
+const defDays = calcEventDays(dSetup, dStart, dEnd) || 1;
+
+currentItems = planned
+  .filter(p => String(p.status||"ACTIVE").toUpperCase() === "ACTIVE")
+  .map(p => ({
+    item_id: String(p.item_id||""),
+    item_name: String(p.item_name||p.item_id||""),
+    qty: Number(p.planned_qty||0),
+    unit: unitMap[String(p.item_id||"")] || "",
+    hsn_sac: hsnMap[String(p.item_id||"")] || "",
+    days: defDays,
+    manual_days: false,
+    rate: 0,
+    amount: 0
+  }));
+
 
     renderItemsTable();
   }
@@ -1584,6 +1648,37 @@ if (type === "invoice") {
     });
 
     if (order_id) await loadPlannedItemsFromOrder(order_id);
+
+
+// apply default days (not manual)
+/* if errors in items check here culprit
+const dSetup = document.getElementById("inv_setup")?.value || "";
+const dStart = document.getElementById("inv_start")?.value || "";
+const dEnd   = document.getElementById("inv_end")?.value || "";
+const defDays = calcEventDays(dSetup, dStart, dEnd) || 1;
+
+currentItems = currentItems.map(p => ({
+  item_id: String(p.item_id||""),
+  item_name: String(p.item_name||p.item_id||""),
+  qty: Number(p.planned_qty||0),
+  unit: unitMap[String(p.item_id||"")] || "",
+  hsn_sac: hsnMap[String(p.item_id||"")] || "",
+  days: defDays,
+  manual_days: false,
+  rate: 0,
+  amount: 0
+}));
+*/
+// apply default days (not manual)
+currentItems = currentItems.map(it => ({
+  ...it,
+  days: it.manual_days ? Number(it.days ?? defDays) : defDays,
+  manual_days: it.manual_days || false
+}));
+renderItemsTable();
+
+
+    
   });
 
   // GST change => rate from sheet + recalc
@@ -1623,12 +1718,48 @@ document.addEventListener("click", (e)=>{
     let rate = Number(document.getElementById("inv_new_rate")?.value || 0);
     if (!(qty > 0)) return alert("Qty must be > 0");
 
-    currentItems.push({ item_id, item_name, hsn_sac, qty, unit, rate, amount: round2(qty*rate) });
-    renderItemsTable();
+    const dSetup = document.getElementById("inv_setup")?.value || "";
+const dStart = document.getElementById("inv_start")?.value || "";
+const dEnd   = document.getElementById("inv_end")?.value || "";
+const defDays = calcEventDays(dSetup, dStart, dEnd) || 1;
+
+currentItems.push({
+  item_id, item_name, hsn_sac, qty, unit,
+  days: defDays,
+  manual_days: false,
+  rate,
+  amount: 0
+});
+renderItemsTable();
+
     return;
   }
 });
 
+
+
+
+  // check this if errors found starts here
+
+  function refreshDefaultDaysIfNeeded(){
+  const dSetup = document.getElementById("inv_setup")?.value || "";
+  const dStart = document.getElementById("inv_start")?.value || "";
+  const dEnd   = document.getElementById("inv_end")?.value || "";
+  const defDays = calcEventDays(dSetup, dStart, dEnd) || 1;
+
+  currentItems = currentItems.map(it => ({
+    ...it,
+    days: it.manual_days ? Number(it.days ?? defDays) : defDays
+  }));
+  renderItemsTable();
+}
+
+document.getElementById("inv_setup")?.addEventListener("change", refreshDefaultDaysIfNeeded);
+document.getElementById("inv_start")?.addEventListener("change", refreshDefaultDaysIfNeeded);
+document.getElementById("inv_end")?.addEventListener("change", refreshDefaultDaysIfNeeded);
+
+
+  // check this is errors end here
   async function saveDoc(){
     if (!canEdit) return;
 
@@ -1676,13 +1807,16 @@ document.addEventListener("click", (e)=>{
         end_date,
         gst_type,
         gst_rate,
-        items: currentItems.map(it => ({
-          item_id: it.item_id,
-          item_name: it.item_name,
-          qty: Number(it.qty||0),
-          unit: it.unit || "",
-          rate: Number(it.rate||0)
-        }))
+       items: currentItems.map(it => ({
+  item_id: it.item_id,
+  item_name: it.item_name,
+  qty: Number(it.qty||0),
+  unit: it.unit || "",
+  hsn_sac: it.hsn_sac || "",
+  days: Number(it.days ?? 1),
+  rate: Number(it.rate||0)
+}))
+
       };
 
       const r = editingInvoiceId
@@ -1725,7 +1859,7 @@ loadSection("invoice");
     const terms = company.terms || "Terms: 1. Please pay within 7 days. 2. Goods once rented are the responsibility of the client.";
 
     return `
-      <div class="printWrap">
+      
         <div class="hdr">
           <div class="hdrLeft">
             <div class="brand">${escapeHtml(company.company_name || "")}</div>
@@ -1766,6 +1900,7 @@ loadSection("invoice");
               <th style="width:5%;">#</th>
               <th>Description</th>
               <th style="width:12%;text-align:right;">Qty</th>
+              <th style="width:10%;text-align:right;">Days</th>
               <th style="width:16%;text-align:right;">Rate</th>
               <th style="width:16%;text-align:right;">Amount</th>
             </tr>
@@ -1776,6 +1911,7 @@ loadSection("invoice");
                 <td>${i+1}</td>
                 <td>${escapeHtml(it.item_name||"")} ${it.unit ? `<span class="u">(${escapeHtml(it.unit)})</span>` : ""}</td>
                 <td style="text-align:right;">${Number(it.qty||0)}</td>
+                <td style="text-align:right;">${Number(it.days ?? 1)}</td>
                 <td style="text-align:right;">₹${money(it.rate||0)}</td>
                 <td style="text-align:right;">₹${money(it.amount||0)}</td>
               </tr>
@@ -1811,7 +1947,7 @@ loadSection("invoice");
         <div class="footerBar">
           Generated on ${escapeHtml(new Date().toLocaleString())}
         </div>
-      </div>
+      
     `;
   }
 
@@ -1844,40 +1980,67 @@ loadSection("invoice");
     if (!printArea) return alert("Print area missing");
 
     const css = `
-      <style>
-        body.printing { background:#fff !important; }
-        .printWrap { font-family: Inter, system-ui, -apple-system, Arial, sans-serif; color:#111; padding:18px; }
-        .hdr { display:flex; justify-content:space-between; gap:14px; border-bottom:2px solid #111; padding-bottom:12px; }
-        .brand { font-size:22px; font-weight:800; letter-spacing:.3px; }
-        .sub { font-size:12px; color:#444; margin-top:2px; }
-        .small { font-size:12px; color:#444; margin-top:2px; }
-        .hdrRight { text-align:right; }
-        .docTitle { font-size:18px; font-weight:800; }
-        .meta { font-size:12px; color:#333; margin-top:2px; }
-        .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
-        .box { border:1px solid #eee; border-radius:10px; padding:10px; }
-        .boxT { font-size:12px; font-weight:800; color:#333; border-bottom:1px solid #eee; padding-bottom:6px; margin-bottom:6px; text-transform:uppercase; }
-        .t { width:100%; border-collapse:collapse; margin-top:12px; }
-        .t th { background:#f8fafc; font-size:12px; text-transform:uppercase; border-bottom:2px solid #eee; padding:10px 8px; text-align:left; }
-        .t td { border-bottom:1px solid #eee; padding:10px 8px; font-size:13px; }
-        .u { color:#777; font-size:12px; }
-        .totals { display:flex; justify-content:flex-end; margin-top:12px; }
-        .totBox { width:320px; border:1px solid #eee; border-radius:10px; padding:10px; }
-        .r { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
-        .gt { border-top:2px solid #111; margin-top:6px; padding-top:8px; font-size:16px; }
-        .foot { margin-top:14px; border-top:1px solid #eee; padding-top:10px; font-size:12px; color:#444; }
-        .sig { margin-top:16px; text-align:right; }
-        .line { margin-top:36px; border-top:1px solid #111; width:220px; display:inline-block; }
-        .footerBar { margin-top:10px; font-size:11px; color:#777; text-align:center; }
-        @page { margin: 10mm; }
-        @media print {
-          .no-print { display:none !important; }
-          body { margin:0; }
-        }
-      </style>
-    `;
+<style>
+  @page { size: A4; margin: 0; }
 
-    printArea.innerHTML = css + buildPrintHtml(header, currentItems);
+  html, body { height:100%; }
+  body.printing { margin:0; background:#fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .printBg{
+    position: fixed;
+    inset: 0;
+    width: 210mm;
+    height: 297mm;
+    object-fit: cover;
+    z-index: -1;
+  }
+
+  .page{
+    width: 210mm;
+    min-height: 297mm;
+    box-sizing: border-box;
+    padding: 18mm 14mm;
+    font-family: Inter, system-ui, -apple-system, Arial, sans-serif;
+    color:#111;
+  }
+
+  .hdr { display:flex; justify-content:space-between; gap:14px; border-bottom:2px solid #111; padding-bottom:12px; }
+  .brand { font-size:22px; font-weight:800; letter-spacing:.3px; }
+  .sub { font-size:12px; color:#444; margin-top:2px; }
+  .small { font-size:12px; color:#444; margin-top:2px; }
+  .hdrRight { text-align:right; }
+  .docTitle { font-size:18px; font-weight:800; }
+  .meta { font-size:12px; color:#333; margin-top:2px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+  .box { border:1px solid #eee; border-radius:10px; padding:10px; background: rgba(255,255,255,0.85); }
+  .boxT { font-size:12px; font-weight:800; color:#333; border-bottom:1px solid #eee; padding-bottom:6px; margin-bottom:6px; text-transform:uppercase; }
+  .t { width:100%; border-collapse:collapse; margin-top:12px; background: rgba(255,255,255,0.85); }
+  .t th { background:rgba(248,250,252,0.95); font-size:12px; text-transform:uppercase; border-bottom:2px solid #eee; padding:10px 8px; text-align:left; }
+  .t td { border-bottom:1px solid #eee; padding:10px 8px; font-size:13px; }
+  .u { color:#777; font-size:12px; }
+  .totals { display:flex; justify-content:flex-end; margin-top:12px; }
+  .totBox { width:320px; border:1px solid #eee; border-radius:10px; padding:10px; background: rgba(255,255,255,0.85); }
+  .r { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
+  .gt { border-top:2px solid #111; margin-top:6px; padding-top:8px; font-size:16px; }
+  .foot { margin-top:14px; border-top:1px solid #eee; padding-top:10px; font-size:12px; color:#444; background: rgba(255,255,255,0.85); border-radius:10px; padding:10px; }
+  .sig { margin-top:16px; text-align:right; }
+  .line { margin-top:36px; border-top:1px solid #111; width:220px; display:inline-block; }
+  .footerBar { margin-top:10px; font-size:11px; color:#777; text-align:center; }
+
+  @media print {
+    .no-print { display:none !important; }
+  }
+</style>
+`;
+
+
+    printArea.innerHTML =
+  css +
+  `<img class="printBg" src="${INVOICE_BG_URL}" alt="">` +
+  `<div class="page">` +
+  buildPrintHtml(header, currentItems) +
+  `</div>`;
+
 
     // show only print area
     const old = content.innerHTML;
@@ -2092,14 +2255,20 @@ listBox.querySelectorAll("[data-inv-wa]").forEach(btn=>{
         setDocTypeUI(String(h.doc_type||"INVOICE"));
 
         currentItems = (full.items || []).map(it=>({
-          item_id: it.item_id || "",
-          item_name: it.item_name || "",
-          qty: Number(it.qty||0),
-          unit: it.unit || "",
-          rate: Number(it.rate||0),
-          amount: round2(Number(it.qty||0)*Number(it.rate||0))
-        }));
+  item_id: it.item_id || "",
+  item_name: it.item_name || "",
+  qty: Number(it.qty||0),
+  unit: it.unit || "",
+  hsn_sac: it.hsn_sac || "",
+  days: Number(it.days ?? 1),
+  manual_days: true, // since it came from saved invoice
+  rate: Number(it.rate||0),
+  amount: 0
+}));
+/*
+renderItemsTable(); // recalc will compute amount
 
+*/
 /*check for this if smthing goes wrong */
         
 applyDocTypeRules();
