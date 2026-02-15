@@ -561,3 +561,50 @@ table tr:last-child td{
     max-width: 420px;
   }
 }
+
+/*css for inventoryTxn starts here*/
+.invTable {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.invRow {
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.invTitle {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.invMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.invInput label,
+.invGrid label {
+  font-size: 12px;
+  color: #666;
+}
+
+.invInput input,
+.invGrid input {
+  width: 100%;
+  padding: 6px;
+  margin-top: 4px;
+}
+
+.invGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+/*css for inventoryTxn ends here*/
