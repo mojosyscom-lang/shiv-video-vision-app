@@ -4736,7 +4736,7 @@ box.innerHTML = `
   // Print Planned List (staff allowed)
   document.getElementById("btn_inv_print")?.addEventListener("click", (e) => {
   e.preventDefault();
-
+const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/print-bg.png";
   const o = selectedOrderObj();
   if (!o) return alert("Select an order first.");
 
@@ -4753,7 +4753,7 @@ box.innerHTML = `
     const plannedRes = await api({ action: "listOrderItems", order_id: o.order_id });
     const planned = Array.isArray(plannedRes) ? plannedRes : [];
     const rows = planned.filter(p => String(p.status || "ACTIVE").toUpperCase() === "ACTIVE");
-    const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/print-bg.png"; 
+     
 
     if (!rows.length) {
       w.document.body.innerHTML = `<p>No planned items found.</p>`;
