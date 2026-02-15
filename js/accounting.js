@@ -4734,64 +4734,103 @@ box.innerHTML = `
   }
 
   // Print Planned List (staff allowed)
-  document.getElementById("btn_inv_print")?.addEventListener("click", async () => {
-    const o = selectedOrderObj();
-    if (!o) return alert("Select an order first.");
+  document.getElementById("btn_inv_print")?.addEventListener("click", (e) => {
+  e.preventDefault();
 
+  const o = selectedOrderObj();
+  if (!o) return alert("Select an order first.");
+
+  // ✅ IMPORTANT (iPhone): open window immediately on click (before any await)
+  const w = window.open("", "_blank");
+  if (!w) return alert("Popup blocked. Please allow popups in Safari.");
+
+  // show instant loading
+  w.document.open();
+  w.document.write(`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:Arial;padding:16px;">Loading…</body></html>`);
+  w.document.close();
+
+  (async () => {
     const plannedRes = await api({ action: "listOrderItems", order_id: o.order_id });
     const planned = Array.isArray(plannedRes) ? plannedRes : [];
-    const rows = planned.filter(p => String(p.status||"ACTIVE").toUpperCase() === "ACTIVE");
+    const rows = planned.filter(p => String(p.status || "ACTIVE").toUpperCase() === "ACTIVE");
 
-    if (!rows.length) return alert("No planned items found.");
+    if (!rows.length) {
+      w.document.body.innerHTML = `<p>No planned items found.</p>`;
+      return;
+    }
 
+    // ✅ Better looking print design (you can edit styles here)
     const html = `
       <html>
         <head>
           <meta name="viewport" content="width=device-width,initial-scale=1">
-          <title>Planned Items - ${o.order_id}</title>
+          <title>Planned Items - ${escapeHtml(o.order_id)}</title>
           <style>
-            body{font-family:Arial, sans-serif; padding:16px;}
-            h2{margin:0 0 6px;}
-            .meta{font-size:12px;color:#444;margin-bottom:12px;line-height:1.4;}
-            table{width:100%;border-collapse:collapse;}
-            th,td{border:1px solid #ddd;padding:8px;font-size:12px;}
-            th{text-align:left;background:#f5f5f5;}
+            body{font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; padding:16px; color:#111;}
+            .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+            h2{margin:0;font-size:18px;}
+            .meta{margin-top:8px;font-size:12px;line-height:1.4;color:#333;}
+            .pill{display:inline-block;padding:4px 8px;border:1px solid #ddd;border-radius:999px;font-size:12px;}
+            table{width:100%;border-collapse:collapse;margin-top:14px;}
+            th,td{border:1px solid #ddd;padding:10px;font-size:12px;}
+            th{background:#f5f5f5;text-align:left;}
+            td.qty, th.qty{text-align:right; width:90px;}
+            .footer{margin-top:14px;font-size:11px;color:#666;}
+            @media print{
+              body{padding:0;}
+              .noPrint{display:none;}
+            }
           </style>
         </head>
         <body>
-          <h2>Planned Item List</h2>
-          <div class="meta">
-            <b>Order:</b> ${o.order_id}<br>
-            <b>Client:</b> ${escapeHtml(o.client_name)} • ${escapeHtml(o.client_phone)}<br>
-            <b>Venue:</b> ${escapeHtml(o.venue)}<br>
-            <b>Dates:</b> Setup ${prettyISODate(o.setup_date)} • ${prettyISODate(o.start_date)} → ${prettyISODate(o.end_date)}
+          <div class="top">
+            <div>
+              <h2>Planned Item List</h2>
+              <div class="meta">
+                <div><b>Order:</b> ${escapeHtml(o.order_id)}</div>
+                <div><b>Client:</b> ${escapeHtml(o.client_name)} • ${escapeHtml(o.client_phone)}</div>
+                <div><b>Venue:</b> ${escapeHtml(o.venue)}</div>
+                <div><b>Dates:</b> Setup ${escapeHtml(prettyISODate(o.setup_date))} • ${escapeHtml(prettyISODate(o.start_date))} → ${escapeHtml(prettyISODate(o.end_date))}</div>
+              </div>
+            </div>
+            <div class="pill">Total Items: <b>${rows.length}</b></div>
           </div>
 
           <table>
             <tr>
+              <th>#</th>
               <th>Item</th>
-              <th style="text-align:right;">Planned Qty</th>
+              <th class="qty">Planned Qty</th>
             </tr>
-            ${rows.map(p => `
+            ${rows.map((p, i) => `
               <tr>
+                <td>${i + 1}</td>
                 <td>${escapeHtml(p.item_name || p.item_id)}</td>
-                <td style="text-align:right;">${Number(p.planned_qty||0)}</td>
+                <td class="qty">${Number(p.planned_qty || 0)}</td>
               </tr>
             `).join("")}
           </table>
 
+          <div class="footer noPrint">
+            If print dialog doesn’t open on iPhone: use Share → Print.
+          </div>
+
           <script>
-            window.onload = () => window.print();
+            // iOS is picky. Delay helps.
+            setTimeout(() => {
+              try { window.print(); } catch(e) {}
+            }, 300);
           </script>
         </body>
       </html>
     `;
 
-    const w = window.open("", "_blank");
     w.document.open();
     w.document.write(html);
     w.document.close();
-  });
+  })();
+});
+
 
   /* 
   // Load Items
