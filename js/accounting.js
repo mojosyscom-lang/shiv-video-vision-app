@@ -288,8 +288,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!rows.length) {
         box.innerHTML = `<div class="dashSmall">No activity found.</div>`;
       } else {
-        box.innerHTML = rows.map(r => `
-          <div class="dashActRow">
+        box.innerHTML = rows.map((r, i) => `
+  <div class="dashActRow" data-act-index="${i}" style="cursor:pointer;">
             <div class="dashActMain">
               <div><b>${escapeHtml(r.action || "")}</b> — ${escapeHtml(r.ref || "")}</div>
               <div class="dashSmall">By ${escapeHtml(r.user || "")}</div>
@@ -297,7 +297,16 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="dashActTime">${escapeHtml(prettyISODate(r.time || ""))}</div>
           </div>
         `).join("");
-      }
+      
+     // starts here check here for syntax error   
+        box.querySelectorAll(".dashActRow").forEach((el, idx) => {
+  el.addEventListener("click", () => {
+    const row = rows[idx];
+    showActivityModal(row);
+  });
+});
+ // ends here       
+}
     }
   }
 
@@ -314,6 +323,111 @@ document.addEventListener("DOMContentLoaded", () => {
     return Number.isFinite(n) && n > 0 ? n : null;
   }
 
+
+  
+// new function
+
+  function showActivityModal(row) {
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.4)";
+  overlay.style.zIndex = "9999";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+
+  overlay.innerHTML = `
+    <div style="background:#fff; width:90%; max-width:420px; padding:16px; border-radius:10px;">
+      <h3 style="margin-top:0;">Activity Details</h3>
+      <div style="font-size:14px; line-height:1.5;">
+        <div><b>Action:</b> ${escapeHtml(row.action || "")}</div>
+        <div><b>Reference:</b> ${escapeHtml(row.ref || "")}</div>
+        <div><b>User:</b> ${escapeHtml(row.user || "")}</div>
+        <div><b>Date:</b> ${escapeHtml(prettyISODate(row.time || ""))}</div>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:10px;">
+        <button id="act_open_btn" class="primary" style="flex:1;">Open Related</button>
+        <button id="act_close_btn" class="secondary" style="flex:1;">Close</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  document.getElementById("act_close_btn").onclick = () => overlay.remove();
+
+  document.getElementById("act_open_btn").onclick = () => {
+    overlay.remove();
+    openRelatedFromActivity(row);
+  };
+}
+
+
+
+
+  
+  function openRelatedFromActivity(row) {
+  const action = String(row.action || "").toLowerCase();
+  const ref = String(row.ref || "").trim();
+
+  // WORKER STATUS
+  if (action.includes("worker")) {
+    sessionStorage.setItem("activity_jump", JSON.stringify({
+      type: "worker",
+      name: ref.split("→")[0].trim()
+    }));
+    loadSection("workers");
+    return;
+  }
+
+  // UPAD
+  if (action.includes("upad")) {
+    const name = ref.split(" ")[0].trim();
+    sessionStorage.setItem("activity_jump", JSON.stringify({
+      type: "upad",
+      name
+    }));
+    loadSection("upad");
+    return;
+  }
+
+  // EXPENSE
+  if (action.includes("expense")) {
+    sessionStorage.setItem("activity_jump", JSON.stringify({
+      type: "expense",
+      name: ref
+    }));
+    loadSection("expenses");
+    return;
+  }
+
+  // INVENTORY
+  if (action.includes("inventory")) {
+    sessionStorage.setItem("activity_jump", JSON.stringify({
+      type: "inventory",
+      name: ref.split("(")[0].trim()
+    }));
+    loadSection("inventory");
+    return;
+  }
+
+  // PASSWORD
+  if (action.includes("password")) {
+    loadSection("settings");
+    return;
+  }
+
+  // fallback
+  loadSection("dashboard");
+}
+
+
+  
+/* Dashboard Ends Here */
+
+
+  
   async function loadSection(type) {
     /* if (type === "invoice") {
       location.href = "invoice.html";
@@ -4806,6 +4920,29 @@ if (type === "inventoryTxn") {
         });
       }
 
+
+
+      (function applyActivityJump() {
+  const raw = sessionStorage.getItem("activity_jump");
+  if (!raw) return;
+
+  const jump = JSON.parse(raw);
+  if (!jump?.name) return;
+
+  const rows = document.querySelectorAll("tr, .card, .row");
+  rows.forEach(el => {
+    if (el.textContent?.toLowerCase().includes(jump.name.toLowerCase())) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.outline = "2px solid #1fa971";
+      setTimeout(() => el.style.outline = "", 1500);
+    }
+  });
+
+  sessionStorage.removeItem("activity_jump");
+})();
+
+
+      
     } finally {
       setTimeout(unlock, 350);
     }
@@ -4815,6 +4952,21 @@ if (type === "inventoryTxn") {
     expSummaryEnabled = true;
     loadExpenseSummary();
   }
+
+     /* Auto-load if coming from activity jump */
+  (function autoLoadFromActivity() {
+    const raw = sessionStorage.getItem("activity_jump");
+    if (!raw) return;
+
+    try {
+      const jump = JSON.parse(raw);
+      if (jump?.type === "expense") {
+        expSummaryEnabled = true;
+        loadExpenseSummary();
+      }
+    } catch (e) {}
+  })();
+
 
   document.getElementById("btn_exp_load")?.addEventListener("click", enableAndLoad);
 
