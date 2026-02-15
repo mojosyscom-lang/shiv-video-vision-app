@@ -1652,10 +1652,7 @@ currentItems = planned
 
 // apply default days (not manual)
 /* if errors in items check here culprit
-const dSetup = document.getElementById("inv_setup")?.value || "";
-const dStart = document.getElementById("inv_start")?.value || "";
-const dEnd   = document.getElementById("inv_end")?.value || "";
-const defDays = calcEventDays(dSetup, dStart, dEnd) || 1;
+
 
 currentItems = currentItems.map(p => ({
   item_id: String(p.item_id||""),
@@ -1670,6 +1667,10 @@ currentItems = currentItems.map(p => ({
 }));
 */
 // apply default days (not manual)
+   const dSetup = document.getElementById("inv_setup")?.value || "";
+const dStart = document.getElementById("inv_start")?.value || "";
+const dEnd   = document.getElementById("inv_end")?.value || "";
+const defDays = calcEventDays(dSetup, dStart, dEnd) || 1;
 currentItems = currentItems.map(it => ({
   ...it,
   days: it.manual_days ? Number(it.days ?? defDays) : defDays,
