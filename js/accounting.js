@@ -1985,49 +1985,40 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
           <div class="footGrid">
 
             <div class="footLeft">
-              <div><b>Amount in Words:</b> ${escapeHtml(header.words||"")}</div>
-              <div style="margin-top:8px;"><b>Terms:</b> ${escapeHtml(terms)}</div>
+  <div><b>Amount in Words:</b> ${escapeHtml(header.words||"")}</div>
+  <div style="margin-top:8px;"><b>Terms:</b> ${escapeHtml(terms)}</div>
 
-              ${
-                String(header.doc_type || "").toUpperCase() === "QUOTATION"
-                  ? ``
-                  : `
-                    <div class="bankBox" style="margin-top:10px;">
-                      <div class="bankTitle">${escapeHtml(BANK_DETAILS.title)}</div>
-                      <div>${escapeHtml(BANK_DETAILS.bank)}</div>
-                      <div>${escapeHtml(BANK_DETAILS.branch)}</div>
-                      <div><b>Name:</b> ${escapeHtml(BANK_DETAILS.name)}</div>
-                      <div><b>A/c. No:</b> ${escapeHtml(BANK_DETAILS.ac)}</div>
-                      <div><b>IFSC:</b> ${escapeHtml(BANK_DETAILS.ifsc)}</div>
-                    </div>
-                  `
-              }
-            </div>
+  ${
+    String(header.doc_type || "").toUpperCase() === "QUOTATION"
+      ? ``
+      : `
+        <div class="payRow" style="margin-top:10px;">
+          <div class="qrMini">
+            <div class="qrTitle">Scan to Pay</div>
+            <img class="qrImg" src="${BANK_QR_URL}" alt="QR">
+          </div>
+
+          <div class="bankMini">
+            <div class="bankTitle">${escapeHtml(BANK_DETAILS.title)}</div>
+            <div>${escapeHtml(BANK_DETAILS.bank)}</div>
+            <div>${escapeHtml(BANK_DETAILS.branch)}</div>
+            <div><b>Name:</b> ${escapeHtml(BANK_DETAILS.name)}</div>
+            <div><b>A/c. No:</b> ${escapeHtml(BANK_DETAILS.ac)}</div>
+            <div><b>IFSC:</b> ${escapeHtml(BANK_DETAILS.ifsc)}</div>
+          </div>
+        </div>
+      `
+  }
+</div>
 
             <div class="footRight">
-              ${
-                String(header.doc_type || "").toUpperCase() === "QUOTATION"
-                  ? `
-                    <div class="sig">
-                      <div>For ${escapeHtml(company.company_name||"")}</div>
-                      <div class="line"></div>
-                      <div>Authorized Signatory</div>
-                    </div>
-                  `
-                  : `
-                    <div class="qrBox">
-                      <div class="qrTitle">Scan to Pay</div>
-                      <img class="qrImg" src="${BANK_QR_URL}" alt="QR">
-                    </div>
+  <div class="sig">
+    <div>For ${escapeHtml(company.company_name||"")}</div>
+    <div class="line"></div>
+    <div>Authorized Signatory</div>
+  </div>
+</div>
 
-                    <div class="sig" style="margin-top:10px;">
-                      <div>For ${escapeHtml(company.company_name||"")}</div>
-                      <div class="line"></div>
-                      <div>Authorized Signatory</div>
-                    </div>
-                  `
-              }
-            </div>
 
           </div>
         </div>
@@ -2118,7 +2109,7 @@ const header = {
   .totBox { width:320px; border:1px solid #eee; border-radius:10px; padding:10px; background: rgba(255,255,255,0.85); }
   .r { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
   .gt { border-top:2px solid #111; margin-top:6px; padding-top:8px; font-size:16px; }
-  .foot { margin-top:14px; border-top:1px solid #eee; padding-top:10px; font-size:12px; color:#444; background: rgba(255,255,255,0.85); border-radius:10px; padding:10px; }
+  .foot { margin-top:14px; border-top:1px solid #eee; padding-top:8px; font-size:12px; color:#444; background: rgba(255,255,255,0.85); border-radius:10px; padding:10px; }
   .footGrid{
   display:grid;
   grid-template-columns: 1.4fr 0.6fr;
@@ -2126,21 +2117,40 @@ const header = {
   align-items:start;
 }
 
-.bankBox{
+.payRow{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+}
+
+.qrMini{
   border:1px solid #eee;
   border-radius:10px;
-  padding:10px;
+  padding:8px;
+  background: rgba(255,255,255,0.9);
+  text-align:center;
+  flex:0 0 auto;
+}
+
+.bankMini{
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:8px 10px;
   background: rgba(255,255,255,0.9);
   font-size:12px;
-  line-height:1.45;
+  line-height:1.35; /* ✅ tighter */
+  flex:1 1 auto;
 }
+
 .bankTitle{
   font-weight:800;
-  margin-bottom:6px;
+  margin-bottom:4px;
   text-transform:uppercase;
   font-size:12px;
   color:#333;
 }
+
+
 
 .qrBox{
   border:1px solid #eee;
@@ -2157,11 +2167,12 @@ const header = {
   color:#333;
 }
 .qrImg{
-  width:160px;
-  height:160px;
+  width:110px;   /* ✅ smaller */
+  height:110px;  /* ✅ smaller */
   object-fit:contain;
   display:inline-block;
 }
+
 
   .sig { margin-top:16px; text-align:right; }
   .line { margin-top:36px; border-top:1px solid #111; width:220px; display:inline-block; }
