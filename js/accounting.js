@@ -2087,26 +2087,28 @@ const header = {
 
 
     // show only print area
-   const appRoot = document.body.innerHTML;
-const scrollY = window.scrollY;
+  const scrollY = window.scrollY;
+const appContent = document.getElementById("content");
 
-document.body.classList.add("printing");
-document.body.innerHTML = printArea.innerHTML;
+// hide app
+if (appContent) appContent.style.display = "none";
+printArea.style.display = "block";
 
+const restore = () => {
+  printArea.style.display = "none";
+  if (appContent) appContent.style.display = "";
 
-    const restore = () => {
-  document.body.classList.remove("printing");
-  document.body.innerHTML = appRoot;
-        // ✅ STEP 3: clear persisted last-saved after using it
+  // ✅ STEP 3: clear persisted last-saved after using it
   sessionStorage.removeItem("lastSavedInvoiceId");
   sessionStorage.removeItem("lastSavedInvoiceNo");
-  loadSection("invoice");
+
   window.scrollTo(0, scrollY);
   window.removeEventListener("afterprint", restore);
 };
 
-
 window.addEventListener("afterprint", restore);
+
+
 
 // ✅ preload bg image before printing (iPhone fix)
 await new Promise((resolve) => {
