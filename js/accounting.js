@@ -1036,6 +1036,14 @@ lastSavedInvoiceNo = sessionStorage.getItem("lastSavedInvoiceNo") || "";
   function norm(s){ return String(s||"").trim().toLowerCase(); }
   function money(n){ return Number(n||0).toFixed(2); }
   function round2(n){ return Math.round((Number(n||0)+Number.EPSILON)*100)/100; }
+// ✅ custom rounding: fraction >= 0.2 rounds up (no decimals)
+function roundQtyNoDecimals(n){
+  const x = Number(n || 0);
+  if (!isFinite(x)) return 0;
+  const base = Math.floor(x);
+  const frac = x - base;
+  return base + (frac >= 0.2 ? 1 : 0);
+}
 
   // helpers starts here
 const INVOICE_BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/print-bg.png";
@@ -1138,10 +1146,23 @@ function formatLedSizeLabel(raw){
 function ledQtySqftFromSize(raw){
   const p = parseLedSizeToFeet(raw);
   if (!p) return null;
+
   const r = calcLedWall(p.widthFt, p.heightFt);
-  const sqft = Math.round((r.carryCabinets * LED_WALL_SQFT_PER_CABINET) * 100) / 100;
-  return { sqft, carryCabinets: r.carryCabinets, layoutW: r.W, layoutH: r.H };
+
+  // ✅ use ONLY needed cabinets (no extra peti / no carry cabinets)
+  const sqftRaw = (r.neededCabinets * LED_WALL_SQFT_PER_CABINET);
+
+  // ✅ integer qty with your rounding rule
+  const sqft = roundQtyNoDecimals(sqftRaw);
+
+  return {
+    sqft,
+    neededCabinets: r.neededCabinets,
+    layoutW: r.W,
+    layoutH: r.H
+  };
 }
+
 
   // ----- led calculator for invoice section ends here
 
@@ -1678,7 +1699,7 @@ currentItems = planned
 
             <div id="inv_led_size_row" style="display:none;margin-top:10px;">
   <label>LED Size (optional)</label>
-  <input id="inv_led_size" placeholder="e.g. 16 x 10 or 16x10 or 10*5 or 5/4 etc ">
+  <input id="inv_led_size" placeholder="e.g. 16 x 10 or 16x10 or 10*5 etc ">
   <p class="dashSmall" id="inv_led_hint_pick" style="margin-top:6px;color:#777;"></p>
 
 </div>
@@ -1706,12 +1727,12 @@ currentItems = planned
 
  <div id="inv_line_led_size_row" style="display:none;margin-top:10px;">
   <label>LED Size (optional)</label>
-  <input id="inv_line_led_size" placeholder="e.g. 16 x 10 or 16x10 or 10*5 or 5/4 etc ">
+  <input id="inv_line_led_size" placeholder="e.g. 16 x 10 or 16x10 or 10*5 etc ">
   <p class="dashSmall" id="inv_line_led_hint" style="margin-top:6px;color:#777;"></p>
 </div>
 
   <!-- ✅ Only Name / Note line toggle -->
-  <label style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+ <label style="margin-top:10px;display:flex;align-items:center;justify-content:flex-start;gap:8px;width:fit-content;">
     <input id="inv_line_onlyname" type="checkbox">
     Only Name (Note line)
   </label>
@@ -1786,8 +1807,6 @@ currentItems = planned
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           ${canEdit ? `<button class="primary" id="btn_inv_save">💾 Save</button>` : ``}
-          <button class="primary" id="btn_inv_print" style="background:#111;">🖨 Print / PDF</button>
-          <button class="primary" id="btn_inv_wa" style="background:#25D366;">📱 WhatsApp PDF</button>
           ${isSuper ? `<button class="primary" id="btn_inv_export_csv" style="background:#1fa971;">Export CSV (List)</button>` : ``}
         </div>
 
@@ -1855,7 +1874,8 @@ currentItems = planned
     }
     qtyInpLine.value = String(r.sqft);
     if (unitInpLine && !unitInpLine.value.trim()) unitInpLine.value = "sq ft";
-    if (hintLine) hintLine.textContent = `Auto: ${r.carryCabinets} cabinets → ${r.sqft} sq ft`;
+    if (hintLine) hintLine.textContent = `Auto: ${r.neededCabinets} cabinets → ${r.sqft} sq ft`;
+
   }
 
   function updatePickUI(){
@@ -1877,7 +1897,7 @@ currentItems = planned
     }
     qtyInpPick.value = String(r.sqft);
     // for Add Item we don't have unit input in box; we will set unit when pushing line
-    if (hintPick) hintPick.textContent = `Auto: ${r.carryCabinets} cabinets → ${r.sqft} sq ft`;
+    if (hintPick) hintPick.textContent = `Auto: ${r.neededCabinets} cabinets → ${r.sqft} sq ft`;
   }
 
   nameInp?.addEventListener("input", () => {
