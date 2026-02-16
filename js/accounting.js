@@ -2713,6 +2713,8 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
 
             <label style="margin-top:10px;">Date</label>
 <input id="upad_date" type="date" value="${todayISO()}" max="${todayISO()}">
+<label style="margin-top:10px;">Description (Optional)</label>
+<input id="upad_desc" type="text" placeholder="Reason / Notes (optional)">
 
             <button class="primary" id="btn_upad" style="margin-top:14px;">Add Upad</button>
           </div>
@@ -2809,6 +2811,7 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
                 <th align="left">Date</th>
                 <th align="left">Worker</th>
                 <th align="right">Amount</th>
+                <th align="left">Description</th>
                 <th align="left">Month</th>
                 <th align="left">Added By</th>
                 ${showActions ? `<th align="right">Actions</th>` : ``}
@@ -2818,6 +2821,7 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
                 const date = prettyISODate(r.date || r[1] || "");
                 const wk = String(r.worker || r[2] || "");
                 const amt = Number(r.amount || r[3] || 0);
+                const desc = String(r.description || r[6] || "");
                 const mon = monthLabelFromAny(r.month ?? r[4] ?? "");
                 const by = String(r.added_by || r[5] || "");
 
@@ -2826,6 +2830,7 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
                     <td>${escapeHtml(date)}</td>
                     <td>${escapeHtml(wk)}</td>
                     <td align="right">₹${amt.toFixed(0)}</td>
+                    <td align="right">${escapeHtml(desc)}</td>
                     <td>${escapeHtml(mon)}</td>
                     <td>${escapeHtml(by)}</td>
                     ${
@@ -2883,6 +2888,7 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
                 // 1. Get the current date (as YYYY-MM-DD) for the prompt default
 const curDate = prettyISODate(cur?.date || todayISO());
                 const curAmt = Number(cur?.amount || 0);
+const curDesc = String(cur?.description || "");
 
                 const newWorker = prompt("Worker:", curWorker);
                 if (newWorker === null) return;
@@ -2892,6 +2898,9 @@ const newDate = prompt("Date (YYYY-MM-DD):", curDate);
 if (newDate === null) return;
                 // 3. Convert the user's input into the Month Label (e.g., Feb-2026)
 const newMonth = monthLabelFromAny(newDate);
+
+                const newDesc = prompt("Description:", curDesc);
+if (newDesc === null) return;
 
                 const newAmountStr = prompt("Amount:", String(curAmt || 0));
                 if (newAmountStr === null) return;
@@ -2909,7 +2918,8 @@ const r = await api({
   date: newDate, // ✅ REQUIRED by backend
   worker: String(newWorker).trim(),
   month: String(newMonth).trim(),
-  amount: newAmount
+  amount: newAmount,
+  description: String(newDesc || "")
 });
 
                   if (r && r.error) return alert(String(r.error));
@@ -3017,7 +3027,8 @@ const r = await api({
         const month = (document.getElementById("upad_filter_month")?.value || "").trim();
         const worker = (document.getElementById("upad_filter_worker")?.value || "").trim();
 
-        const header = ["date","worker","amount","month","added_by","row"];
+        const header = ["date","worker","amount","description","month","added_by","row"];
+
         const lines = [header.join(",")];
 
         lastUpadRows.forEach(r => {
@@ -3026,6 +3037,7 @@ const r = await api({
             prettyISODate(r.date || ""),
             String(r.worker || ""),
             String(Number(r.amount || 0)),
+            String(r.description || ""),
             monthLabelFromAny(r.month || ""),
             String(r.added_by || ""),
             String(rowId)
@@ -3053,6 +3065,8 @@ const r = await api({
     }
 
     // ---- rest of your file unchanged below ----
+
+    // -------- upad section ends here
 
     // ------ clients module loadsection starts here 
 if (type === "clients") {
@@ -6143,20 +6157,23 @@ async function isDuplicateUpad({ company, date, worker, amount, month }) {
       const proceed = confirm("⚠ Same UPAD entry already exists.\nDo you want to add anyway?");
       if (!proceed) return;
     }
-
+const description = String(document.getElementById("upad_desc")?.value || "").trim();
     const r = await apiSafe({
       action: "addUpad",
       company,               // keep if your backend stores company
       date: selectedDate,
       worker,
       amount,
-      month
+      month,
+      description
     });
 
     if (r && r.queued) alert("Saved offline. Will sync when online.");
     else alert("Upad added");
 
     document.getElementById("upad_amount").value = "";
+    document.getElementById("upad_desc").value = "";
+
     invalidateCache(["upadMeta", "monthsMerged"]);
   } finally {
     setTimeout(unlock, 600);
