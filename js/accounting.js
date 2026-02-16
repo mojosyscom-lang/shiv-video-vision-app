@@ -1614,7 +1614,7 @@ currentItems = planned
         <div id="inv_list" style="margin-top:12px;"></div>
       </div>
 
-      <div id="inv_print_area" style="display:none;"></div>
+      
     </div>
   `;
 
@@ -2017,7 +2017,8 @@ const header = {
 };
 
 
-    const printArea = document.getElementById("inv_print_area");
+    const printArea = document.getElementById("global_print_area");
+
     if (!printArea) return alert("Print area missing");
 
     const css = `
@@ -6843,3 +6844,13 @@ window.handleAddExpense = async function() {
 };
 
   /* ends here handle function*/
+
+// print area for invoice section
+// === GLOBAL PRINT AREA (OUTSIDE #content) ===
+if (!document.getElementById("global_print_area")) {
+  const gp = document.createElement("div");
+  gp.id = "global_print_area";
+  gp.style.display = "none";
+  document.body.appendChild(gp);
+}
+
