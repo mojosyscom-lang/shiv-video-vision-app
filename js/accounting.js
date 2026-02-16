@@ -1045,8 +1045,9 @@ const LED_WALL_SQFT_PER_CABINET = 2.691;
 // ✅ Detect which planned item needs conversion
 // Option A: by name (recommended for you right now)
 function isLedWallLine(name){
-  return String(name||"").toLowerCase().includes("led wall on rent");
+  return String(name || "").trim().toLowerCase() === "led wall on rent";
 }
+
 
 // ✅ safe number
 function numOr(v, fallback){
