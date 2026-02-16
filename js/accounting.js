@@ -2072,9 +2072,26 @@ const header = {
   .line { margin-top:36px; border-top:1px solid #111; width:220px; display:inline-block; }
   .footerBar { margin-top:10px; font-size:11px; color:#777; text-align:center; }
 
-  @media print {
-    .no-print { display:none !important; }
+ @media print {
+
+  body * {
+    visibility: hidden !important;
   }
+
+  #global_print_area,
+  #global_print_area * {
+    visibility: visible !important;
+  }
+
+  #global_print_area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+}
+
 </style>
 `;
 
