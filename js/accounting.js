@@ -4739,43 +4739,56 @@ if (!hasAnyOut) {
 
   `;
 
- document.getElementById("btn_save_out")?.addEventListener("click", async () => {
-  const inputs = box.querySelectorAll("input[data-out-item]");
+document.getElementById("btn_save_out")?.addEventListener("click", async (e) => {
 
-  for (const inp of inputs) {
-    const item_id = inp.getAttribute("data-out-item");
-    const qty = Number(inp.value || 0);
+  const btn = e.currentTarget;
+  if (btn.dataset.loading === "1") return; // 🚫 prevent double click
 
-    if (qty <= 0) continue;
+  btn.dataset.loading = "1";
+  const unlock = lockButton(btn, "Saving...");
 
-    const row = rows.find(r => r.item_id === item_id);
-    const maxAllowed = Math.min(row.available_qty, row.planned_qty + 10);
+  try {
+    const inputs = box.querySelectorAll("input[data-out-item]");
 
-    if (qty > maxAllowed) {
-      return alert(`Max allowed for ${row.item_name} is ${maxAllowed}`);
+    for (const inp of inputs) {
+      const item_id = inp.getAttribute("data-out-item");
+      const qty = Number(inp.value || 0);
+      if (qty <= 0) continue;
+
+      const row = rows.find(r => r.item_id === item_id);
+      const maxAllowed = Math.min(row.available_qty, row.planned_qty + 10);
+
+      if (qty > maxAllowed) {
+        throw new Error(`Max allowed for ${row.item_name} is ${maxAllowed}`);
+      }
+
+      const rSave = await api({
+        action: "addInventoryTxn",
+        order_id: o.order_id,
+        item_id,
+        item_name: row.item_name,
+        txn_type: "OUT",
+        qty,
+        start_date: o.setup_date,
+        end_date: o.end_date
+      });
+
+      if (rSave && rSave.error) {
+        throw new Error(`${row.item_name}: ${rSave.error}`);
+      }
     }
 
-   const rSave = await api({
-  action: "addInventoryTxn",
-  order_id: o.order_id,
-  item_id,
-  item_name: row.item_name, // ✅ send it
-  txn_type: "OUT",
-  qty,
-  start_date: o.start_date,
-  end_date: o.end_date
-});
+    alert("OUT saved");
+    await loadOrderItemsUI();
 
-if (rSave && rSave.error) {
-  console.log("addInventoryTxn error:", rSave);
-  return alert(`Save failed for ${row.item_name}: ${rSave.error}`);
-}
-
+  } catch (err) {
+    alert(String(err.message || err));
+  } finally {
+    btn.dataset.loading = "0";
+    setTimeout(unlock, 300);
   }
-
-  alert("OUT saved");
-  await loadOrderItemsUI();
 });
+
 
 
   return;
@@ -4865,7 +4878,7 @@ const item_id = String(inp.getAttribute(attr) || "").trim();
 
       const row = rows.find(r => r.item_id === item_id);
       if (!row) continue;
-if (maxAllowed <= 0) continue;
+
       const maxAllowed = Number(row.outstanding || 0);
       if (qty > maxAllowed) {
         throw new Error(`Max allowed for ${row.item_name} is ${maxAllowed}`);
