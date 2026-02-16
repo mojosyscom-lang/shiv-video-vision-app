@@ -1039,6 +1039,16 @@ lastSavedInvoiceNo = sessionStorage.getItem("lastSavedInvoiceNo") || "";
 
   // helpers starts here
 const INVOICE_BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/print-bg.png";
+const BANK_QR_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/bank-qr.png"; // ✅ change filename if needed
+
+const BANK_DETAILS = {
+  title: "Bank Details",
+  bank: "Kotak Mahindra Bank",
+  branch: "Vaisnodevi Branch",
+  name: "Shiv Video Vision",
+  ac: "6053510619",
+  ifsc: "KKBK0003083"
+};
 
 function parseISODate(d){
   const s = String(d || "").trim();
@@ -1971,16 +1981,57 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
           </div>
         </div>
 
-        <div class="foot">
-          <div><b>Amount in Words:</b> ${escapeHtml(header.words||"")}</div>
-          <div style="margin-top:8px;"><b>Terms:</b> ${escapeHtml(terms)}</div>
+                <div class="foot">
+          <div class="footGrid">
 
-          <div class="sig">
-            <div>For ${escapeHtml(company.company_name||"")}</div>
-            <div class="line"></div>
-            <div>Authorized Signatory</div>
+            <div class="footLeft">
+              <div><b>Amount in Words:</b> ${escapeHtml(header.words||"")}</div>
+              <div style="margin-top:8px;"><b>Terms:</b> ${escapeHtml(terms)}</div>
+
+              ${
+                String(header.doc_type || "").toUpperCase() === "QUOTATION"
+                  ? ``
+                  : `
+                    <div class="bankBox" style="margin-top:10px;">
+                      <div class="bankTitle">${escapeHtml(BANK_DETAILS.title)}</div>
+                      <div>${escapeHtml(BANK_DETAILS.bank)}</div>
+                      <div>${escapeHtml(BANK_DETAILS.branch)}</div>
+                      <div><b>Name:</b> ${escapeHtml(BANK_DETAILS.name)}</div>
+                      <div><b>A/c. No:</b> ${escapeHtml(BANK_DETAILS.ac)}</div>
+                      <div><b>IFSC:</b> ${escapeHtml(BANK_DETAILS.ifsc)}</div>
+                    </div>
+                  `
+              }
+            </div>
+
+            <div class="footRight">
+              ${
+                String(header.doc_type || "").toUpperCase() === "QUOTATION"
+                  ? `
+                    <div class="sig">
+                      <div>For ${escapeHtml(company.company_name||"")}</div>
+                      <div class="line"></div>
+                      <div>Authorized Signatory</div>
+                    </div>
+                  `
+                  : `
+                    <div class="qrBox">
+                      <div class="qrTitle">Scan to Pay</div>
+                      <img class="qrImg" src="${BANK_QR_URL}" alt="QR">
+                    </div>
+
+                    <div class="sig" style="margin-top:10px;">
+                      <div>For ${escapeHtml(company.company_name||"")}</div>
+                      <div class="line"></div>
+                      <div>Authorized Signatory</div>
+                    </div>
+                  `
+              }
+            </div>
+
           </div>
         </div>
+
 
         <div class="footerBar">
           Generated on ${escapeHtml(new Date().toLocaleString())}
@@ -2068,6 +2119,50 @@ const header = {
   .r { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
   .gt { border-top:2px solid #111; margin-top:6px; padding-top:8px; font-size:16px; }
   .foot { margin-top:14px; border-top:1px solid #eee; padding-top:10px; font-size:12px; color:#444; background: rgba(255,255,255,0.85); border-radius:10px; padding:10px; }
+  .footGrid{
+  display:grid;
+  grid-template-columns: 1.4fr 0.6fr;
+  gap:12px;
+  align-items:start;
+}
+
+.bankBox{
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:10px;
+  background: rgba(255,255,255,0.9);
+  font-size:12px;
+  line-height:1.45;
+}
+.bankTitle{
+  font-weight:800;
+  margin-bottom:6px;
+  text-transform:uppercase;
+  font-size:12px;
+  color:#333;
+}
+
+.qrBox{
+  border:1px solid #eee;
+  border-radius:10px;
+  padding:10px;
+  background: rgba(255,255,255,0.9);
+  text-align:center;
+}
+.qrTitle{
+  font-weight:800;
+  font-size:12px;
+  margin-bottom:8px;
+  text-transform:uppercase;
+  color:#333;
+}
+.qrImg{
+  width:160px;
+  height:160px;
+  object-fit:contain;
+  display:inline-block;
+}
+
   .sig { margin-top:16px; text-align:right; }
   .line { margin-top:36px; border-top:1px solid #111; width:220px; display:inline-block; }
   .footerBar { margin-top:10px; font-size:11px; color:#777; text-align:center; }
@@ -2130,11 +2225,18 @@ window.addEventListener("afterprint", restore);
 
 // ✅ preload bg image before printing (iPhone fix)
 await new Promise((resolve) => {
-  const img = new Image();
-  img.onload = resolve;
-  img.onerror = resolve;
-  img.src = INVOICE_BG_URL;
+  let done = 0;
+  const finish = () => { done++; if (done >= 2) resolve(); };
+
+  const img1 = new Image();
+  img1.onload = finish; img1.onerror = finish;
+  img1.src = INVOICE_BG_URL;
+
+  const img2 = new Image();
+  img2.onload = finish; img2.onerror = finish;
+  img2.src = BANK_QR_URL;
 });
+
 
 setTimeout(() => {
   try { window.print(); } catch(e) {}
