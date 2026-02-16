@@ -2044,19 +2044,21 @@ loadSection("invoice");
 
 
     // show only print area
-    const old = content.innerHTML;
-    const scrollY = window.scrollY;
+   const appRoot = document.body.innerHTML;
+const scrollY = window.scrollY;
 
-    document.body.classList.add("printing");
-    content.innerHTML = printArea.innerHTML;
+document.body.classList.add("printing");
+document.body.innerHTML = printArea.innerHTML;
+
 
     const restore = () => {
-      document.body.classList.remove("printing");
-      content.innerHTML = old;
-      loadSection("invoice"); // restore fully (safe)
-      window.scrollTo(0, scrollY);
-      window.removeEventListener("afterprint", restore);
-    };
+  document.body.classList.remove("printing");
+  document.body.innerHTML = appRoot;
+  loadSection("invoice");
+  window.scrollTo(0, scrollY);
+  window.removeEventListener("afterprint", restore);
+};
+
 
     window.addEventListener("afterprint", restore);
     window.print();
