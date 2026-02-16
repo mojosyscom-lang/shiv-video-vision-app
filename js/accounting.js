@@ -1066,6 +1066,87 @@ const BANK_DETAILS = {
   ifsc: "KKBK0003083"
 };
 
+// ----- led calculation for invoice section starts here
+// ===============================
+// ✅ LED size -> cabinets -> SQFT (Invoice)
+// ===============================
+const CABINET_FT = 1.64042;
+const CABINETS_PER_PETI = 6;
+
+// same as Orders
+function roundCabinets(raw) {
+  const base = Math.floor(raw);
+  const frac = raw - base;
+  return base + (frac >= 0.5 ? 1 : 0);
+}
+
+// same as Orders
+function calcLedWall(widthFt, heightFt) {
+  const Wraw = widthFt / CABINET_FT;
+  const Hraw = heightFt / CABINET_FT;
+  const W = roundCabinets(Wraw);
+  const H = roundCabinets(Hraw);
+  const neededCabinets = W * H;
+
+  const petiExact = neededCabinets / CABINETS_PER_PETI;
+  const petiBase = Math.ceil(petiExact);
+  const frac = petiExact - Math.floor(petiExact);
+  const addExtra = (frac === 0) || (frac >= 0.5);
+  const petiCarry = petiBase + (addExtra ? 1 : 0);
+  const carryCabinets = petiCarry * CABINETS_PER_PETI;
+
+  return { W, H, neededCabinets, petiBase, petiCarry, carryCabinets };
+}
+
+function isLedAnyName(name){
+  return String(name || "").toLowerCase().includes("led");
+}
+
+// supports: 16x10, 16 x 10, 16’ x 10’, 16 * 10, 16ft x 10ft
+function parseLedSizeToFeet(raw){
+  let s = String(raw || "").trim().toLowerCase();
+  if (!s) return null;
+
+  // normalize: replace quotes/feet symbols and separators
+  s = s.replace(/[’']/g, "");     // remove apostrophes
+  s = s.replace(/ft|feet/g, "");  // remove ft words
+  s = s.replace(/×/g, "x");
+  s = s.replace(/\*/g, "x");
+
+  // keep only digits, dot, x, space
+  s = s.replace(/[^0-9x.\s]/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+
+  // now split around x
+  const parts = s.split("x").map(p => p.trim()).filter(Boolean);
+  if (parts.length !== 2) return null;
+
+  const w = Number(parts[0]);
+  const h = Number(parts[1]);
+  if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) return null;
+
+  return { widthFt: w, heightFt: h };
+}
+
+function formatLedSizeLabel(raw){
+  const p = parseLedSizeToFeet(raw);
+  if (!p) return "";
+  return `Size: ${p.widthFt}’ x ${p.heightFt}’`;
+}
+
+
+function ledQtySqftFromSize(raw){
+  const p = parseLedSizeToFeet(raw);
+  if (!p) return null;
+  const r = calcLedWall(p.widthFt, p.heightFt);
+  const sqft = Math.round((r.carryCabinets * LED_WALL_SQFT_PER_CABINET) * 100) / 100;
+  return { sqft, carryCabinets: r.carryCabinets, layoutW: r.W, layoutH: r.H };
+}
+
+  // ----- led calculator for invoice section ends here
+
+
+  
 function parseISODate(d){
   const s = String(d || "").trim();
   if (!s) return null;
@@ -1327,7 +1408,7 @@ function calcEventDays(setupISO, startISO, endISO){
           ${currentItems.map((it, idx)=>`
             <tr data-inv-line="${idx}" style="border-top:1px solid #eee;vertical-align:top;">
               <td>
-                <b>${escapeHtml(it.item_name||"")}</b><br>
+                <b>${escapeHtml(it.item_name||"").replace(/\n/g,"<br>")}</b><br>
                 <span class="dashSmall">${escapeHtml(it.item_id||"")} ${it.unit ? "• "+escapeHtml(it.unit) : ""}</span>
               </td>
               <td align="right">${escapeHtml(it.hsn_sac || "")}</td>
@@ -1595,6 +1676,14 @@ currentItems = planned
               `).join("")}
             </select>
 
+            <div id="inv_led_size_row" style="display:none;margin-top:10px;">
+  <label>LED Size (optional)</label>
+  <input id="inv_led_size" placeholder="e.g. 16 x 10 or 16x10 or 10*5 or 5/4 etc ">
+  <p class="dashSmall" id="inv_led_hint_pick" style="margin-top:6px;color:#777;"></p>
+
+</div>
+
+
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
               <div style="flex:1;min-width:120px;">
                 <label>Qty</label>
@@ -1615,34 +1704,53 @@ currentItems = planned
   <label style="margin-top:8px;">Item Name *</label>
   <input id="inv_line_name" placeholder="e.g. Transport / Labour / Installation">
 
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-    <div style="flex:1;min-width:120px;">
-      <label>Qty</label>
-      <input id="inv_line_qty" type="number" inputmode="decimal" value="1">
-    </div>
-    <div style="flex:1;min-width:120px;">
-      <label>Unit</label>
-      <input id="inv_line_unit" placeholder="e.g. trip / day / sq ft">
-    </div>
-  </div>
+ <div id="inv_line_led_size_row" style="display:none;margin-top:10px;">
+  <label>LED Size (optional)</label>
+  <input id="inv_line_led_size" placeholder="e.g. 16 x 10 or 16x10 or 10*5 or 5/4 etc ">
+  <p class="dashSmall" id="inv_line_led_hint" style="margin-top:6px;color:#777;"></p>
+</div>
 
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-    <div style="flex:1;min-width:140px;">
-      <label>HSN/SAC</label>
-      <input id="inv_line_hsn" placeholder="optional">
+  <!-- ✅ Only Name / Note line toggle -->
+  <label style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+    <input id="inv_line_onlyname" type="checkbox">
+    Only Name (Note line)
+  </label>
+
+  <!-- ✅ Optional fields wrapper (we will hide/show this) -->
+  <div id="inv_line_optional_fields">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+      <div style="flex:1;min-width:120px;">
+        <label>Qty</label>
+        <input id="inv_line_qty" type="number" inputmode="decimal" value="1">
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label>Unit</label>
+        <input id="inv_line_unit" placeholder="e.g. trip / day / sq ft">
+      </div>
     </div>
-    <div style="flex:1;min-width:120px;">
-      <label>Rate (₹)</label>
-      <input id="inv_line_rate" type="number" inputmode="decimal" value="0">
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+      <div style="flex:1;min-width:140px;">
+        <label>HSN/SAC</label>
+        <input id="inv_line_hsn" placeholder="optional">
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label>Rate (₹)</label>
+        <input id="inv_line_rate" type="number" inputmode="decimal" value="0">
+      </div>
     </div>
   </div>
 
   <button class="primary" id="btn_inv_line_confirm" style="margin-top:10px;">Add Line</button>
 
   <p class="dashSmall" style="margin-top:8px;">
-    Note: Qty defaults to 1, Rate defaults to 0. Only Item Name is required.
+    Tip: Tick <b>Only Name</b> for Transport / Notes so users don’t fill numbers.
   </p>
-</div></div>
+</div>
+
+
+
+</div>
 
 
 
@@ -1709,6 +1817,86 @@ currentItems = planned
       
     </div>
   `;
+
+
+  // ===============================
+// ✅ LED Size UI live behavior (Invoice)
+// ===============================
+(function initInvoiceLedSizeUI(){
+  const nameInp = document.getElementById("inv_line_name");
+  const sizeRowLine = document.getElementById("inv_line_led_size_row");
+  const sizeInpLine = document.getElementById("inv_line_led_size");
+  const hintLine = document.getElementById("inv_line_led_hint");
+  const qtyInpLine = document.getElementById("inv_line_qty");
+  const unitInpLine = document.getElementById("inv_line_unit");
+
+  // Add Item box
+  const itemPick = document.getElementById("inv_item_pick");
+  const sizeRowPick = document.getElementById("inv_led_size_row");
+  const sizeInpPick = document.getElementById("inv_led_size");
+ const hintPick = document.getElementById("inv_led_hint_pick");
+  const qtyInpPick = document.getElementById("inv_new_qty");
+  const unitPick = () => (itemPick?.selectedOptions?.[0]?.getAttribute("data-unit") || "");
+
+  function updateLineUI(){
+    if (!nameInp || !sizeRowLine) return;
+    const isLed = isLedAnyName(nameInp.value);
+    sizeRowLine.style.display = isLed ? "block" : "none";
+    if (!isLed && sizeInpLine) sizeInpLine.value = "";
+    if (hintLine) hintLine.textContent = "";
+  }
+
+  function computeLineQty(){
+    if (!sizeInpLine || !qtyInpLine) return;
+    const r = ledQtySqftFromSize(sizeInpLine.value);
+    if (!r) {
+      if (hintLine) hintLine.textContent = "";
+      return;
+    }
+    qtyInpLine.value = String(r.sqft);
+    if (unitInpLine && !unitInpLine.value.trim()) unitInpLine.value = "sq ft";
+    if (hintLine) hintLine.textContent = `Auto: ${r.carryCabinets} cabinets → ${r.sqft} sq ft`;
+  }
+
+  function updatePickUI(){
+    if (!itemPick || !sizeRowPick) return;
+    const opt = itemPick.selectedOptions?.[0];
+    const nm = opt?.getAttribute("data-name") || "";
+    const isLed = isLedAnyName(nm);
+    sizeRowPick.style.display = isLed ? "block" : "none";
+    if (!isLed && sizeInpPick) sizeInpPick.value = "";
+    if (hintPick) hintPick.textContent = "";
+  }
+
+  function computePickQty(){
+    if (!sizeInpPick || !qtyInpPick) return;
+    const r = ledQtySqftFromSize(sizeInpPick.value);
+    if (!r) {
+      if (hintPick) hintPick.textContent = "";
+      return;
+    }
+    qtyInpPick.value = String(r.sqft);
+    // for Add Item we don't have unit input in box; we will set unit when pushing line
+    if (hintPick) hintPick.textContent = `Auto: ${r.carryCabinets} cabinets → ${r.sqft} sq ft`;
+  }
+
+  nameInp?.addEventListener("input", () => {
+    updateLineUI();
+    // if LED and size already filled, recompute
+    if (sizeInpLine?.value) computeLineQty();
+  });
+  sizeInpLine?.addEventListener("input", computeLineQty);
+
+  itemPick?.addEventListener("change", () => {
+    updatePickUI();
+    // if LED and size already filled, recompute
+    if (sizeInpPick?.value) computePickQty();
+  });
+  sizeInpPick?.addEventListener("input", computePickQty);
+
+  updateLineUI();
+  updatePickUI();
+})();
 
   // init doc type + gst defaults
   setDocTypeUI("INVOICE");
@@ -1804,6 +1992,36 @@ renderItemsTable();
   document.getElementById("inv_gst_rate")?.addEventListener("input", recalc);
   document.getElementById("inv_gst_rate")?.addEventListener("change", recalc);
 
+
+
+  // ✅ Only Name toggle for Manual Line (hide optional inputs + auto-clear)
+document.addEventListener("change", (e) => {
+  const t = e.target;
+  if (!t || t.id !== "inv_line_onlyname") return;
+
+  const box = document.getElementById("inv_line_optional_fields");
+  if (!box) return;
+
+  const on = !!t.checked;
+  box.style.display = on ? "none" : "block";
+
+  // when OnlyName ON → force empty/zero values to avoid confusion
+  if (on) {
+    const q = document.getElementById("inv_line_qty");
+    const u = document.getElementById("inv_line_unit");
+    const h = document.getElementById("inv_line_hsn");
+    const r = document.getElementById("inv_line_rate");
+    if (q) q.value = "0";
+    if (u) u.value = "";
+    if (h) h.value = "";
+    if (r) r.value = "0";
+  } else {
+    // when turning back ON→OFF, keep reasonable defaults
+    const q = document.getElementById("inv_line_qty");
+    if (q && (String(q.value||"").trim()==="" || Number(q.value||0)===0)) q.value = "1";
+  }
+});
+
   // add row flow
   // ✅ Always works even if UI re-renders
 document.addEventListener("click", (e)=>{
@@ -1828,13 +2046,24 @@ if (t && t.id === "btn_inv_add_line") {
 
 // Confirm manual line
 if (t && t.id === "btn_inv_line_confirm") {
-  const name = String(document.getElementById("inv_line_name")?.value || "").trim();
-  if (!name) return alert("Item Name is required");
+  const rawName = String(document.getElementById("inv_line_name")?.value || "").trim();
+  if (!rawName) return alert("Item Name is required");
 
-  const qty = numOr(document.getElementById("inv_line_qty")?.value, 1);
-  const rate = numOr(document.getElementById("inv_line_rate")?.value, 0);
-  const unit = String(document.getElementById("inv_line_unit")?.value || "").trim();
-  const hsn_sac = String(document.getElementById("inv_line_hsn")?.value || "").trim();
+// if LED and size given, append size on next line
+const sizeRaw = String(document.getElementById("inv_line_led_size")?.value || "").trim();
+let name = rawName;
+if (isLedAnyName(rawName) && sizeRaw) {
+  const lbl = formatLedSizeLabel(sizeRaw);
+  if (lbl) name = `${rawName}\n${lbl}`;
+}
+
+  
+const onlyName = !!document.getElementById("inv_line_onlyname")?.checked;
+
+  const qty = onlyName ? 0 : numOr(document.getElementById("inv_line_qty")?.value, 1);
+  const rate = onlyName ? 0 : numOr(document.getElementById("inv_line_rate")?.value, 0);
+  const unit = onlyName ? "" : String(document.getElementById("inv_line_unit")?.value || "").trim();
+  const hsn_sac = onlyName ? "" : String(document.getElementById("inv_line_hsn")?.value || "").trim();
 
   // default days from current dates
   const dSetup = document.getElementById("inv_setup")?.value || "";
@@ -1846,7 +2075,7 @@ if (t && t.id === "btn_inv_line_confirm") {
     item_id: "",              // manual line (no inventory id)
     item_name: name,
     hsn_sac,
-    qty: (qty > 0 ? qty : 1), // backend requires qty > 0
+    qty: qty, // ✅ allow 0 while adding (we will validate on Save)
     unit,
     days: defDays,
     manual_days: false,
@@ -1860,6 +2089,13 @@ if (t && t.id === "btn_inv_line_confirm") {
   document.getElementById("inv_line_unit").value = "";
   document.getElementById("inv_line_hsn").value = "";
   document.getElementById("inv_line_rate").value = "0";
+  const onlyEl = document.getElementById("inv_line_onlyname");
+if (onlyEl) onlyEl.checked = false;
+const optBox = document.getElementById("inv_line_optional_fields");
+if (optBox) optBox.style.display = "block";
+
+const ls = document.getElementById("inv_line_led_size");
+if (ls) ls.value = "";
 
   renderItemsTable();
   return;
@@ -1872,13 +2108,27 @@ if (t && t.id === "btn_inv_line_confirm") {
     if (!opt || !opt.value) return alert("Select inventory item");
 
     const item_id = String(opt.value||"");
-    const item_name = opt.getAttribute("data-name") || item_id;
-    const unit = opt.getAttribute("data-unit") || "";
-    const hsn_sac = opt.getAttribute("data-hsn") || "";
+   let item_name = opt.getAttribute("data-name") || item_id;
+let unit = opt.getAttribute("data-unit") || "";
+const hsn_sac = opt.getAttribute("data-hsn") || "";
 
-    let qty = Number(document.getElementById("inv_new_qty")?.value || 1);
-    let rate = Number(document.getElementById("inv_new_rate")?.value || 0);
-    if (!(qty > 0)) return alert("Qty must be > 0");
+let qty = Number(document.getElementById("inv_new_qty")?.value || 0);
+let rate = Number(document.getElementById("inv_new_rate")?.value || 0);
+
+// ✅ LED size override (optional)
+const sizeRaw = String(document.getElementById("inv_led_size")?.value || "").trim();
+if (isLedAnyName(item_name) && sizeRaw) {
+  const r = ledQtySqftFromSize(sizeRaw);
+  if (r) {
+    qty = r.sqft;
+    unit = unit || "sq ft";
+    const lbl = formatLedSizeLabel(sizeRaw);
+    if (lbl) item_name = `${item_name}\n${lbl}`;
+  }
+}
+
+// ✅ allow 0 while adding; will validate on Save
+
 
     const dSetup = document.getElementById("inv_setup")?.value || "";
 const dStart = document.getElementById("inv_start")?.value || "";
@@ -1948,8 +2198,22 @@ document.getElementById("inv_end")?.addEventListener("change", refreshDefaultDay
       const gst_rate = Number(document.getElementById("inv_gst_rate")?.value || 0);
 
       if (!currentItems.length) return alert("No items");
-      const bad = currentItems.find(it => !(Number(it.qty||0) > 0) || !(Number(it.rate||0) >= 0));
-      if (bad) return alert("Check qty/rate");
+      const bad = currentItems.find(it => {
+  // only name is required
+  if (!String(it.item_name || "").trim()) return true;
+
+  // allow empty/0 qty/rate/days/unit/hsn
+  // but still block negative numbers (optional safety)
+  const qty = Number(it.qty || 0);
+  const rate = Number(it.rate || 0);
+  const days = Number(it.days ?? 1);
+
+  if (qty < 0 || rate < 0 || days < 0) return true;
+
+  return false;
+});
+if (bad) return alert("Item Name required (and no negative qty/rate/days).");
+
 
       const payload = {
         invoice_id: editingInvoiceId,
@@ -2028,6 +2292,10 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
     const showHSN = String(header.gst_type || "").toUpperCase() !== "NONE";
     const title = (header.doc_type === "QUOTATION") ? "QUOTATION" : "INVOICE";
     const terms = company.terms || "Terms: 1. Please pay within 7 days. 2. Goods once rented are the responsibility of the client.";
+function isBlankOrZero(v){
+  const n = Number(v);
+  return !isFinite(n) || n === 0;
+}
 
     return `
       <br><br><br><br>
@@ -2078,21 +2346,50 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
             </tr>
           </thead>
           <tbody>
-            ${items.map((it,i)=>`
-              <tr>
-                <td>${i+1}</td>
-                <td>${escapeHtml(it.item_name||"")} ${it.unit ? `<span class="u">(${escapeHtml(it.unit)})</span>` : ""}</td>
-              ${showHSN ? `
-    <td style="text-align:center;">
-      ${escapeHtml(it.hsn_sac || "")}
-    </td>
-  ` : ``}
-  <td style="text-align:right;">${Number(it.qty||0)}</td>
-                <td style="text-align:right;">${Number(it.days ?? 1)}</td>
-                <td style="text-align:right;">₹${money(it.rate||0)}</td>
-                <td style="text-align:right;">₹${money(it.amount||0)}</td>
-              </tr>
-            `).join("")}
+           ${items.map((it,i)=>{
+  const name = String(it.item_name || "");
+  const unit = String(it.unit || "");
+  const hsn  = String(it.hsn_sac || "");
+
+  const qty  = Number(it.qty || 0);
+  const days = Number(it.days ?? 1);
+  const rate = Number(it.rate || 0);
+  const amt  = Number(it.amount || 0);
+
+  // ✅ If line is "only name" (everything else empty/0), print blanks
+ const onlyName =
+  isBlankOrZero(qty) &&
+  isBlankOrZero(rate) &&
+  isBlankOrZero(amt) &&   // ✅ check amount also
+  !unit.trim() &&
+  !hsn.trim();
+
+
+  const qtyTxt  = onlyName ? "" : (isFinite(qty) ? String(qty) : "");
+ const daysTxt =
+  onlyName ? "" :
+  (!isFinite(days) || days === 0 || days === 1) ? "" :
+  String(days);
+
+  const rateTxt = onlyName ? "" : (isFinite(rate) && rate !== 0 ? `₹${money(rate)}` : "");
+  const amtTxt  = onlyName ? "" : (isFinite(amt)  && amt  !== 0 ? `₹${money(amt)}`  : "");
+
+  // unit shown only if not onlyName and unit exists
+  const unitPart = (!onlyName && unit) ? ` <span class="u">(${escapeHtml(unit)})</span>` : "";
+
+  return `
+    <tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(name).replace(/\n/g,"<br>")}${unitPart}</td>
+      ${showHSN ? `<td style="text-align:center;">${onlyName ? "" : escapeHtml(hsn)}</td>` : ``}
+      <td style="text-align:right;">${qtyTxt}</td>
+      <td style="text-align:right;">${daysTxt}</td>
+      <td style="text-align:right;">${rateTxt}</td>
+      <td style="text-align:right;">${amtTxt}</td>
+    </tr>
+  `;
+}).join("")}
+
           </tbody>
         </table>
 
