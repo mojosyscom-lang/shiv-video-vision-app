@@ -4753,13 +4753,22 @@ if (!hasAnyOut) {
       return alert(`Max allowed for ${row.item_name} is ${maxAllowed}`);
     }
 
-    await api({
-      action: "addInventoryTxn",
-      order_id: o.order_id,
-      item_id,
-      txn_type: "OUT",
-      qty
-    });
+   const rSave = await api({
+  action: "addInventoryTxn",
+  order_id: o.order_id,
+  item_id,
+  item_name: row.item_name, // ✅ send it
+  txn_type: "OUT",
+  qty,
+  start_date: o.start_date,
+  end_date: o.end_date
+});
+
+if (rSave && rSave.error) {
+  console.log("addInventoryTxn error:", rSave);
+  return alert(`Save failed for ${row.item_name}: ${rSave.error}`);
+}
+
   }
 
   alert("OUT saved");
@@ -4812,7 +4821,7 @@ box.innerHTML = `
 </div>
 
 <button class="primary" id="btn_save_all" style="width:100%;margin-top:14px;">
-  Save Returns
+  Save Return / Lost / Damaged
 </button>
 
   <div class="card" style="margin-top:12px;">
@@ -4831,6 +4840,74 @@ box.innerHTML = `
     }
   </div>
 `;
+document.getElementById("btn_save_all")?.addEventListener("click", async () => {
+  const o = selectedOrderObj();
+  if (!o) return alert("Select an order first.");
+
+  const retInputs = box.querySelectorAll("input[data-ret-item]");
+  const lostInputs = box.querySelectorAll("input[data-lost-item]");
+  const damInputs = box.querySelectorAll("input[data-dam-item]");
+
+  // helper to save one type
+  async function saveType(inputs, txn_type) {
+    for (const inp of inputs) {
+      const attr =
+  (txn_type === "RETURN") ? "data-ret-item" :
+  (txn_type === "LOST") ? "data-lost-item" :
+  "data-dam-item";
+
+const item_id = String(inp.getAttribute(attr) || "").trim();
+
+      const qty = Number(inp.value || 0);
+      if (!(qty > 0)) continue;
+
+      const row = rows.find(r => r.item_id === item_id);
+      if (!row) continue;
+if (maxAllowed <= 0) continue;
+      const maxAllowed = Number(row.outstanding || 0);
+      if (qty > maxAllowed) {
+        throw new Error(`Max allowed for ${row.item_name} is ${maxAllowed}`);
+      }
+
+      const rSave = await api({
+        action: "addInventoryTxn",
+        order_id: o.order_id,
+        item_id,
+        item_name: row.item_name,     // ✅ important
+        txn_type: txn_type,           // RETURN / LOST / DAMAGED
+        qty,
+        start_date: o.setup_date,     // ✅ keep date range same as OUT
+        end_date: o.end_date
+      });
+
+      if (rSave && rSave.error) {
+        throw new Error(`${row.item_name}: ${rSave.error}`);
+      }
+
+      // clear input after successful save
+      inp.value = "";
+    }
+  }
+
+  const btn = document.getElementById("btn_save_all");
+  const unlock = lockButton(btn, "Saving...");
+
+  try {
+    await saveType(retInputs, "RETURN");
+    await saveType(lostInputs, "LOST");
+    await saveType(damInputs, "DAMAGED");
+
+    alert("Saved. (LOST/DAMAGED will be PENDING for approval)");
+    await loadOrderItemsUI();
+    if (isAdmin) await renderPendingBox();
+  } catch (err) {
+    alert(String(err.message || err));
+  } finally {
+    setTimeout(unlock, 350);
+  }
+});
+
+    
 
     // bind mini action buttons
    
