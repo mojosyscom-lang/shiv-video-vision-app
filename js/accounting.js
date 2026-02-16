@@ -1872,7 +1872,7 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
     const terms = company.terms || "Terms: 1. Please pay within 7 days. 2. Goods once rented are the responsibility of the client.";
 
     return `
-      
+      <br><br><br><br>
         <div class="hdr">
           <div class="hdrLeft">
             <div class="brand">${escapeHtml(company.company_name || "")}</div>
