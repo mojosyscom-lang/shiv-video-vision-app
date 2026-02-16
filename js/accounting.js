@@ -1025,6 +1025,10 @@ if (type === "invoice") {
   let editingInvoiceId = "";     // if set -> updateInvoice else addInvoice
   let lastSavedInvoiceId = "";   // for WhatsApp/PDF generation after save
   let lastSavedInvoiceNo = "";
+  // ✅ Restore last saved invoice info (if exists)
+lastSavedInvoiceId = sessionStorage.getItem("lastSavedInvoiceId") || "";
+lastSavedInvoiceNo = sessionStorage.getItem("lastSavedInvoiceNo") || "";
+
   let currentItems = [];         // [{item_id,item_name,qty,unit,rate,amount}]
   let currentDocType = "INVOICE"; // "INVOICE" or "QUOTATION"
   let currentHeaderCache = null; // last loaded/saved header for print/wa
@@ -1845,7 +1849,15 @@ currentHeaderCache = {
 
 const no = lastSavedInvoiceNo;
 alert(editingInvoiceId ? "Saved" : (doc_type === "QUOTATION" ? ("Quotation saved: " + no) : ("Invoice saved: " + no)));
+// ✅ Persist last saved invoice info across reload
+sessionStorage.setItem("lastSavedInvoiceId", lastSavedInvoiceId || "");
+sessionStorage.setItem("lastSavedInvoiceNo", lastSavedInvoiceNo || "");
+
+// ✅ reload invoice section (after reload, DOM is rebuilt)
 loadSection("invoice");
+return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
+
+
 
       
     } finally {
@@ -1952,10 +1964,10 @@ loadSection("invoice");
     `;
   }
 
-  function printSameWindow(){
+  async function printSameWindow(){
     const header = {
       doc_type: currentDocType,
-      invoice_no: lastSavedInvoiceNo || "",
+      invoice_no: (currentHeaderCache?.invoice_no || lastSavedInvoiceNo || ""),
       invoice_date: document.getElementById("inv_date")?.value || "",
       order_id: document.getElementById("inv_order_id")?.textContent || "",
       venue: document.getElementById("inv_venue")?.value || "",
@@ -1985,24 +1997,27 @@ loadSection("invoice");
   @page { size: A4; margin: 0; }
 
   html, body { height:100%; }
-  body.printing { margin:0; background:#fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.printing { margin:0; background: transparent !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  .printBg{
+    .printBg{
     position: fixed;
     inset: 0;
     width: 210mm;
     height: 297mm;
     object-fit: cover;
-    z-index: -1;
+    z-index: 0;          /* ✅ not negative */
+     -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
   }
 
   .page{
+    position: relative;  /* ✅ creates stacking context above bg */
+    z-index: 1;
     width: 210mm;
     min-height: 297mm;
     box-sizing: border-box;
     padding: 18mm 14mm;
-    font-family: Inter, system-ui, -apple-system, Arial, sans-serif;
-    color:#111;
+
   }
 
   .hdr { display:flex; justify-content:space-between; gap:14px; border-bottom:2px solid #111; padding-bottom:12px; }
@@ -2054,14 +2069,29 @@ document.body.innerHTML = printArea.innerHTML;
     const restore = () => {
   document.body.classList.remove("printing");
   document.body.innerHTML = appRoot;
+        // ✅ STEP 3: clear persisted last-saved after using it
+  sessionStorage.removeItem("lastSavedInvoiceId");
+  sessionStorage.removeItem("lastSavedInvoiceNo");
   loadSection("invoice");
   window.scrollTo(0, scrollY);
   window.removeEventListener("afterprint", restore);
 };
 
 
-    window.addEventListener("afterprint", restore);
-    window.print();
+window.addEventListener("afterprint", restore);
+
+// ✅ preload bg image before printing (iPhone fix)
+await new Promise((resolve) => {
+  const img = new Image();
+  img.onload = resolve;
+  img.onerror = resolve;
+  img.src = INVOICE_BG_URL;
+});
+
+setTimeout(() => {
+  try { window.print(); } catch(e) {}
+}, 150);
+
   }
   // --- helpers for list actions (Print/WhatsApp)
   async function getInvoiceFullById(invoice_id){
@@ -2106,7 +2136,15 @@ document.body.innerHTML = printArea.innerHTML;
   }
 
   
-  document.getElementById("btn_inv_print")?.addEventListener("click", printSameWindow);
+   document.getElementById("btn_inv_print")?.addEventListener("click", async ()=>{
+  // If we have a saved invoice id, print using server data so invoice_no is correct
+  const id = editingInvoiceId || lastSavedInvoiceId;
+  if (id) return await printFromInvoiceId(id);
+
+  // Otherwise print draft preview
+  return await printSameWindow();
+});
+
 
   // WhatsApp PDF
   document.getElementById("btn_inv_wa")?.addEventListener("click", async ()=>{
