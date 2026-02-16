@@ -1039,6 +1039,21 @@ lastSavedInvoiceNo = sessionStorage.getItem("lastSavedInvoiceNo") || "";
 
   // helpers starts here
 const INVOICE_BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/print-bg.png";
+  // ✅ LED Wall conversion: cabinets -> sq ft
+const LED_WALL_SQFT_PER_CABINET = 2.691;
+
+// ✅ Detect which planned item needs conversion
+// Option A: by name (recommended for you right now)
+function isLedWallLine(name){
+  return String(name||"").toLowerCase().includes("led wall on rent");
+}
+
+// ✅ safe number
+function numOr(v, fallback){
+  const n = Number(v);
+  return isFinite(n) ? n : fallback;
+}
+
 const BANK_QR_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/bank-qr.png"; // ✅ change filename if needed
 
 const BANK_DETAILS = {
@@ -1404,17 +1419,33 @@ const defDays = calcEventDays(dSetup, dStart, dEnd) || 1;
 
 currentItems = planned
   .filter(p => String(p.status||"ACTIVE").toUpperCase() === "ACTIVE")
-  .map(p => ({
-    item_id: String(p.item_id||""),
-    item_name: String(p.item_name||p.item_id||""),
-    qty: Number(p.planned_qty||0),
-    unit: unitMap[String(p.item_id||"")] || "",
-    hsn_sac: hsnMap[String(p.item_id||"")] || "",
-    days: defDays,
-    manual_days: false,
-    rate: 0,
-    amount: 0
-  }));
+  .map(p => {
+    const item_id = String(p.item_id||"");
+    const item_name = String(p.item_name||p.item_id||"");
+
+    let qty = Number(p.planned_qty||0);
+    let unit = unitMap[item_id] || "";
+    let hsn_sac = hsnMap[item_id] || "";
+
+    // ✅ Convert LED Wall cabinets -> sq ft
+    if (isLedWallLine(item_name)) {
+      qty = Math.round((qty * LED_WALL_SQFT_PER_CABINET) * 100) / 100; // 2 decimals
+      unit = unit || "sq ft"; // force unit for clarity
+    }
+
+    return {
+      item_id,
+      item_name,
+      qty,
+      unit,
+      hsn_sac,
+      days: defDays,
+      manual_days: false,
+      rate: 0,
+      amount: 0
+    };
+  });
+
 
 
     renderItemsTable();
@@ -1532,10 +1563,20 @@ currentItems = planned
         </div>
 
         <div class="card" style="margin-top:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-            <b>Line Items</b>
-            ${canEdit ? `<button class="userToggleBtn" id="btn_inv_add_row">➕ Add Item</button>` : ``}
-          </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+  <b>Line Items</b>
+  ${
+    canEdit
+      ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="userToggleBtn" id="btn_inv_add_row">➕ Add Item</button>
+          <button class="userToggleBtn" id="btn_inv_add_line">➕ Add Line</button>
+        </div>
+      `
+      : ``
+  }
+</div>
+
 
           <div id="inv_items_box" style="margin-top:10px;"></div>
 
@@ -1566,7 +1607,47 @@ currentItems = planned
 
             <button class="primary" id="btn_inv_add_confirm" style="margin-top:10px;">Add</button>
           </div>
-        </div>
+          
+<div id="inv_add_line_box" style="display:none;margin-top:12px;">
+  <label>Manual Line (Type anything)</label>
+
+  <label style="margin-top:8px;">Item Name *</label>
+  <input id="inv_line_name" placeholder="e.g. Transport / Labour / Installation">
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+    <div style="flex:1;min-width:120px;">
+      <label>Qty</label>
+      <input id="inv_line_qty" type="number" inputmode="decimal" value="1">
+    </div>
+    <div style="flex:1;min-width:120px;">
+      <label>Unit</label>
+      <input id="inv_line_unit" placeholder="e.g. trip / day / sq ft">
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+    <div style="flex:1;min-width:140px;">
+      <label>HSN/SAC</label>
+      <input id="inv_line_hsn" placeholder="optional">
+    </div>
+    <div style="flex:1;min-width:120px;">
+      <label>Rate (₹)</label>
+      <input id="inv_line_rate" type="number" inputmode="decimal" value="0">
+    </div>
+  </div>
+
+  <button class="primary" id="btn_inv_line_confirm" style="margin-top:10px;">Add Line</button>
+
+  <p class="dashSmall" style="margin-top:8px;">
+    Note: Qty defaults to 1, Rate defaults to 0. Only Item Name is required.
+  </p>
+</div></div>
+
+
+
+
+          
+        
 
         <div class="card" id="gst_card"  style="margin-top:12px;">
           <b>GST</b>
@@ -1735,6 +1816,53 @@ document.addEventListener("click", (e)=>{
     box.style.display = isHidden ? "block" : "none";
     return;
   }
+// Toggle manual add line box
+if (t && t.id === "btn_inv_add_line") {
+  const box = document.getElementById("inv_add_line_box");
+  if (!box) return;
+  const isHidden = window.getComputedStyle(box).display === "none";
+  box.style.display = isHidden ? "block" : "none";
+  return;
+}
+
+// Confirm manual line
+if (t && t.id === "btn_inv_line_confirm") {
+  const name = String(document.getElementById("inv_line_name")?.value || "").trim();
+  if (!name) return alert("Item Name is required");
+
+  const qty = numOr(document.getElementById("inv_line_qty")?.value, 1);
+  const rate = numOr(document.getElementById("inv_line_rate")?.value, 0);
+  const unit = String(document.getElementById("inv_line_unit")?.value || "").trim();
+  const hsn_sac = String(document.getElementById("inv_line_hsn")?.value || "").trim();
+
+  // default days from current dates
+  const dSetup = document.getElementById("inv_setup")?.value || "";
+  const dStart = document.getElementById("inv_start")?.value || "";
+  const dEnd   = document.getElementById("inv_end")?.value || "";
+  const defDays = calcEventDays(dSetup, dStart, dEnd) || 1;
+
+  currentItems.push({
+    item_id: "",              // manual line (no inventory id)
+    item_name: name,
+    hsn_sac,
+    qty: (qty > 0 ? qty : 1), // backend requires qty > 0
+    unit,
+    days: defDays,
+    manual_days: false,
+    rate,
+    amount: 0
+  });
+
+  // clear inputs
+  document.getElementById("inv_line_name").value = "";
+  document.getElementById("inv_line_qty").value = "1";
+  document.getElementById("inv_line_unit").value = "";
+  document.getElementById("inv_line_hsn").value = "";
+  document.getElementById("inv_line_rate").value = "0";
+
+  renderItemsTable();
+  return;
+}
 
   // Confirm add item
   if (t && t.id === "btn_inv_add_confirm") {
@@ -1994,7 +2122,6 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
       : `
         <div class="payRow" style="margin-top:10px;">
           <div class="qrMini">
-            <div class="qrTitle">Scan to Pay</div>
             <img class="qrImg" src="${BANK_QR_URL}" alt="QR">
           </div>
 
@@ -2126,7 +2253,7 @@ const header = {
 .qrMini{
   border:1px solid #eee;
   border-radius:10px;
-  padding:8px;
+  padding:5px;
   background: rgba(255,255,255,0.9);
   text-align:center;
   flex:0 0 auto;
@@ -4393,7 +4520,7 @@ if (type === "orders") {
                   const already = Number(existingMap[id] || 0);
                   const availableNow = Number(it.available_qty || 0);
                   const booked = Number(it.booked_qty || 0);
-                  const max = availableNow + already;
+                  const max = availableNow;
 
                   return `
                     <tr style="border-top:1px solid #eee;">
