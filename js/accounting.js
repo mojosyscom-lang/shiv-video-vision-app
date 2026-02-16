@@ -1536,7 +1536,8 @@ currentItems = planned
               ${invMasterAll.map(it=>`
                 <option value="${escapeAttr(String(it.item_id||""))}"
                   data-name="${escapeAttr(String(it.item_name||""))}"
-                  data-unit="${escapeAttr(String(it.unit||""))}">
+                  data-unit="${escapeAttr(String(it.unit||""))}"
+                  data-hsn="${escapeAttr(String(it.hsn_sac || it.hsnSac || ""))}">
                   ${escapeHtml(it.item_name||"")} • ${escapeHtml(String(it.item_id||""))}
                 </option>
               `).join("")}
