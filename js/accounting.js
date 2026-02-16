@@ -1261,11 +1261,28 @@ function calcEventDays(setupISO, startISO, endISO){
     const box = document.getElementById("inv_items_box");
     if (!box) return;
 
-    if (!currentItems.length){
-      box.innerHTML = `<p class="dashSmall">No items yet. Select an order or add inventory items.</p>`;
-      recalc();
-      return;
-    }
+   if (!currentItems.length){
+  box.innerHTML = `
+    <div style="overflow:auto;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th>Item</th>
+          <th>HSN/SAC</th>
+          <th>Unit</th>
+          <th>Qty</th>
+          <th>Days</th>
+          <th>Rate (₹)</th>
+          <th>Amount</th>
+          <th></th>
+        </tr>
+      </table>
+    </div>
+    <p class="dashSmall">No items yet. Use ➕ Add Item to insert manually.</p>
+  `;
+  recalc();
+  return;
+}
+
 
     box.innerHTML = `
       <div style="overflow:auto;">
@@ -1868,6 +1885,7 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
   document.getElementById("btn_inv_save")?.addEventListener("click", saveDoc);
 
   function buildPrintHtml(header, items){
+    const showHSN = String(header.gst_type || "").toUpperCase() !== "NONE";
     const title = (header.doc_type === "QUOTATION") ? "QUOTATION" : "INVOICE";
     const terms = company.terms || "Terms: 1. Please pay within 7 days. 2. Goods once rented are the responsibility of the client.";
 
@@ -1912,6 +1930,7 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
             <tr>
               <th style="width:5%;">#</th>
               <th>Description</th>
+              ${showHSN ? `<th style="width:12%;text-align:center;">HSN/SAC</th>` : ``}
               <th style="width:12%;text-align:right;">Qty</th>
               <th style="width:10%;text-align:right;">Days</th>
               <th style="width:16%;text-align:right;">Rate</th>
@@ -1923,7 +1942,12 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
               <tr>
                 <td>${i+1}</td>
                 <td>${escapeHtml(it.item_name||"")} ${it.unit ? `<span class="u">(${escapeHtml(it.unit)})</span>` : ""}</td>
-                <td style="text-align:right;">${Number(it.qty||0)}</td>
+              ${showHSN ? `
+    <td style="text-align:center;">
+      ${escapeHtml(it.hsn_sac || "")}
+    </td>
+  ` : ``}
+  <td style="text-align:right;">${Number(it.qty||0)}</td>
                 <td style="text-align:right;">${Number(it.days ?? 1)}</td>
                 <td style="text-align:right;">₹${money(it.rate||0)}</td>
                 <td style="text-align:right;">₹${money(it.amount||0)}</td>
@@ -1965,29 +1989,32 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
   }
 
   async function printSameWindow(){
-    const header = {
-      doc_type: currentDocType,
-      invoice_no: (currentHeaderCache?.invoice_no || lastSavedInvoiceNo || ""),
-      invoice_date: document.getElementById("inv_date")?.value || "",
-      order_id: document.getElementById("inv_order_id")?.textContent || "",
-      venue: document.getElementById("inv_venue")?.value || "",
-      setup_date: document.getElementById("inv_setup")?.value || "",
-      start_date: document.getElementById("inv_start")?.value || "",
-      end_date: document.getElementById("inv_end")?.value || "",
-      client_name: document.getElementById("inv_client_name")?.textContent || "",
-      client_company: document.getElementById("inv_client_company")?.textContent || "",
-      client_phone: document.getElementById("inv_client_phone1")?.textContent || "",
-      client_phone2: document.getElementById("inv_client_phone2")?.textContent || "",
-      client_address: document.getElementById("inv_client_address")?.textContent || "",
-      client_gstin: document.getElementById("inv_client_gstin")?.textContent || "",
-      gst_type: document.getElementById("inv_gst_type")?.value || "",
-      subtotal: document.getElementById("inv_subtotal")?.textContent || "0.00",
-      cgst: document.getElementById("inv_cgst")?.textContent || "0.00",
-      sgst: document.getElementById("inv_sgst")?.textContent || "0.00",
-      igst: document.getElementById("inv_igst")?.textContent || "0.00",
-      grand: document.getElementById("inv_grand")?.textContent || "0.00",
-      words: document.getElementById("inv_words")?.value || ""
-    };
+   const source = currentHeaderCache || {};
+
+const header = {
+  doc_type: source.doc_type || currentDocType,
+  invoice_no: source.invoice_no || lastSavedInvoiceNo || "",
+  invoice_date: source.invoice_date || document.getElementById("inv_date")?.value || "",
+  order_id: source.order_id || document.getElementById("inv_order_id")?.textContent || "",
+  venue: source.venue || document.getElementById("inv_venue")?.value || "",
+  setup_date: source.setup_date || document.getElementById("inv_setup")?.value || "",
+  start_date: source.start_date || document.getElementById("inv_start")?.value || "",
+  end_date: source.end_date || document.getElementById("inv_end")?.value || "",
+  client_name: source.client_name || document.getElementById("inv_client_name")?.textContent || "",
+  client_company: source.client_company || document.getElementById("inv_client_company")?.textContent || "",
+  client_phone: source.client_phone || document.getElementById("inv_client_phone1")?.textContent || "",
+  client_phone2: source.client_phone2 || document.getElementById("inv_client_phone2")?.textContent || "",
+  client_address: source.client_address || document.getElementById("inv_client_address")?.textContent || "",
+  client_gstin: source.client_gstin || document.getElementById("inv_client_gstin")?.textContent || "",
+  gst_type: source.gst_type || document.getElementById("inv_gst_type")?.value || "",
+  subtotal: source.subtotal || document.getElementById("inv_subtotal")?.textContent || "0.00",
+  cgst: source.cgst || document.getElementById("inv_cgst")?.textContent || "0.00",
+  sgst: source.sgst || document.getElementById("inv_sgst")?.textContent || "0.00",
+  igst: source.igst || document.getElementById("inv_igst")?.textContent || "0.00",
+  grand: source.grand || document.getElementById("inv_grand")?.textContent || "0.00",
+  words: source.words || document.getElementById("inv_words")?.value || ""
+};
+
 
     const printArea = document.getElementById("inv_print_area");
     if (!printArea) return alert("Print area missing");
@@ -2111,6 +2138,18 @@ setTimeout(() => {
   async function printFromInvoiceId(invoice_id){
     const full = await getInvoiceFullById(invoice_id);
     currentHeaderCache = full.header || null;
+    if (full.header) {
+  currentHeaderCache = {
+    ...full.header,
+    subtotal: full.header.subtotal,
+    cgst: full.header.cgst,
+    sgst: full.header.sgst,
+    igst: full.header.igst,
+    grand: full.header.grand_total,
+    words: amountInWordsIN(full.header.grand_total) + " Only"
+  };
+}
+
     currentItems = Array.isArray(full.items) ? full.items : [];
     renderItemsTable(); // keeps UI consistent
     printSameWindow();  // will now print with real invoice_no
