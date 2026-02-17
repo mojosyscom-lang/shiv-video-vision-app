@@ -462,121 +462,38 @@ showDashboard();
    - Line items optional
    - Sheet: gst_bills
    ========================================================== */
-if (type === "gstBills") {
+if (type === "gstbills") {
   content.innerHTML = `<div class="card"><h2>GST Bills</h2><p>Loading…</p></div>`;
 
   const canEdit = (role === "owner" || role === "superadmin");
 
-  // TODO later: list bills + view/edit
-  content.innerHTML = `
-    <div class="card">
-      <h2>GST Bills</h2>
+  // ---- state
+  let editingBillId = "";
+  let uploadedFile = null; // {file_id,file_url,file_name,ocr_text}
+  let lineItems = [];      // optional [{desc, qty, unit, rate, amount}]
+  let ocrCacheText = "";   // last OCR text returned from upload
 
-      <div class="card" style="margin-top:12px;">
-        <h3 style="margin-top:0;">Create / Upload</h3>
+  function money(n){ return Number(n||0).toFixed(2); }
+  function round2(n){ return Math.round((Number(n||0)+Number.EPSILON)*100)/100; }
+  function norm(s){ return String(s||"").trim(); }
 
-        <label>Bill Number</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="gb_bill_no" placeholder="Bill / Invoice No">
-          <button class="userToggleBtn" id="gb_detect_billno" type="button">Detect</button>
-        </div>
+  function recalcLineItems(){
+    lineItems = lineItems.map(x=>{
+      const qty = Number(x.qty||0);
+      const rate = Number(x.rate||0);
+      const amount = round2(qty * rate);
+      return {...x, qty, rate, amount};
+    });
+  }
 
-        <label style="margin-top:10px;">Bill Date</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="gb_bill_date" type="date">
-          <button class="userToggleBtn" id="gb_detect_date" type="button">Detect</button>
-        </div>
-
-        <label style="margin-top:10px;">Vendor</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="gb_vendor" placeholder="Vendor name">
-          <button class="userToggleBtn" id="gb_detect_vendor" type="button">Detect</button>
-        </div>
-
-        <div class="card" style="margin-top:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-            <b>Line Items (optional)</b>
-            ${canEdit ? `<button class="userToggleBtn" id="gb_add_line" type="button">➕ Add Line</button>` : ``}
-          </div>
-
-          <div id="gb_lines" style="margin-top:10px;"></div>
-
-          <p class="dashSmall" style="margin-top:8px;color:#777;">
-            You can save without line items.
-          </p>
-        </div>
-
-        <label style="margin-top:10px;">Total Bill Amount (₹)</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="gb_total" type="number" inputmode="decimal" placeholder="0">
-          <button class="userToggleBtn" id="gb_detect_total" type="button">Detect</button>
-        </div>
-
-        <label style="margin-top:10px;">GST Amount (₹)</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="gb_gst" type="number" inputmode="decimal" placeholder="0">
-          <button class="userToggleBtn" id="gb_detect_gst" type="button">Detect</button>
-        </div>
-
-        <div class="card" style="margin-top:12px;">
-          <b>OR GST Split (optional)</b>
-
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-            <div style="flex:1;min-width:120px;">
-              <label>CGST (₹)</label>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <input id="gb_cgst" type="number" inputmode="decimal" placeholder="0">
-                <button class="userToggleBtn" id="gb_detect_cgst" type="button">Detect</button>
-              </div>
-            </div>
-            <div style="flex:1;min-width:120px;">
-              <label>SGST (₹)</label>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <input id="gb_sgst" type="number" inputmode="decimal" placeholder="0">
-                <button class="userToggleBtn" id="gb_detect_sgst" type="button">Detect</button>
-              </div>
-            </div>
-            <div style="flex:1;min-width:120px;">
-              <label>IGST (₹)</label>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <input id="gb_igst" type="number" inputmode="decimal" placeholder="0">
-                <button class="userToggleBtn" id="gb_detect_igst" type="button">Detect</button>
-              </div>
-            </div>
-          </div>
-
-          <p class="dashSmall" style="margin-top:8px;color:#777;">
-            If CGST/SGST/IGST filled, we can auto-calc GST Total later.
-          </p>
-        </div>
-
-        <label style="margin-top:10px;">Upload Bill File / Photo</label>
-        <input id="gb_file" type="file" accept="image/*,application/pdf">
-
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          ${canEdit ? `<button class="primary" id="gb_upload" type="button">⬆ Upload + OCR</button>` : ``}
-          ${canEdit ? `<button class="primary" id="gb_save" type="button">💾 Save Bill</button>` : ``}
-        </div>
-
-        <p class="dashSmall" id="gb_status" style="margin-top:10px;color:#777;"></p>
-      </div>
-
-      <div class="card" style="margin-top:12px;">
-        <h3 style="margin-top:0;">Bills List</h3>
-        <div id="gb_list">Coming next…</div>
-      </div>
-    </div>
-  `;
-
-  // ---------- UI helpers ----------
-  let gbLines = []; // optional: [{name, amount, gst?}]
-
-  function renderGbLines(){
-    const box = document.getElementById("gb_lines");
+  function renderLineItems(){
+    const box = document.getElementById("gb_items_box");
     if (!box) return;
 
-    if (!gbLines.length){
-      box.innerHTML = `<p class="dashSmall" style="color:#777;">No lines added.</p>`;
+    if (!lineItems.length){
+      box.innerHTML = `
+        <div class="dashSmall">Line items are optional. You can add them if you want.</div>
+      `;
       return;
     }
 
@@ -584,50 +501,275 @@ if (type === "gstBills") {
       <div style="overflow:auto;">
         <table style="width:100%;border-collapse:collapse;">
           <tr>
-            <th align="left">Goods/Service</th>
-            <th align="right">Amount (₹)</th>
+            <th align="left">Goods / Service</th>
+            <th align="right">Qty</th>
+            <th align="right">Unit</th>
+            <th align="right">Rate</th>
+            <th align="right">Amount</th>
             <th></th>
           </tr>
-          ${gbLines.map((ln, idx)=>`
+          ${lineItems.map((it,idx)=>`
             <tr style="border-top:1px solid #eee;vertical-align:top;">
-              <td><input data-gb-name="${idx}" value="${escapeAttr(String(ln.name||""))}" placeholder="e.g. Cable / Rent / Service"></td>
-              <td align="right"><input data-gb-amt="${idx}" type="number" inputmode="decimal" value="${escapeAttr(String(ln.amount||0))}" style="width:140px;"></td>
-              <td align="right"><button class="userToggleBtn" data-gb-del="${idx}" type="button">✖</button></td>
+              <td><input data-gb-desc="${idx}" placeholder="e.g. Printing / Material" value="${escapeAttr(it.desc||"")}" style="width:220px;"></td>
+              <td align="right"><input data-gb-qty="${idx}" type="number" inputmode="decimal" value="${escapeAttr(String(it.qty??0))}" style="width:80px;"></td>
+              <td align="right"><input data-gb-unit="${idx}" placeholder="pcs" value="${escapeAttr(it.unit||"")}" style="width:90px;"></td>
+              <td align="right"><input data-gb-rate="${idx}" type="number" inputmode="decimal" value="${escapeAttr(String(it.rate??0))}" style="width:110px;"></td>
+              <td align="right"><b>₹ ${money(it.amount||0)}</b></td>
+              <td align="right"><button class="userToggleBtn" data-gb-del="${idx}">✖</button></td>
             </tr>
           `).join("")}
         </table>
       </div>
     `;
 
-    box.querySelectorAll("[data-gb-name]").forEach(inp=>{
+    box.querySelectorAll("input[data-gb-desc]").forEach(inp=>{
       inp.addEventListener("input", ()=>{
-        const i = Number(inp.getAttribute("data-gb-name"));
-        gbLines[i].name = String(inp.value||"");
+        const i = Number(inp.getAttribute("data-gb-desc"));
+        lineItems[i].desc = inp.value;
       });
     });
-    box.querySelectorAll("[data-gb-amt]").forEach(inp=>{
+    box.querySelectorAll("input[data-gb-qty]").forEach(inp=>{
       inp.addEventListener("input", ()=>{
-        const i = Number(inp.getAttribute("data-gb-amt"));
-        gbLines[i].amount = Number(inp.value||0);
+        const i = Number(inp.getAttribute("data-gb-qty"));
+        lineItems[i].qty = Number(inp.value||0);
+        recalcLineItems(); renderLineItems();
       });
     });
-    box.querySelectorAll("[data-gb-del]").forEach(btn=>{
+    box.querySelectorAll("input[data-gb-unit]").forEach(inp=>{
+      inp.addEventListener("input", ()=>{
+        const i = Number(inp.getAttribute("data-gb-unit"));
+        lineItems[i].unit = inp.value;
+      });
+    });
+    box.querySelectorAll("input[data-gb-rate]").forEach(inp=>{
+      inp.addEventListener("input", ()=>{
+        const i = Number(inp.getAttribute("data-gb-rate"));
+        lineItems[i].rate = Number(inp.value||0);
+        recalcLineItems(); renderLineItems();
+      });
+    });
+    box.querySelectorAll("button[data-gb-del]").forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const i = Number(btn.getAttribute("data-gb-del"));
-        gbLines.splice(i,1);
-        renderGbLines();
+        lineItems.splice(i,1);
+        recalcLineItems(); renderLineItems();
       });
     });
   }
 
-  document.getElementById("gb_add_line")?.addEventListener("click", ()=>{
-    gbLines.push({ name:"", amount:0 });
-    renderGbLines();
+  // ---------- OCR detect helpers (Option 3 buttons use OCR text from Option 1 upload)
+  function detectFromOcr(type){
+    const text = String(ocrCacheText||"");
+    if (!text.trim()) return alert("No OCR text yet. Upload bill photo/file first.");
+
+    // very simple heuristics (safe + user-confirm)
+    const pick = (re) => {
+      const m = text.match(re);
+      return m ? String(m[1]||"").trim() : "";
+    };
+
+    if (type === "bill_no"){
+      const v = pick(/(?:Bill\s*No|Invoice\s*No|Inv\s*No|Tax\s*Invoice\s*No)\s*[:\-]?\s*([A-Z0-9\/\-]+)/i);
+      if (v) document.getElementById("gb_bill_no").value = v;
+      else alert("Could not detect Bill No. Please type manually.");
+    }
+
+    if (type === "bill_date"){
+      // dd/mm/yyyy or dd-mm-yyyy
+      const v = pick(/(?:Date|Bill\s*Date|Invoice\s*Date)\s*[:\-]?\s*([0-3]?\d[\/\-][01]?\d[\/\-](?:20)?\d{2})/i);
+      if (v) {
+        // try convert to YYYY-MM-DD if possible
+        const parts = v.replace(/-/g,"/").split("/");
+        if (parts.length === 3){
+          const dd = parts[0].padStart(2,"0");
+          const mm = parts[1].padStart(2,"0");
+          let yy = parts[2];
+          if (yy.length === 2) yy = "20"+yy;
+          document.getElementById("gb_bill_date").value = `${yy}-${mm}-${dd}`;
+        }
+      } else alert("Could not detect Bill Date.");
+    }
+
+    if (type === "vendor"){
+      // pick first strong vendor-like line (fallback)
+      const lines = text.split("\n").map(x=>x.trim()).filter(Boolean);
+      const v = (lines[0] || "").slice(0,60);
+      if (v) document.getElementById("gb_vendor").value = v;
+      else alert("Could not detect Vendor.");
+    }
+
+    if (type === "total"){
+      const v = pick(/(?:Grand\s*Total|Total\s*Amount|Net\s*Amount|Amount\s*Payable)\s*[:\-]?\s*₹?\s*([0-9,]+\.\d{2}|[0-9,]+)/i);
+      if (v) document.getElementById("gb_total").value = v.replace(/,/g,"");
+      else alert("Could not detect Total.");
+    }
+
+    if (type === "gst"){
+      const v = pick(/(?:GST\s*Amount|Total\s*GST|Tax\s*Amount)\s*[:\-]?\s*₹?\s*([0-9,]+\.\d{2}|[0-9,]+)/i);
+      if (v) document.getElementById("gb_gst").value = v.replace(/,/g,"");
+      else alert("Could not detect GST amount.");
+    }
+  }
+
+  // -------- UI
+  content.innerHTML = `
+    <div class="card">
+      <h2>GST Bills</h2>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Add / Update GST Bill</h3>
+
+        <label>Bill Number</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_bill_no" placeholder="e.g. INV-123">
+          <button class="userToggleBtn" id="gb_detect_bill_no">Detect</button>
+        </div>
+
+        <label style="margin-top:10px;">Bill Date</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_bill_date" type="date">
+          <button class="userToggleBtn" id="gb_detect_bill_date">Detect</button>
+        </div>
+
+        <label style="margin-top:10px;">Vendor</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_vendor" placeholder="Vendor name">
+          <button class="userToggleBtn" id="gb_detect_vendor">Detect</button>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+            <b>Line Items (Optional)</b>
+            ${canEdit ? `<button class="userToggleBtn" id="gb_add_item">➕ Add Line Item</button>` : ``}
+          </div>
+          <div id="gb_items_box" style="margin-top:10px;"></div>
+        </div>
+
+        <label style="margin-top:10px;">Total Bill Amount (₹)</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_total" type="number" inputmode="decimal" placeholder="0">
+          <button class="userToggleBtn" id="gb_detect_total">Detect</button>
+        </div>
+
+        <label style="margin-top:10px;">GST Amount (₹)</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_gst" type="number" inputmode="decimal" placeholder="0">
+          <button class="userToggleBtn" id="gb_detect_gst">Detect</button>
+        </div>
+
+        <div class="dashSmall" style="margin-top:10px;color:#666;">
+          Optional: If you want split later we will add CGST/SGST/IGST fields (master plan).
+        </div>
+
+        <label style="margin-top:10px;">Upload Bill (Photo / PDF)</label>
+        <input id="gb_file" type="file" accept="image/*,application/pdf">
+        <div class="dashSmall" id="gb_file_status" style="margin-top:6px;color:#777;"></div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          ${canEdit ? `<button class="primary" id="gb_save">💾 Save</button>` : ``}
+        </div>
+
+        <p class="dashSmall" id="gb_status" style="margin-top:10px;color:#777;"></p>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">GST Bills List</h3>
+        <div id="gb_list"></div>
+      </div>
+    </div>
+  `;
+
+  // --- bind detect buttons (Option 3)
+  document.getElementById("gb_detect_bill_no")?.addEventListener("click", ()=>detectFromOcr("bill_no"));
+  document.getElementById("gb_detect_bill_date")?.addEventListener("click", ()=>detectFromOcr("bill_date"));
+  document.getElementById("gb_detect_vendor")?.addEventListener("click", ()=>detectFromOcr("vendor"));
+  document.getElementById("gb_detect_total")?.addEventListener("click", ()=>detectFromOcr("total"));
+  document.getElementById("gb_detect_gst")?.addEventListener("click", ()=>detectFromOcr("gst"));
+
+  // left-aligned checkbox request from you: (we’ll do it when we add split tax UI)
+  // (for now detect buttons are already left)
+
+  // --- add optional line item
+  document.getElementById("gb_add_item")?.addEventListener("click", ()=>{
+    lineItems.push({desc:"", qty:0, unit:"", rate:0, amount:0});
+    recalcLineItems(); renderLineItems();
   });
 
-  renderGbLines();
+  // --- upload => Option 1 Drive OCR (backend action we will add in Step 3)
+  document.getElementById("gb_file")?.addEventListener("change", async (e)=>{
+    const f = e.target.files?.[0];
+    if (!f) return;
 
-  // Next steps: gb_upload -> API upload + OCR; Detect buttons -> API detect from OCR text; Save -> addGstBill
+    const st = document.getElementById("gb_file_status");
+    if (st) st.textContent = "Uploading + OCR…";
+
+    try {
+      // you likely already have upload helper; if not we will add in Step 3
+      const res = await apiUploadBase64("uploadGSTBillFile", f); 
+      // expected: {file_id,file_url,file_name,ocr_text}
+      if (res && res.error) return alert(String(res.error));
+
+      uploadedFile = res;
+      ocrCacheText = String(res.ocr_text || "");
+
+      if (st) st.textContent = `Uploaded: ${res.file_name || "file"} ✅ OCR ready`;
+    } catch (err){
+      if (st) st.textContent = "";
+      alert(String(err?.message || err));
+    }
+  });
+
+  // --- save (backend action we will add Step 4)
+  document.getElementById("gb_save")?.addEventListener("click", async ()=>{
+    if (!canEdit) return;
+
+    const bill_no = norm(document.getElementById("gb_bill_no")?.value);
+    const bill_date = norm(document.getElementById("gb_bill_date")?.value);
+    const vendor = norm(document.getElementById("gb_vendor")?.value);
+    const total = Number(document.getElementById("gb_total")?.value || 0);
+    const gst = Number(document.getElementById("gb_gst")?.value || 0);
+
+    if (!bill_no) return alert("Bill number required");
+    if (!bill_date) return alert("Bill date required");
+    if (!vendor) return alert("Vendor required");
+
+    recalcLineItems();
+
+    const payload = {
+      bill_id: editingBillId,
+      bill_no, bill_date, vendor,
+      total_amount: total,
+      gst_amount: gst,
+      file_id: uploadedFile?.file_id || "",
+      file_url: uploadedFile?.file_url || "",
+      file_name: uploadedFile?.file_name || "",
+      ocr_text: ocrCacheText || "",
+      line_items: lineItems // optional
+    };
+
+    const btn = document.getElementById("gb_save");
+    const unlock = lockButton(btn, "Saving...");
+
+    try {
+      const r = editingBillId
+        ? await api({ action: "updateGSTBill", ...payload })
+        : await api({ action: "addGSTBill", ...payload });
+
+      if (r && r.error) return alert(String(r.error));
+      alert("Saved ✅");
+      loadSection("gstbills");
+      return;
+    } finally {
+      setTimeout(unlock, 350);
+    }
+  });
+
+  // initial
+  renderLineItems();
+  // list will come after Step 4 backend; for now keep placeholder
+  const listBox = document.getElementById("gb_list");
+  if (listBox) listBox.innerHTML = `<div class="dashSmall">List will appear after backend actions are added (next step).</div>`;
+
   return;
 }
 
@@ -7621,4 +7763,35 @@ if (!document.getElementById("global_print_area")) {
   gp.style.display = "none";
   document.body.appendChild(gp);
 }
+
+// ===============================
+// ✅ Upload helper (base64 → Apps Script)
+// Usage: const res = await apiUploadBase64("uploadGSTBillFile", file);
+// ===============================
+async function apiUploadBase64(action, file, extraPayload = {}) {
+  if (!file) throw new Error("Missing file");
+
+  const file_b64 = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = () => reject(new Error("File read failed"));
+    r.onload = () => {
+      const s = String(r.result || "");
+      // r.result is like: data:image/png;base64,AAAA...
+      const comma = s.indexOf(",");
+      resolve(comma >= 0 ? s.slice(comma + 1) : s);
+    };
+    r.readAsDataURL(file);
+  });
+
+  const payload = {
+    action,
+    file_name: String(file.name || "upload"),
+    mime_type: String(file.type || "application/octet-stream"),
+    file_b64,
+    ...extraPayload
+  };
+
+  return await api(payload);
+}
+
 
