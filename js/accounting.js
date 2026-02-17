@@ -730,12 +730,12 @@ const pre = document.getElementById("gb_ocr_text");
 if (pre) pre.textContent = String(existingFile.ocr_text || "");
 
 
-  const up = document.getElementById("gb_upload_status");
+/*  const up = document.getElementById("gb_upload_status");
   if (up) up.textContent = lastUpload.file_url ? `Existing file: ${lastUpload.file_url}` : "No file";
 
   const pre = document.getElementById("gb_ocr_text");
   if (pre) pre.textContent = String(h.ocr_text || "");
-
+*/
   // ✅ load saved line items
   try { lineItems = JSON.parse(h.line_items_json || "[]") || []; }
   catch(e){ lineItems = []; }
