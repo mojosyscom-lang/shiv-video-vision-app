@@ -481,6 +481,11 @@ let lineItems = [];    // optional [{name, amount}]
 
 
   // ----- helpers 
+  function money(n){
+  n = Number(n || 0);
+  return n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
   function num0(v){ const n = Number(v); return isFinite(n) ? n : 0; }
   function jstr(x){ try { return JSON.stringify(x || []); } catch(e){ return "[]"; } }
 
@@ -561,22 +566,67 @@ let lineItems = [];    // optional [{name, amount}]
     });
   }
 
-  function applyParsedToFields(parsed, mode){
-    // mode: "bill_no" | "bill_date" | "vendor" | "total" | "gst"
-    const p = parsed || {};
-    if (mode === "bill_no" && p.bill_no) document.getElementById("gb_bill_no").value = p.bill_no;
-    if (mode === "bill_date" && p.bill_date) document.getElementById("gb_bill_date").value = prettyISODate(p.bill_date);
-    if (mode === "vendor") {
-      // backend parser may not provide vendor yet; keep for future
-      // we won't overwrite if empty
-    }
-    if (mode === "total" && (p.total_amount !== "" && p.total_amount != null)) {
-      document.getElementById("gb_total_amount").value = String(p.total_amount);
-    }
-    if (mode === "gst" && (p.gst_amount !== "" && p.gst_amount != null)) {
-      document.getElementById("gb_gst_amount").value = String(p.gst_amount);
+function toISODateSafe(str){
+  if (!str) return "";
+
+  str = String(str).trim();
+
+  // DD-MM-YYYY or DD/MM/YYYY
+  const m1 = str.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+  if (m1) {
+    return m1[3] + "-" + m1[2] + "-" + m1[1];
+  }
+
+  // YYYY-MM-DD
+  const m2 = str.match(/^(\d{4})[\/\-](\d{2})[\/\-](\d{2})$/);
+  if (m2) {
+    return m2[1] + "-" + m2[2] + "-" + m2[3];
+  }
+
+  return "";
+}
+
+  
+ function applyParsedToFields(parsed, mode){
+  const p = parsed || {};
+
+  if (mode === "bill_no") {
+    if (p.bill_no) {
+      document.getElementById("gb_bill_no").value = String(p.bill_no);
     }
   }
+
+   if (mode === "gst_type" && p.gst_type) {
+  document.getElementById("gb_gst_type").value = p.gst_type;
+}
+
+
+  if (mode === "bill_date") {
+    if (p.bill_date) {
+      const iso = toISODateSafe(p.bill_date);
+      if (iso) document.getElementById("gb_bill_date").value = iso;
+    }
+  }
+
+  if (mode === "vendor") {
+    if (p.vendor) {
+      document.getElementById("gb_vendor").value = String(p.vendor);
+    }
+  }
+
+  if (mode === "total") {
+    if (p.total_amount != null && p.total_amount !== "") {
+      document.getElementById("gb_total_amount").value = Number(p.total_amount);
+    }
+  }
+
+  if (mode === "gst") {
+    if (p.gst_amount != null && p.gst_amount !== "") {
+      document.getElementById("gb_gst_amount").value = Number(p.gst_amount);
+    }
+  }
+}
+
 
   async function refreshList(){
     const listBox = document.getElementById("gb_list");
@@ -695,7 +745,11 @@ let lineItems = [];    // optional [{name, amount}]
         </div>
 
         <label style="margin-top:10px;">Vendor</label>
-        <input id="gb_vendor" placeholder="Vendor name">
+<div style="display:flex;gap:8px;align-items:center;">
+  <input id="gb_vendor" placeholder="Vendor name">
+  <button class="userToggleBtn" id="gb_detect_vendor">Detect</button>
+</div>
+
 
         <label style="margin-top:10px;">Total Amount (₹)</label>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -709,6 +763,8 @@ let lineItems = [];    // optional [{name, amount}]
           <option value="IGST">IGST</option>
           <option value="NONE">No GST</option>
         </select>
+        <button class="userToggleBtn" id="gb_detect_gst_type">Detect</button>
+
 
         <div id="gb_gst_amount_row" style="margin-top:10px;">
           <label>GST Amount (₹)</label>
@@ -718,20 +774,30 @@ let lineItems = [];    // optional [{name, amount}]
           </div>
         </div>
 
-        <div id="gb_split_row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-          <div style="flex:1;min-width:120px;">
-            <label>CGST</label>
-            <input id="gb_cgst" type="number" inputmode="decimal" value="0">
-          </div>
-          <div style="flex:1;min-width:120px;">
-            <label>SGST</label>
-            <input id="gb_sgst" type="number" inputmode="decimal" value="0">
-          </div>
-          <div style="flex:1;min-width:120px;">
-            <label>IGST</label>
-            <input id="gb_igst" type="number" inputmode="decimal" value="0">
-          </div>
-        </div>
+       <div id="gb_split_row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+  <div style="flex:1;min-width:120px;">
+    <label>CGST</label>
+    <div style="display:flex;gap:6px;">
+      <input id="gb_cgst" type="number" inputmode="decimal" value="0">
+      <button class="userToggleBtn" id="gb_detect_cgst">Detect</button>
+    </div>
+  </div>
+  <div style="flex:1;min-width:120px;">
+    <label>SGST</label>
+    <div style="display:flex;gap:6px;">
+      <input id="gb_sgst" type="number" inputmode="decimal" value="0">
+      <button class="userToggleBtn" id="gb_detect_sgst">Detect</button>
+    </div>
+  </div>
+  <div style="flex:1;min-width:120px;">
+    <label>IGST</label>
+    <div style="display:flex;gap:6px;">
+      <input id="gb_igst" type="number" inputmode="decimal" value="0">
+      <button class="userToggleBtn" id="gb_detect_igst">Detect</button>
+    </div>
+  </div>
+</div>
+
 
         <div class="card" style="margin-top:12px;">
           <b>Upload Bill File/Photo</b>
@@ -819,11 +885,7 @@ if (!String(r.ocr_text || "").trim()) {
   // Detect buttons (Option 3)
   document.getElementById("gb_detect_billno")?.addEventListener("click", ()=>{
     if (!lastUpload) return alert("Upload bill first.");
-if (!lastUpload.parsed || (!lastUpload.parsed.bill_no && !lastUpload.parsed.bill_date && lastUpload.parsed.total_amount == null && lastUpload.parsed.gst_amount == null)) {
-  return alert("Nothing detected from OCR. Please enter manually or upload a clearer image/PDF.");
-}
-applyParsedToFields(lastUpload.parsed, "bill_no");
-
+    applyParsedToFields(lastUpload.parsed, "bill_no");
   });
   document.getElementById("gb_detect_date")?.addEventListener("click", ()=>{
     if (!lastUpload?.parsed) return alert("Upload bill first.");
@@ -837,6 +899,40 @@ applyParsedToFields(lastUpload.parsed, "bill_no");
     if (!lastUpload?.parsed) return alert("Upload bill first.");
     applyParsedToFields(lastUpload.parsed, "gst");
   });
+  document.getElementById("gb_detect_vendor")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  applyParsedToFields(lastUpload.parsed, "vendor");
+});
+  document.getElementById("gb_detect_gst_type")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  applyParsedToFields(lastUpload.parsed, "gst_type");
+});
+  document.getElementById("gb_detect_cgst")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  if (lastUpload.parsed.gst_amount) {
+    const half = Number(lastUpload.parsed.gst_amount) / 2;
+    document.getElementById("gb_cgst").value = half;
+    document.getElementById("gb_sgst").value = half;
+  }
+});
+
+document.getElementById("gb_detect_sgst")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  if (lastUpload.parsed.gst_amount) {
+    const half = Number(lastUpload.parsed.gst_amount) / 2;
+    document.getElementById("gb_sgst").value = half;
+  }
+});
+
+document.getElementById("gb_detect_igst")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  if (lastUpload.parsed.gst_amount) {
+    document.getElementById("gb_igst").value = Number(lastUpload.parsed.gst_amount);
+  }
+});
+
+
+
 
   // Save
   document.getElementById("gb_save")?.addEventListener("click", async ()=>{
