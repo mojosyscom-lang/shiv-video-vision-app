@@ -800,6 +800,10 @@ let lineItems = [];    // optional [{name, amount}]
 
       const pre = document.getElementById("gb_ocr_text");
       if (pre) pre.textContent = String(r.ocr_text || "");
+if (!String(r.ocr_text || "").trim()) {
+  const msg = r.ocr_error ? `OCR failed: ${r.ocr_error}` : "OCR text is empty (not detected). Try a clearer photo or PDF.";
+  if (pre) pre.textContent = msg;
+}
 
       // OPTIONAL: lightly prefill (do not force; Detect buttons are the “final”)
       // You can comment these 2 lines if you want zero autofill:
@@ -814,8 +818,12 @@ let lineItems = [];    // optional [{name, amount}]
 
   // Detect buttons (Option 3)
   document.getElementById("gb_detect_billno")?.addEventListener("click", ()=>{
-    if (!lastUpload?.parsed) return alert("Upload bill first.");
-    applyParsedToFields(lastUpload.parsed, "bill_no");
+    if (!lastUpload) return alert("Upload bill first.");
+if (!lastUpload.parsed || (!lastUpload.parsed.bill_no && !lastUpload.parsed.bill_date && lastUpload.parsed.total_amount == null && lastUpload.parsed.gst_amount == null)) {
+  return alert("Nothing detected from OCR. Please enter manually or upload a clearer image/PDF.");
+}
+applyParsedToFields(lastUpload.parsed, "bill_no");
+
   });
   document.getElementById("gb_detect_date")?.addEventListener("click", ()=>{
     if (!lastUpload?.parsed) return alert("Upload bill first.");
