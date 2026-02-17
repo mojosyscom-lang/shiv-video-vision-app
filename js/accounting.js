@@ -609,39 +609,42 @@ function toISODateSafe(str){
 
 function applyParsedToFields(parsed, mode){
   const p = parsed || {};
+if (mode === "gst_split") mode = "split";
 
-  if (mode === "bill_no" && p.bill_no){
-    document.getElementById("gb_bill_no").value = String(p.bill_no);
+
+  if (mode === "bill_no" && p.bill_no) {
+    document.getElementById("gb_bill_no").value = String(p.bill_no || "");
   }
 
-  if (mode === "bill_date" && p.bill_date){
-    const iso = toISODateMaybe(p.bill_date);
-    if (iso) document.getElementById("gb_bill_date").value = iso;
+  if (mode === "bill_date" && p.bill_date) {
+    // p.bill_date MUST be YYYY-MM-DD now (backend fix)
+    document.getElementById("gb_bill_date").value = String(p.bill_date || "");
   }
 
-  if (mode === "vendor" && p.vendor){
-    document.getElementById("gb_vendor").value = String(p.vendor);
+  if (mode === "vendor" && p.vendor) {
+    document.getElementById("gb_vendor").value = String(p.vendor || "");
   }
 
-  if (mode === "total" && p.total_amount !== "" && p.total_amount != null){
+  if (mode === "total" && (p.total_amount !== "" && p.total_amount != null)) {
     document.getElementById("gb_total_amount").value = String(p.total_amount);
   }
 
-  if (mode === "gst" && p.gst_amount !== "" && p.gst_amount != null){
-    document.getElementById("gb_gst_amount").value = String(p.gst_amount);
-  }
-
-  if (mode === "gst_type" && p.gst_type){
-    document.getElementById("gb_gst_type").value = String(p.gst_type).toUpperCase();
+  if (mode === "gst_type" && p.gst_type) {
+    document.getElementById("gb_gst_type").value = String(p.gst_type || "CGST_SGST").toUpperCase();
     refreshGSTSplitUI();
   }
 
-  if (mode === "gst_split"){
-    if (p.cgst != null) document.getElementById("gb_cgst").value = String(p.cgst);
-    if (p.sgst != null) document.getElementById("gb_sgst").value = String(p.sgst);
-    if (p.igst != null) document.getElementById("gb_igst").value = String(p.igst);
+  if (mode === "gst" && (p.gst_amount !== "" && p.gst_amount != null)) {
+    document.getElementById("gb_gst_amount").value = String(p.gst_amount);
+  }
+
+  if (mode === "split") {
+    if (p.cgst !== "" && p.cgst != null) document.getElementById("gb_cgst").value = String(p.cgst);
+    if (p.sgst !== "" && p.sgst != null) document.getElementById("gb_sgst").value = String(p.sgst);
+    if (p.igst !== "" && p.igst != null) document.getElementById("gb_igst").value = String(p.igst);
   }
 }
+
 
 
 
@@ -693,8 +696,19 @@ function applyParsedToFields(parsed, mode){
   const full = await api({ action: "getGSTBillFull", bill_id });
   if (full && full.error) return alert(String(full.error));
 
-  const h = full.header || {};
-  editingBillId = bill_id;
+  const h = full.bill || full.header || {};
+editingBillId = bill_id;
+
+// ✅ store existing file separately (keep old if no new upload)
+existingFile = {
+  file_id: String(h.file_id || ""),
+  file_url: String(h.file_url || ""),
+  ocr_text: String(h.ocr_text || "")
+};
+
+// ✅ reset lastUpload for this edit (so Detect requires a new upload)
+lastUpload = null;
+
 
   document.getElementById("gb_bill_no").value = h.bill_no || "";
   document.getElementById("gb_bill_date").value = String(h.bill_date || "");
@@ -708,13 +722,13 @@ function applyParsedToFields(parsed, mode){
   refreshGSTSplitUI();
 
   // ✅ keep old file if user doesn't upload new
-  lastUpload = {
-    file_id: h.file_id || "",
-    file_url: h.file_url || "",
-    ocr_text: h.ocr_text || "",
-    parsed: null,
-    ocr_ok: !!String(h.ocr_text||"").trim()
-  };
+  // ✅ show existing file + OCR text (do not treat as new upload)
+const up = document.getElementById("gb_upload_status");
+if (up) up.textContent = existingFile.file_url ? `Existing file: ${existingFile.file_url}` : "No file";
+
+const pre = document.getElementById("gb_ocr_text");
+if (pre) pre.textContent = String(existingFile.ocr_text || "");
+
 
   const up = document.getElementById("gb_upload_status");
   if (up) up.textContent = lastUpload.file_url ? `Existing file: ${lastUpload.file_url}` : "No file";
@@ -873,11 +887,13 @@ function applyParsedToFields(parsed, mode){
     try {
       const up = await readFileAsBase64(f);
       const r = await api({
-        action: "uploadGSTBillFile",
-        filename: up.filename,
-        mimeType: up.mimeType,
-        base64: up.base64
-      });
+  action: "uploadGSTBillFile",
+  filename: up.filename,
+  mimeType: up.mimeType,
+  base64: up.base64,
+  bill_date: String(document.getElementById("gb_bill_date")?.value || "").trim()
+});
+
       if (r && r.error) return alert(String(r.error));
 
       lastUpload = r;
@@ -902,58 +918,75 @@ if (!String(r.ocr_text || "").trim()) {
   });
 
   // Detect buttons (Option 3)
-  document.getElementById("gb_detect_billno")?.addEventListener("click", ()=>{
-    if (!lastUpload) return alert("Upload bill first.");
-    applyParsedToFields(lastUpload.parsed, "bill_no");
-  });
-  document.getElementById("gb_detect_date")?.addEventListener("click", ()=>{
-    if (!lastUpload?.parsed) return alert("Upload bill first.");
-    applyParsedToFields(lastUpload.parsed, "bill_date");
-  });
-  document.getElementById("gb_detect_total")?.addEventListener("click", ()=>{
-    if (!lastUpload?.parsed) return alert("Upload bill first.");
-    applyParsedToFields(lastUpload.parsed, "total");
-  });
-  document.getElementById("gb_detect_gst")?.addEventListener("click", ()=>{
-    if (!lastUpload?.parsed) return alert("Upload bill first.");
-    applyParsedToFields(lastUpload.parsed, "gst");
-  });
-  document.getElementById("gb_detect_vendor")?.addEventListener("click", ()=>{
+// Detect buttons (Option 3)
+document.getElementById("gb_detect_billno")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  applyParsedToFields(lastUpload.parsed, "bill_no");
+});
+
+document.getElementById("gb_detect_date")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  applyParsedToFields(lastUpload.parsed, "bill_date");
+});
+
+document.getElementById("gb_detect_vendor")?.addEventListener("click", ()=>{
   if (!lastUpload?.parsed) return alert("Upload bill first.");
   applyParsedToFields(lastUpload.parsed, "vendor");
 });
-  document.getElementById("gb_detect_gst_type")?.addEventListener("click", ()=>{
+
+document.getElementById("gb_detect_total")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  applyParsedToFields(lastUpload.parsed, "total");
+});
+
+document.getElementById("gb_detect_gst_type")?.addEventListener("click", ()=>{
   if (!lastUpload?.parsed) return alert("Upload bill first.");
   applyParsedToFields(lastUpload.parsed, "gst_type");
 });
 
+document.getElementById("gb_detect_gst")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  applyParsedToFields(lastUpload.parsed, "gst");
+});
+
+// Split detect (fills cgst/sgst/igst)
 document.getElementById("gb_detect_gst_split")?.addEventListener("click", ()=>{
   if (!lastUpload?.parsed) return alert("Upload bill first.");
-  applyParsedToFields(lastUpload.parsed, "gst_split");
-});
-  document.getElementById("gb_detect_cgst")?.addEventListener("click", ()=>{
-  if (!lastUpload?.parsed) return alert("Upload bill first.");
-  if (lastUpload.parsed.gst_amount) {
-    const half = Number(lastUpload.parsed.gst_amount) / 2;
-    document.getElementById("gb_cgst").value = half;
-    document.getElementById("gb_sgst").value = half;
+
+  // Preferred: use parsed split numbers directly
+  const p = lastUpload.parsed || {};
+  const hasSplit = (p.cgst != null && p.cgst !== "") || (p.sgst != null && p.sgst !== "") || (p.igst != null && p.igst !== "");
+
+  if (hasSplit) {
+    // IMPORTANT: make sure your applyParsedToFields supports either "split" OR "gst_split"
+    applyParsedToFields(p, "split");
+    return;
+  }
+
+  // Fallback: split gst_amount/2 only if no cgst/sgst/igst available
+  const gst = Number(p.gst_amount || 0);
+  if (gst > 0) {
+    const half = Math.round((gst / 2) * 100) / 100;
+    document.getElementById("gb_cgst").value = String(half);
+    document.getElementById("gb_sgst").value = String(half);
+    document.getElementById("gb_igst").value = "0";
   }
 });
 
+// Optional: individual buttons just call split detect
+document.getElementById("gb_detect_cgst")?.addEventListener("click", ()=>{
+  if (!lastUpload?.parsed) return alert("Upload bill first.");
+  applyParsedToFields(lastUpload.parsed, "split");
+});
 document.getElementById("gb_detect_sgst")?.addEventListener("click", ()=>{
   if (!lastUpload?.parsed) return alert("Upload bill first.");
-  if (lastUpload.parsed.gst_amount) {
-    const half = Number(lastUpload.parsed.gst_amount) / 2;
-    document.getElementById("gb_sgst").value = half;
-  }
+  applyParsedToFields(lastUpload.parsed, "split");
 });
-
 document.getElementById("gb_detect_igst")?.addEventListener("click", ()=>{
   if (!lastUpload?.parsed) return alert("Upload bill first.");
-  if (lastUpload.parsed.gst_amount) {
-    document.getElementById("gb_igst").value = Number(lastUpload.parsed.gst_amount);
-  }
+  applyParsedToFields(lastUpload.parsed, "split");
 });
+
 
 
 
