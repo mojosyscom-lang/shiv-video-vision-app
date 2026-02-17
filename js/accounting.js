@@ -451,6 +451,199 @@ showDashboard();
       return;
     } */
 
+// GST bills section starts here
+
+    /* ==========================================================
+   ✅ GST BILLS (PURCHASE BILLS) (NEW)
+   - Save purchase/vendor GST bills
+   - Upload file/photo to Drive folder "gst bills" (per company)
+   - OCR on upload (Option 1 Drive OCR)
+   - Detect buttons near fields (Option 3) to fill/confirm
+   - Line items optional
+   - Sheet: gst_bills
+   ========================================================== */
+if (type === "gstBills") {
+  content.innerHTML = `<div class="card"><h2>GST Bills</h2><p>Loading…</p></div>`;
+
+  const canEdit = (role === "owner" || role === "superadmin");
+
+  // TODO later: list bills + view/edit
+  content.innerHTML = `
+    <div class="card">
+      <h2>GST Bills</h2>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Create / Upload</h3>
+
+        <label>Bill Number</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_bill_no" placeholder="Bill / Invoice No">
+          <button class="userToggleBtn" id="gb_detect_billno" type="button">Detect</button>
+        </div>
+
+        <label style="margin-top:10px;">Bill Date</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_bill_date" type="date">
+          <button class="userToggleBtn" id="gb_detect_date" type="button">Detect</button>
+        </div>
+
+        <label style="margin-top:10px;">Vendor</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_vendor" placeholder="Vendor name">
+          <button class="userToggleBtn" id="gb_detect_vendor" type="button">Detect</button>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <b>Line Items (optional)</b>
+            ${canEdit ? `<button class="userToggleBtn" id="gb_add_line" type="button">➕ Add Line</button>` : ``}
+          </div>
+
+          <div id="gb_lines" style="margin-top:10px;"></div>
+
+          <p class="dashSmall" style="margin-top:8px;color:#777;">
+            You can save without line items.
+          </p>
+        </div>
+
+        <label style="margin-top:10px;">Total Bill Amount (₹)</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_total" type="number" inputmode="decimal" placeholder="0">
+          <button class="userToggleBtn" id="gb_detect_total" type="button">Detect</button>
+        </div>
+
+        <label style="margin-top:10px;">GST Amount (₹)</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="gb_gst" type="number" inputmode="decimal" placeholder="0">
+          <button class="userToggleBtn" id="gb_detect_gst" type="button">Detect</button>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <b>OR GST Split (optional)</b>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+            <div style="flex:1;min-width:120px;">
+              <label>CGST (₹)</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input id="gb_cgst" type="number" inputmode="decimal" placeholder="0">
+                <button class="userToggleBtn" id="gb_detect_cgst" type="button">Detect</button>
+              </div>
+            </div>
+            <div style="flex:1;min-width:120px;">
+              <label>SGST (₹)</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input id="gb_sgst" type="number" inputmode="decimal" placeholder="0">
+                <button class="userToggleBtn" id="gb_detect_sgst" type="button">Detect</button>
+              </div>
+            </div>
+            <div style="flex:1;min-width:120px;">
+              <label>IGST (₹)</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input id="gb_igst" type="number" inputmode="decimal" placeholder="0">
+                <button class="userToggleBtn" id="gb_detect_igst" type="button">Detect</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="dashSmall" style="margin-top:8px;color:#777;">
+            If CGST/SGST/IGST filled, we can auto-calc GST Total later.
+          </p>
+        </div>
+
+        <label style="margin-top:10px;">Upload Bill File / Photo</label>
+        <input id="gb_file" type="file" accept="image/*,application/pdf">
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          ${canEdit ? `<button class="primary" id="gb_upload" type="button">⬆ Upload + OCR</button>` : ``}
+          ${canEdit ? `<button class="primary" id="gb_save" type="button">💾 Save Bill</button>` : ``}
+        </div>
+
+        <p class="dashSmall" id="gb_status" style="margin-top:10px;color:#777;"></p>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Bills List</h3>
+        <div id="gb_list">Coming next…</div>
+      </div>
+    </div>
+  `;
+
+  // ---------- UI helpers ----------
+  let gbLines = []; // optional: [{name, amount, gst?}]
+
+  function renderGbLines(){
+    const box = document.getElementById("gb_lines");
+    if (!box) return;
+
+    if (!gbLines.length){
+      box.innerHTML = `<p class="dashSmall" style="color:#777;">No lines added.</p>`;
+      return;
+    }
+
+    box.innerHTML = `
+      <div style="overflow:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Goods/Service</th>
+            <th align="right">Amount (₹)</th>
+            <th></th>
+          </tr>
+          ${gbLines.map((ln, idx)=>`
+            <tr style="border-top:1px solid #eee;vertical-align:top;">
+              <td><input data-gb-name="${idx}" value="${escapeAttr(String(ln.name||""))}" placeholder="e.g. Cable / Rent / Service"></td>
+              <td align="right"><input data-gb-amt="${idx}" type="number" inputmode="decimal" value="${escapeAttr(String(ln.amount||0))}" style="width:140px;"></td>
+              <td align="right"><button class="userToggleBtn" data-gb-del="${idx}" type="button">✖</button></td>
+            </tr>
+          `).join("")}
+        </table>
+      </div>
+    `;
+
+    box.querySelectorAll("[data-gb-name]").forEach(inp=>{
+      inp.addEventListener("input", ()=>{
+        const i = Number(inp.getAttribute("data-gb-name"));
+        gbLines[i].name = String(inp.value||"");
+      });
+    });
+    box.querySelectorAll("[data-gb-amt]").forEach(inp=>{
+      inp.addEventListener("input", ()=>{
+        const i = Number(inp.getAttribute("data-gb-amt"));
+        gbLines[i].amount = Number(inp.value||0);
+      });
+    });
+    box.querySelectorAll("[data-gb-del]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const i = Number(btn.getAttribute("data-gb-del"));
+        gbLines.splice(i,1);
+        renderGbLines();
+      });
+    });
+  }
+
+  document.getElementById("gb_add_line")?.addEventListener("click", ()=>{
+    gbLines.push({ name:"", amount:0 });
+    renderGbLines();
+  });
+
+  renderGbLines();
+
+  // Next steps: gb_upload -> API upload + OCR; Detect buttons -> API detect from OCR text; Save -> addGstBill
+  return;
+}
+
+
+
+
+    
+    // gst bills section ends here
+
+
+
+
+    
+
+
+    
 /* change my password section Add this inside the loadSection(type) function in accounting.js */
 
 if (type === "myAccount") {
