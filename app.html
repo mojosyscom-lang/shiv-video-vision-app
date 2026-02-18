@@ -105,7 +105,7 @@
     </div>
 
     <button data-nav="dashboard" onclick="navTo('dashboard'); closeDrawer()">🏠 Dashboard</button>
-<div id="ownerAdminMenu" style="display:none;">
+<div class="ownerAdminMenu" style="display:none;">
     <h4>PAYROLL</h4>
 <button data-nav="upad" onclick="navTo('upad'); closeDrawer()">👷 Upad</button>
 <button data-nav="expenses" onclick="navTo('expenses'); closeDrawer()">📒 Expenses</button>
@@ -114,20 +114,18 @@
 <button data-nav="holidays" onclick="navTo('holidays'); closeDrawer()">🗓 Holidays</button>
 </div>
 <h4>EVENTS</h4>
-<div id="ownerAdminMenu" style="display:none;">
+<div class="ownerAdminMenu" style="display:none;">
   <button data-nav="clients" onclick="navTo('clients'); closeDrawer()">👤 Clients</button>
-</div>
-    <div id="ownerAdminMenu" style="display:none;">
-<button data-nav="orders" onclick="navTo('orders'); closeDrawer()">📅 Orders</button>
+  <button data-nav="orders" onclick="navTo('orders'); closeDrawer()">📅 Orders</button>
     </div>
 <button data-nav="inventoryTxn" onclick="navTo('inventoryTxn'); closeDrawer()">📦 Inventory</button>
-    <div id="ownerAdminMenu" style="display:none;">
+    <div class="ownerAdminMenu" style="display:none;">
     <h4>ACCOUNTING</h4>
     <button data-nav="invoice" onclick="navTo('invoice'); closeDrawer()">🧾 Create Invoice</button>
     <button data-nav="gstbills" onclick="navTo('gstbills'); closeDrawer()">💸 GST Bills</button>
     <button data-nav="incomes" onclick="navTo('incomes'); closeDrawer()">💵 Incomes</button>
     </div>
-<div id="ownerAdminMenu" style="display:none;">
+<div class="ownerAdminMenu" style="display:none;">
   <h4>SETTINGS</h4>
   <button data-nav="myAccount" onclick="navTo('myAccount'); closeDrawer()">🗝️ Reset Password</button>
 </div>
@@ -288,11 +286,21 @@ function toggleTheme() {
     });
   }
 </script>
-<script>
-  /* Update your existing role check logic or add this to handle visibility */
+
+  <script>
+  // 1. Retrieve the role from storage
   const userRole = localStorage.getItem("role");
+
+  // 2. Check if the user has permission
   if (userRole === "superadmin" || userRole === "owner") {
-    document.getElementById("ownerAdminMenu").style.display = "block";
+    
+    // 3. Select ALL elements with the class 'admin-hidden'
+    const adminElements = document.querySelectorAll(".ownerAdminMenu");
+
+    // 4. Loop through each element and change the display style
+    adminElements.forEach(element => {
+      element.style.display = "block";
+    });
   }
 </script>
 
