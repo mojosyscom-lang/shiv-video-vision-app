@@ -452,6 +452,22 @@ showDashboard();
     } */
 
 
+// Company details section starts here
+
+    
+    // Company details section ends here
+
+
+
+
+    
+    // Bank details section starts here
+
+    
+   // Bank details section ends here
+
+
+    
     // Incomes and bank account section starts here
 
 /* ==========================================================
@@ -473,279 +489,235 @@ if (type === "incomes") {
 
   content.innerHTML = `<div class="card"><h2>INCOMES</h2><p>Loading…</p></div>`;
 
-  // Load dropdown data
-  const [bankRes, clientsRes, invoicesRes] = await Promise.all([
-    api({ action: "listCompanyBankAccounts" }),
-    api({ action: "listClients" }),
-    api({ action: "listInvoices" }) // we will filter on front-end by client
-  ]);
+  function todayISO(){
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  function num0(v){ const n = Number(v); return isFinite(n) ? n : 0; }
 
-  const bankAccounts = Array.isArray(bankRes?.rows) ? bankRes.rows : (Array.isArray(bankRes) ? bankRes : []);
-  const clients = Array.isArray(clientsRes?.rows) ? clientsRes.rows : (Array.isArray(clientsRes) ? clientsRes : []);
-  const invoicesAll = Array.isArray(invoicesRes?.rows) ? invoicesRes.rows : (Array.isArray(invoicesRes) ? invoicesRes : []);
-
-  const safe = (x) => escapeHtml(String(x ?? ""));
-  const money2 = (n) => {
-    const v = Number(n || 0);
-    return isFinite(v) ? v.toFixed(2) : "0.00";
-  };
+  let bankAccounts = [];
+  let selectedMode = "CASH";
 
   content.innerHTML = `
     <div class="card">
       <h2>INCOMES</h2>
 
       <div class="card" style="margin-top:12px;">
-        <h3 style="margin-top:0;">Add Income</h3>
+        <h3 style="margin-top:0;">Create Income</h3>
 
         <label>Payment Type</label>
-        <select id="in_pay_type">
+        <select id="in_type">
           <option value="INVOICE">Invoice Payment</option>
           <option value="QUOTATION_ADVANCE">Advance (from Client on Quotation)</option>
           <option value="LOAN_OTHER">Loan / Other Income</option>
         </select>
 
-        <label style="margin-top:10px;">Mode of Payment</label>
-        <select id="in_mode">
-          <option value="BANK">Bank</option>
-          <option value="UPI">UPI</option>
-          <option value="CHEQUE">Cheque</option>
-          <option value="CASH">Cash</option>
-        </select>
+        <div class="card" style="margin-top:10px;padding:12px;border:1px solid #f0b;">
+          <div style="font-weight:800;color:#b00020;" id="in_mode_banner">MODE: CASH</div>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="in_mode">
+              <option value="BANK">Bank</option>
+              <option value="UPI">UPI</option>
+              <option value="CHEQUE">Cheque</option>
+              <option value="CASH" selected>Cash</option>
+            </select>
 
-        <div id="in_mode_banner" style="margin-top:10px; font-weight:700; color:#d93025;"></div>
-
-        <div id="in_bank_wrap" style="display:none; margin-top:10px;">
-          <label>Bank Account</label>
-          <select id="in_bank_account_id">
-            <option value="">Select bank account</option>
-            ${bankAccounts.map(b =>
-              `<option value="${safe(b.bank_account_id)}">${safe(b.label || b.bank_name || b.bank_account_id)}</option>`
-            ).join("")}
-          </select>
-        </div>
-
-        <div id="in_cheque_wrap" style="display:none; margin-top:10px;">
-          <label>Cheque No</label>
-          <input id="in_cheque_no" inputmode="numeric" placeholder="Enter cheque number">
+            <select id="in_bank_account" style="display:none;flex:1;min-width:220px;"></select>
+            <input id="in_cheque_no" style="display:none;flex:1;min-width:160px;" placeholder="Cheque No">
+            <input id="in_ref_no" style="display:none;flex:1;min-width:160px;" placeholder="UTR / Reference (optional)">
+          </div>
         </div>
 
         <label style="margin-top:10px;">Date</label>
         <input id="in_date" type="date">
 
-        <div id="in_invoice_flow" style="margin-top:10px;">
+        <div id="in_invoice_box" class="card" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0;">Invoice Payment</h4>
+
           <label>Client</label>
-          <select id="in_client_id">
-            <option value="">Select client</option>
-            ${clients.map(c => `<option value="${safe(c.client_id)}">${safe(c.client_name || c.name || c.client_id)}</option>`).join("")}
-          </select>
+          <select id="in_client"></select>
 
           <label style="margin-top:10px;">Invoice No</label>
-          <select id="in_invoice_id" disabled>
-            <option value="">Select invoice</option>
-          </select>
+          <select id="in_invoice"></select>
 
-          <div class="card" style="margin-top:12px; background:#fafafa; border:1px solid #eee;">
-            <div style="font-weight:700;margin-bottom:6px;">Invoice Info</div>
-            <div class="dashSmall" id="in_inv_info">Select client + invoice…</div>
-            <div class="dashSmall" style="margin-top:8px;">
-              <div><b>Invoice Total:</b> ₹ <span id="in_total">0.00</span></div>
-              <div><b>Already Paid:</b> ₹ <span id="in_paid">0.00</span></div>
-              <div><b>TDS:</b> ₹ <span id="in_tds_sum">0.00</span></div>
-              <div><b>Balance:</b> ₹ <span id="in_balance">0.00</span></div>
-              <div style="margin-top:6px;"><b>GST (info):</b> <span id="in_gst_info">—</span></div>
-            </div>
+          <div class="card" style="margin-top:10px;">
+            <div class="dashSmall" id="in_info">Select client + invoice…</div>
           </div>
 
-          <label style="margin-top:10px;">Received Amount</label>
-          <input id="in_received_amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00">
+          <label style="margin-top:10px;">Received Amount (₹)</label>
+          <input id="in_received" type="number" inputmode="decimal" value="0">
 
-          <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
-            <input type="checkbox" id="in_tds_check" style="width:20px;height:20px;">
-            <label for="in_tds_check" style="margin:0;">TDS</label>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+            <input id="in_tds_chk" type="checkbox">
+            <label for="in_tds_chk" style="margin:0;">TDS</label>
           </div>
 
-          <div id="in_tds_wrap" style="display:none; margin-top:8px;">
-            <label>TDS Amount</label>
-            <input id="in_tds_amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00">
-            <div class="dashSmall" style="margin-top:6px;">
-              <b>Net Credit to Invoice = Received + TDS</b>
-            </div>
+          <div id="in_tds_row" style="display:none;margin-top:10px;">
+            <label>TDS Amount (₹)</label>
+            <input id="in_tds_amt" type="number" inputmode="decimal" value="0">
           </div>
 
-          <label style="margin-top:10px;">Description / Reference (UTR etc.)</label>
+          <div class="card" style="margin-top:10px;">
+            <b>Net Credit to Invoice:</b>
+            <span id="in_net_credit">0</span>
+          </div>
+
+          <label style="margin-top:10px;">Description / Reference</label>
           <input id="in_note" placeholder="Optional note">
         </div>
 
-        <button class="primary" id="btn_in_save" style="margin-top:14px;">💾 Save Income</button>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="primary" id="in_save">💾 Save</button>
+          <button class="primary" id="in_reset" style="background:#111;">Reset</button>
+        </div>
+
+        <p class="dashSmall" id="in_status" style="margin-top:10px;color:#777;"></p>
       </div>
     </div>
   `;
 
   // defaults
-  document.getElementById("in_date").value = new Date().toISOString().slice(0,10);
+  document.getElementById("in_date").value = todayISO();
 
-  const modeEl = document.getElementById("in_mode");
-  const banner = document.getElementById("in_mode_banner");
-  const bankWrap = document.getElementById("in_bank_wrap");
-  const chequeWrap = document.getElementById("in_cheque_wrap");
+  function setModeUI(){
+    const mode = String(document.getElementById("in_mode").value || "CASH").toUpperCase();
+    selectedMode = mode;
 
-  function renderModeUI() {
-    const mode = String(modeEl.value || "");
-    banner.innerHTML = `MODE OF PAYMENT: ${safe(mode)}`;
+    const banner = document.getElementById("in_mode_banner");
+    const bankSel = document.getElementById("in_bank_account");
+    const chequeInp = document.getElementById("in_cheque_no");
+    const refInp = document.getElementById("in_ref_no");
 
-    bankWrap.style.display = (mode === "BANK" || mode === "UPI") ? "block" : "none";
-    chequeWrap.style.display = (mode === "CHEQUE") ? "block" : "none";
+    if (banner) banner.textContent = "MODE: " + mode;
+
+    if (bankSel) bankSel.style.display = (mode === "BANK" || mode === "UPI") ? "" : "none";
+    if (refInp) refInp.style.display = (mode === "BANK" || mode === "UPI") ? "" : "none";
+    if (chequeInp) chequeInp.style.display = (mode === "CHEQUE") ? "" : "none";
+
+    // optional behavior: if cheque no entered, hide field
+    if (mode === "CHEQUE" && chequeInp){
+      chequeInp.onchange = ()=>{
+        if (String(chequeInp.value||"").trim()){
+          banner.textContent = "MODE: CHEQUE (" + String(chequeInp.value||"").trim() + ")";
+          chequeInp.style.display = "none";
+        }
+      };
+    }
   }
-  modeEl.addEventListener("change", renderModeUI);
-  renderModeUI();
 
-  // TDS UI
-  const tdsCheck = document.getElementById("in_tds_check");
-  const tdsWrap = document.getElementById("in_tds_wrap");
-  tdsCheck.addEventListener("change", () => {
-    tdsWrap.style.display = tdsCheck.checked ? "block" : "none";
-    if (!tdsCheck.checked) document.getElementById("in_tds_amount").value = "";
-  });
+  function setTdsUI(){
+    const chk = !!document.getElementById("in_tds_chk").checked;
+    document.getElementById("in_tds_row").style.display = chk ? "" : "none";
+    if (!chk) document.getElementById("in_tds_amt").value = "0";
+    calcNet();
+  }
 
-  // Client → invoice filtered
-  const clientEl = document.getElementById("in_client_id");
-  const invEl = document.getElementById("in_invoice_id");
+  function calcNet(){
+    const r = num0(document.getElementById("in_received").value);
+    const tds = document.getElementById("in_tds_chk").checked ? num0(document.getElementById("in_tds_amt").value) : 0;
+    document.getElementById("in_net_credit").textContent = String((r + tds).toFixed(2));
+  }
 
-  function fillInvoicesForClient(clientId) {
-    const list = invoicesAll
-      .filter(x => String(x.client_id || "") === String(clientId || ""))
-      .filter(x => String(x.status || "ACTIVE").toUpperCase() !== "CANCELLED");
+  document.getElementById("in_mode").addEventListener("change", setModeUI);
+  document.getElementById("in_tds_chk").addEventListener("change", setTdsUI);
+  document.getElementById("in_received").addEventListener("input", calcNet);
+  document.getElementById("in_tds_amt").addEventListener("input", calcNet);
 
-    invEl.innerHTML = `<option value="">Select invoice</option>` + list.map(inv => {
-      const no = inv.invoice_no || inv.invoice_id;
-      const dt = inv.invoice_date || "";
-      return `<option value="${safe(inv.invoice_id)}">${safe(no)} ${dt ? `(${safe(dt)})` : ""}</option>`;
+  async function loadBankAccounts(){
+    const r = await api({ action: "listBankAccountsForCompany" });
+    bankAccounts = Array.isArray(r) ? r : [];
+    const sel = document.getElementById("in_bank_account");
+    if (!sel) return;
+
+    if (!bankAccounts.length){
+      sel.innerHTML = `<option value="">No bank accounts</option>`;
+      return;
+    }
+
+    sel.innerHTML = bankAccounts.map(a=>{
+      const label = (a.label || a.bank_name || "Account") + (a.account_no_last4 ? ` ••••${a.account_no_last4}` : "");
+      return `<option value="${escapeAttr(a.bank_account_id||"")}">${escapeHtml(label)}</option>`;
     }).join("");
-
-    invEl.disabled = list.length === 0;
   }
 
-  clientEl.addEventListener("change", () => {
-    const cid = clientEl.value;
-    fillInvoicesForClient(cid);
+  // TODO next: load clients + invoices filtered by client, and show invoice info + already paid/balance.
+  // For now we just load bank accounts so Mode dropdown works.
+  await loadBankAccounts();
+  setModeUI();
+  setTdsUI();
+  calcNet();
 
-    // reset info box
-    document.getElementById("in_inv_info").innerText = "Select invoice…";
-    document.getElementById("in_total").innerText = "0.00";
-    document.getElementById("in_paid").innerText = "0.00";
-    document.getElementById("in_tds_sum").innerText = "0.00";
-    document.getElementById("in_balance").innerText = "0.00";
-    document.getElementById("in_gst_info").innerText = "—";
+  document.getElementById("in_reset").addEventListener("click", ()=>{
+    document.getElementById("in_type").value = "INVOICE";
+    document.getElementById("in_mode").value = "CASH";
+    document.getElementById("in_date").value = todayISO();
+    document.getElementById("in_received").value = "0";
+    document.getElementById("in_tds_chk").checked = false;
+    document.getElementById("in_tds_amt").value = "0";
+    document.getElementById("in_note").value = "";
+    document.getElementById("in_ref_no").value = "";
+    document.getElementById("in_cheque_no").value = "";
+    document.getElementById("in_status").textContent = "";
+    setModeUI();
+    setTdsUI();
+    calcNet();
   });
 
-  // Invoice → show details + summary
-  invEl.addEventListener("change", async () => {
-    const invoice_id = invEl.value;
-    if (!invoice_id) return;
-
-    const [full, sum] = await Promise.all([
-      api({ action: "getInvoiceFull", invoice_id }),
-      api({ action: "getInvoicePaymentSummary", invoice_id })
-    ]);
-
-    if (full?.error) return alert(String(full.error));
-    if (sum?.error) return alert(String(sum.error));
-
-    const h = full.header || {};
-    const infoParts = [];
-    if (h.client_name) infoParts.push(`Client: ${h.client_name}`);
-    if (h.venue) infoParts.push(`Venue: ${h.venue}`);
-    if (h.setup_date || h.start_date || h.end_date) infoParts.push(`Dates: ${h.setup_date || "-"} / ${h.start_date || "-"} / ${h.end_date || "-"}`);
-
-    // LED size (best-effort: try items text)
-    let ledSize = "";
-    const items = Array.isArray(full.items) ? full.items : [];
-    const ledItem = items.find(it => String(it.item_name || "").toLowerCase().includes("led"));
-    if (ledItem && ledItem.item_name) ledSize = String(ledItem.item_name);
-
-    document.getElementById("in_inv_info").innerHTML =
-      safe(infoParts.join(" | ")) + (ledSize ? `<div style="margin-top:6px;"><b>LED:</b> ${safe(ledSize)}</div>` : "");
-
-    const grand = Number(h.grand_total || 0);
-    const alreadyPaid = Number(sum.paid_received_sum || 0);
-    const tdsSum = Number(sum.tds_sum || 0);
-    const settled = Number(sum.settled_sum || (alreadyPaid + tdsSum));
-    const balance = Math.max(0, grand - settled);
-
-    document.getElementById("in_total").innerText = money2(grand);
-    document.getElementById("in_paid").innerText = money2(alreadyPaid);
-    document.getElementById("in_tds_sum").innerText = money2(tdsSum);
-    document.getElementById("in_balance").innerText = money2(balance);
-
-    const gstType = String(h.gst_type || "");
-    const gstInfo = (gstType === "CGST_SGST")
-      ? `CGST ₹${money2(h.cgst)} + SGST ₹${money2(h.sgst)}`
-      : (gstType === "IGST")
-        ? `IGST ₹${money2(h.igst)}`
-        : "NONE";
-    document.getElementById("in_gst_info").innerText = gstInfo;
-  });
-
-  // SAVE
-  document.getElementById("btn_in_save").addEventListener("click", async () => {
-    const btn = document.getElementById("btn_in_save");
-    const unlock = lockButton(btn, "Saving...");
+  document.getElementById("in_save").addEventListener("click", async ()=>{
+    const btn = document.getElementById("in_save");
+    const unlock = lockButton(btn, "Saving…");
 
     try {
-      const pay_type = String(document.getElementById("in_pay_type").value || "");
-      const mode = String(document.getElementById("in_mode").value || "");
-      const pay_date = String(document.getElementById("in_date").value || "");
+      const mode = String(document.getElementById("in_mode").value || "CASH").toUpperCase();
+      const pay_type = String(document.getElementById("in_type").value || "INVOICE").toUpperCase();
+      const pay_date = String(document.getElementById("in_date").value || "").trim();
 
-      const bank_account_id = String(document.getElementById("in_bank_account_id")?.value || "");
-      const cheque_no = String(document.getElementById("in_cheque_no")?.value || "").trim();
+      const received_amount = num0(document.getElementById("in_received").value);
+      const tds_checked = !!document.getElementById("in_tds_chk").checked;
+      const tds_amount = tds_checked ? num0(document.getElementById("in_tds_amt").value) : 0;
 
-      const client_id = String(document.getElementById("in_client_id")?.value || "");
-      const invoice_id = String(document.getElementById("in_invoice_id")?.value || "");
-      const received_amount = Number(document.getElementById("in_received_amount").value || 0);
-
-      const tds_checked = document.getElementById("in_tds_check").checked;
-      const tds_amount = tds_checked ? Number(document.getElementById("in_tds_amount").value || 0) : 0;
+      const bank_account_id = String(document.getElementById("in_bank_account").value || "").trim();
+      const cheque_no = String(document.getElementById("in_cheque_no").value || "").trim();
+      const ref_no = String(document.getElementById("in_ref_no").value || "").trim();
 
       const note = String(document.getElementById("in_note").value || "").trim();
 
-      // ✅ Validations (as you confirmed)
-      if (!pay_date) return alert("Date is required");
-      if (!received_amount || received_amount <= 0) return alert("Received Amount is required");
+      // REQUIRED rules you confirmed
+      if (!received_amount || received_amount <= 0) return alert("Received Amount required");
+      if (!tds_checked && tds_amount > 0) return alert("TDS amount must be 0 unless checkbox ticked");
+      if (mode === "CHEQUE" && !cheque_no) return alert("Cheque No required");
+      if ((mode === "BANK" || mode === "UPI") && !bank_account_id) return alert("Select bank account");
 
-      if (mode === "CHEQUE" && !cheque_no) return alert("Cheque No is required for Cheque payments");
-      if ((mode === "BANK" || mode === "UPI") && !bank_account_id) return alert("Select Bank Account");
-
-      if (pay_type === "INVOICE") {
-        if (!client_id) return alert("Select Client");
-        if (!invoice_id) return alert("Select Invoice");
-      }
-
-      if (tds_checked && tds_amount < 0) return alert("TDS cannot be negative");
-
-      const clientObj = clients.find(c => String(c.client_id) === String(client_id));
+      // (Next message) we’ll wire client/invoice selection and pass invoice_id/client_id.
       const payload = {
-        action: "addInPayment",
         pay_type,
         mode,
         pay_date,
-        bank_account_id: (mode === "BANK" || mode === "UPI") ? bank_account_id : "",
-        cheque_no: (mode === "CHEQUE") ? cheque_no : "",
-        client_id: (pay_type === "INVOICE") ? client_id : "",
-        client_name: (pay_type === "INVOICE") ? String(clientObj?.client_name || clientObj?.name || "") : "",
-        invoice_id: (pay_type === "INVOICE") ? invoice_id : "",
+        bank_account_id,
+        cheque_no,
+        ref_no,
         received_amount,
+        tds_checked,
         tds_amount,
         note,
-        status: "ACTIVE"
+
+        // placeholders for now until we wire dropdowns:
+        client_id: "",
+        client_name: "",
+        invoice_id: "",
+        quotation_id: ""
       };
 
-      const r = await api(payload);
+      const r = await api({ action: "addInPayment", ...payload });
       if (r && r.error) return alert(String(r.error));
 
-      alert("Income saved");
-      loadSection("incomes");
+      alert("Saved Income: " + (r.pay_id || ""));
+      document.getElementById("in_status").textContent = "Saved: " + (r.pay_id || "");
     } finally {
-      setTimeout(unlock, 400);
+      setTimeout(unlock, 350);
     }
   });
 
