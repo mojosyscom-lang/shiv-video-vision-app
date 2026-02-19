@@ -716,12 +716,13 @@ if (commonBox) commonBox.style.display = ""; // always visible
 
   // Clear invoice UI when not invoice
   if (t !== "INVOICE") {
-    if (elClient) elClient.value = "";
-    if (elInvoice) elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
-    setInfo("");
-    setPaidBalance("", "");
-    setPaymentsHtml("");
-  }
+  const _elClient = document.getElementById("in_client");
+  const _elInvoice = document.getElementById("in_invoice");
+  if (_elClient) _elClient.value = "";
+  if (_elInvoice) _elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
+  setInfo(""); setPaidBalance("", ""); setPaymentsHtml("");
+}
+
 
   // Clear quotation UI when not quotation
   if (t !== "QUOTATION_ADVANCE") {
@@ -815,6 +816,82 @@ function setPaymentsHtml(html){
   }
 function setPaidBalance(paid, bal){
   if (!infoBox) return;
+
+
+
+
+  
+// ✅ Quotation Advance wiring (must be OUTSIDE Save handler)
+// ---------------------------
+const elQClient = document.getElementById("in_q_client");
+const elQuotation = document.getElementById("in_quotation");
+const qInfoBox = document.getElementById("in_q_info");
+
+async function loadClientsForQuotationAdvance(){
+  if (!elQClient) return;
+
+  // reuse same clients cache
+  if (!IN_CACHE.clients) await loadClientsForIncome();
+
+  const list = IN_CACHE.clients || [];
+  elQClient.innerHTML =
+    `<option value="">Select Client</option>` +
+    list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
+}
+
+async function loadQuotationsForClient(client_id){
+  if (!elQuotation) return;
+
+  elQuotation.innerHTML = `<option value="">Select Quotation</option>`;
+  if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+  if (!client_id) return;
+
+  const rows = await api({ action: "listInvoices", q: client_id });
+  const list = Array.isArray(rows) ? rows : [];
+  const qOnly = list.filter(x => String(x.doc_type||"").toUpperCase() === "QUOTATION");
+
+  elQuotation.innerHTML =
+    `<option value="">Select Quotation</option>` +
+    qOnly.map(q => {
+      const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}`;
+      return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
+    }).join("");
+}
+
+async function renderQuotationInfo(quotation_id){
+  if (!quotation_id) return;
+
+  const full = await api({ action: "getInvoiceFull", invoice_id: quotation_id });
+  if (full && full.error) {
+    if (qInfoBox) qInfoBox.textContent = String(full.error);
+    return;
+  }
+
+  const h = full?.header || {};
+  if (qInfoBox) {
+    qInfoBox.innerHTML = `
+      <div><b>Client:</b> ${escapeHtml(h.client_name || "")}</div>
+      <div><b>Quotation Total:</b> ₹${Number(h.grand_total||0).toFixed(2)}</div>
+      <div><b>Date:</b> ${escapeHtml(h.invoice_date || "")}</div>
+    `;
+  }
+}
+
+// bind ONCE
+elQClient?.addEventListener("change", async ()=>{
+  await loadQuotationsForClient(String(elQClient.value||"").trim());
+});
+elQuotation?.addEventListener("change", async ()=>{
+  await renderQuotationInfo(String(elQuotation.value||"").trim());
+});
+
+// initial load ONCE
+await loadClientsForQuotationAdvance();
+
+
+
+
+  
 
   const paidTxt = String(paid ?? "").trim();
   const balTxt  = String(bal ?? "").trim();
@@ -1027,72 +1104,6 @@ setPaymentsHtml(`
   // Initial load
   await loadClientsForIncome();
 // ---------------------------
-// ✅ Quotation Advance wiring (must be OUTSIDE Save handler)
-// ---------------------------
-const elQClient = document.getElementById("in_q_client");
-const elQuotation = document.getElementById("in_quotation");
-const qInfoBox = document.getElementById("in_q_info");
-
-async function loadClientsForQuotationAdvance(){
-  if (!elQClient) return;
-
-  // reuse same clients cache
-  if (!IN_CACHE.clients) await loadClientsForIncome();
-
-  const list = IN_CACHE.clients || [];
-  elQClient.innerHTML =
-    `<option value="">Select Client</option>` +
-    list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
-}
-
-async function loadQuotationsForClient(client_id){
-  if (!elQuotation) return;
-
-  elQuotation.innerHTML = `<option value="">Select Quotation</option>`;
-  if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
-  if (!client_id) return;
-
-  const rows = await api({ action: "listInvoices", q: client_id });
-  const list = Array.isArray(rows) ? rows : [];
-  const qOnly = list.filter(x => String(x.doc_type||"").toUpperCase() === "QUOTATION");
-
-  elQuotation.innerHTML =
-    `<option value="">Select Quotation</option>` +
-    qOnly.map(q => {
-      const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}`;
-      return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
-    }).join("");
-}
-
-async function renderQuotationInfo(quotation_id){
-  if (!quotation_id) return;
-
-  const full = await api({ action: "getInvoiceFull", invoice_id: quotation_id });
-  if (full && full.error) {
-    if (qInfoBox) qInfoBox.textContent = String(full.error);
-    return;
-  }
-
-  const h = full?.header || {};
-  if (qInfoBox) {
-    qInfoBox.innerHTML = `
-      <div><b>Client:</b> ${escapeHtml(h.client_name || "")}</div>
-      <div><b>Quotation Total:</b> ₹${Number(h.grand_total||0).toFixed(2)}</div>
-      <div><b>Date:</b> ${escapeHtml(h.invoice_date || "")}</div>
-    `;
-  }
-}
-
-// bind ONCE
-elQClient?.addEventListener("change", async ()=>{
-  await loadQuotationsForClient(String(elQClient.value||"").trim());
-});
-elQuotation?.addEventListener("change", async ()=>{
-  await renderQuotationInfo(String(elQuotation.value||"").trim());
-});
-
-// initial load ONCE
-await loadClientsForQuotationAdvance();
 
 
   document.getElementById("in_reset").addEventListener("click", ()=>{
@@ -1209,7 +1220,7 @@ client_name: (pay_type === "QUOTATION_ADVANCE")
 
         quotation_id: (pay_type === "QUOTATION_ADVANCE")
   ? String(document.getElementById("in_quotation")?.value || "").trim()
-  : ""
+  : "",
 
 
       };
