@@ -506,6 +506,7 @@ showDashboard();
    - Shows totals + GST + already paid + balance
    ========================================================== */
 if (type === "incomes") {
+  (async () => {
 
   // 🔒 Security Gate
   const isAdmin = (role === "owner" || role === "superadmin");
@@ -996,6 +997,9 @@ setPaymentsHtml(`
   });
 
   return;
+  })();
+  return;
+}
 }
 
 
