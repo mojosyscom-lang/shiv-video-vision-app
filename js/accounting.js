@@ -1151,8 +1151,8 @@ setPaymentsHtml(`
       if (mode === "CHEQUE" && !cheque_no) return alert("Cheque No required");
       if ((mode === "BANK" || mode === "UPI") && !bank_account_id) return alert("Select bank account");
 
-   let selectedInvoiceId = "";
-
+ /*  let selectedInvoiceId = "";
+*/
 // ✅ collect notes safely (before validations)
 const noteInvoice = String(document.getElementById("in_note")?.value || "").trim();
 const noteQuotation = String(document.getElementById("in_q_note")?.value || "").trim();
@@ -1168,6 +1168,8 @@ const noteFinal =
       : noteInvoice;
       
 
+let invoice_id = "selectedInvoiceId";
+let quotation_id = "qid";
 
 // ✅ validations by type
 if (pay_type === "INVOICE") {
