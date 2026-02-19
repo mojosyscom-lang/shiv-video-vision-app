@@ -6,6 +6,35 @@ document.addEventListener("DOMContentLoaded", () => {
   return;
 }
 
+
+// try different dashboards starts here
+// --- Role-Based Entry Logic ---
+  try {
+    if (role === "owner" || role === "superadmin") {
+      console.log("👑 Access granted: Initializing Dashboard...");
+      // Ensure showDashboard() is called (which is your async function name in the file)
+      await showDashboard(); 
+    } 
+    else if (role === "staff") {
+      console.log("🛠️ Staff Access: Loading Inventory Transactions...");
+      // Calls your existing section loader
+      loadSection("inventoryTxn"); 
+    } 
+    else {
+      content.innerHTML = `
+        <div style="text-align:center; padding: 40px;">
+          <h2>Access Restricted</h2>
+          <p>Please log in with an authorized account.</p>
+        </div>`;
+    }
+  } catch (error) {
+    console.error("❌ Error loading role-based section:", error);
+    content.innerHTML = "<p>Critical error loading workspace. Please refresh.</p>";
+  }
+  // --- End Role Logic ---
+
+  // try different dashboards ends here
+  
   /* =========================
      SPEED CACHE (NEW)
   ========================== */
