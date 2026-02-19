@@ -679,6 +679,128 @@ if (type === "incomes") {
   setTdsUI();
   calcNet();
 
+    // ---------------------------
+  // ✅ Client → Invoice wiring
+  // ---------------------------
+  const elClient = document.getElementById("in_client");
+  const elInvoice = document.getElementById("in_invoice");
+
+  const infoBox = document.getElementById("in_info"); // make sure this id exists in your HTML
+  
+
+  function setInfo(html){
+    if (infoBox) infoBox.innerHTML = html;
+  }
+ function setPaidBalance(paid, bal){
+  // ✅ show inside info card (because separate fields not created)
+  const paidTxt = String(paid ?? "");
+  const balTxt  = String(bal ?? "");
+  if (!infoBox) return;
+
+  const extra = `
+    <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="userToggleBtn" style="cursor:default;">Already Paid: <b>${escapeHtml(paidTxt)}</b></div>
+      <div class="userToggleBtn" style="cursor:default;">Balance: <b>${escapeHtml(balTxt)}</b></div>
+    </div>
+  `;
+
+  // append after main info (don’t overwrite if setInfo already called)
+  infoBox.innerHTML = infoBox.innerHTML + extra;
+}
+
+
+  async function loadClientsForIncome(){
+    if (!elClient) return;
+
+    const rows = await api({ action: "listClients" });
+    const list = Array.isArray(rows) ? rows : [];
+
+    elClient.innerHTML =
+      `<option value="">Select Client</option>` +
+      list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
+  }
+
+  async function loadInvoicesForClient(client_id){
+    if (!elInvoice) return;
+
+    elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
+    setInfo("");
+    setPaidBalance("", "");
+
+    if (!client_id) return;
+
+    // ✅ Best: use backend listInvoices search by q=client_id (your backend search hay includes client_id)
+    const rows = await api({ action: "listInvoices", q: client_id });
+    const list = Array.isArray(rows) ? rows : [];
+
+    // only INVOICE docs (not quotation)
+    const invOnly = list.filter(x => String(x.doc_type||"INVOICE").toUpperCase() === "INVOICE");
+
+    elInvoice.innerHTML =
+      `<option value="">Select Invoice</option>` +
+      invOnly.map(inv => {
+        const label = `${inv.invoice_no || inv.invoice_id} • ₹${Number(inv.grand_total||0).toFixed(2)}`;
+        return `<option value="${escapeAttr(inv.invoice_id||"")}">${escapeHtml(label)}</option>`;
+      }).join("");
+  }
+
+  async function renderInvoiceInfo(invoice_id){
+    if (!invoice_id) {
+      setInfo("");
+      setPaidBalance("", "");
+      return;
+    }
+
+    const full = await api({ action: "getInvoiceFull", invoice_id });
+    if (full && full.error) return alert(String(full.error));
+
+    const h = full.header || {};
+    const grand = Number(h.grand_total || 0);
+    const gstType = String(h.gst_type || "").toUpperCase();
+
+    // ✅ payment summary (Already Paid / Balance)
+    const sum = await api({ action: "getInvoicePaymentSummary", invoice_id });
+    const settled = Number(sum?.settled || 0);
+    const balance = Math.max(0, grand - settled);
+
+    // LED size: best-effort from header/order fields (you can improve later)
+    const led = h.led_size || h.led_wall_size || ""; // if you store it anywhere
+
+setInfo(`
+  <div><b>Client:</b> ${escapeHtml(h.client_name || "")} • ${escapeHtml(h.client_phone || "")}</div>
+  <div><b>Venue:</b> ${escapeHtml(h.venue || "")}</div>
+  <div><b>Dates:</b> ${escapeHtml(h.setup_date || "")} • ${escapeHtml(h.start_date || "")} → ${escapeHtml(h.end_date || "")}</div>
+  ${led ? `<div><b>LED Size:</b> ${escapeHtml(led)}</div>` : ``}
+  <div><b>GST Type:</b> ${escapeHtml(gstType)}</div>
+  <div style="margin-top:6px;"><b>Invoice Total:</b> ₹${grand.toFixed(2)}</div>
+`);
+
+
+    setPaidBalance(`₹${settled.toFixed(2)}`, `₹${balance.toFixed(2)}`);
+
+    // ✅ Nice UX: default received to remaining balance (optional)
+    const rec = document.getElementById("in_received");
+    if (rec && (!Number(rec.value) || Number(rec.value) === 0)) {
+      rec.value = String(balance.toFixed(2));
+      calcNet();
+    }
+  }
+
+  // Bind
+  elClient?.addEventListener("change", async ()=>{
+    const cid = String(elClient.value || "").trim();
+    await loadInvoicesForClient(cid);
+  });
+
+  elInvoice?.addEventListener("change", async ()=>{
+    const invoice_id = String(elInvoice.value || "").trim();
+    await renderInvoiceInfo(invoice_id);
+  });
+
+  // Initial load
+  await loadClientsForIncome();
+
+
   document.getElementById("in_reset").addEventListener("click", ()=>{
     document.getElementById("in_type").value = "INVOICE";
     document.getElementById("in_mode").value = "CASH";
@@ -720,6 +842,14 @@ if (type === "incomes") {
       if (mode === "CHEQUE" && !cheque_no) return alert("Cheque No required");
       if ((mode === "BANK" || mode === "UPI") && !bank_account_id) return alert("Select bank account");
 
+      if (pay_type === "INVOICE") {
+  const cid = String(document.getElementById("in_client")?.value || "").trim();
+  const iid = String(document.getElementById("in_invoice")?.value || "").trim();
+  if (!cid) return alert("Select client");
+  if (!iid) return alert("Select invoice");
+}
+
+
       // (Next message) we’ll wire client/invoice selection and pass invoice_id/client_id.
       const payload = {
         pay_type,
@@ -734,10 +864,11 @@ if (type === "incomes") {
         note,
 
         // placeholders for now until we wire dropdowns:
-        client_id: "",
-        client_name: "",
-        invoice_id: "",
-        quotation_id: ""
+              client_id: String(document.getElementById("in_client")?.value || "").trim(),
+        client_name: String(document.getElementById("in_client")?.selectedOptions?.[0]?.textContent || "").trim(),
+        invoice_id: String(document.getElementById("in_invoice")?.value || "").trim(),
+        quotation_id: "" // later for QUOTATION_ADVANCE flow
+
       };
 
       const r = await api({ action: "addInPayment", ...payload });
