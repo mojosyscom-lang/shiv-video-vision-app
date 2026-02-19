@@ -530,6 +530,19 @@ if (type === "incomes") {
   let bankAccounts = [];
   let selectedMode = "CASH";
 
+// cache for invoice and clients list starts here
+// ✅ INCOMES local cache (fast)
+const IN_CACHE = {
+  clients: null,
+  invoicesByClient: {},   // client_id -> invoices[]
+  invoiceFull: {},        // invoice_id -> full payload
+  paySummary: {}          // invoice_id -> summary payload
+};
+
+  // chche ends here
+
+
+  
   content.innerHTML = `
     <div class="card">
       <h2>INCOMES</h2>
@@ -709,15 +722,21 @@ if (type === "incomes") {
 }
 
 
-  async function loadClientsForIncome(){
-    if (!elClient) return;
+ async function loadClientsForIncome(){
+  if (!elClient) return;
 
-    const rows = await api({ action: "listClients" });
-    const list = Array.isArray(rows) ? rows : [];
-
+  if (IN_CACHE.clients) {
+    const list = IN_CACHE.clients;
     elClient.innerHTML =
       `<option value="">Select Client</option>` +
       list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
+    return;
+  }
+
+  const rows = await api({ action: "listClients" });
+  const list = Array.isArray(rows) ? rows : [];
+  IN_CACHE.clients = list;
+
   }
 
   async function loadInvoicesForClient(client_id){
@@ -728,6 +747,17 @@ if (type === "incomes") {
     setPaidBalance("", "");
 
     if (!client_id) return;
+    if (IN_CACHE.invoicesByClient[client_id]) {
+  const invOnly = IN_CACHE.invoicesByClient[client_id];
+  elInvoice.innerHTML =
+    `<option value="">Select Invoice</option>` +
+    invOnly.map(inv => {
+      const label = `${inv.invoice_no || inv.invoice_id} • ₹${Number(inv.grand_total||0).toFixed(2)}`;
+      return `<option value="${escapeAttr(inv.invoice_id||"")}">${escapeHtml(label)}</option>`;
+    }).join("");
+  return;
+}
+
 
     // ✅ Best: use backend listInvoices search by q=client_id (your backend search hay includes client_id)
     const rows = await api({ action: "listInvoices", q: client_id });
@@ -742,6 +772,9 @@ if (type === "incomes") {
         const label = `${inv.invoice_no || inv.invoice_id} • ₹${Number(inv.grand_total||0).toFixed(2)}`;
         return `<option value="${escapeAttr(inv.invoice_id||"")}">${escapeHtml(label)}</option>`;
       }).join("");
+
+    IN_CACHE.invoicesByClient[client_id] = invOnly;
+
   }
 
   async function renderInvoiceInfo(invoice_id){
@@ -777,6 +810,8 @@ setInfo(`
 
 
     setPaidBalance(`₹${settled.toFixed(2)}`, `₹${balance.toFixed(2)}`);
+
+
 
     // ✅ Nice UX: default received to remaining balance (optional)
     const rec = document.getElementById("in_received");
