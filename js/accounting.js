@@ -497,7 +497,7 @@ showDashboard();
 
 
     
-    // Incomes and bank account section starts here
+    // Incomes section and bank account section starts here
 
 /* ==========================================================
    ✅ INCOMES (OWNER/SUPERADMIN ONLY)
@@ -671,6 +671,54 @@ const IN_CACHE = {
   document.getElementById("in_received").addEventListener("input", calcNet);
   document.getElementById("in_tds_amt").addEventListener("input", calcNet);
 
+  
+  function setPayTypeUI(){
+  const t = String(document.getElementById("in_type").value || "INVOICE").toUpperCase();
+  const box = document.getElementById("in_invoice_box");
+  if (!box) return;
+
+  if (t === "INVOICE") {
+    box.style.display = "";
+  } else {
+    // hide invoice fields for QUOTATION_ADVANCE / LOAN_OTHER
+    box.style.display = "none";
+
+    // clear invoice selection + info
+    if (elClient) elClient.value = "";
+    if (elInvoice) elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
+    setInfo("");
+    setPaidBalance("", "");
+    setPaymentsHtml("");
+  }
+}
+
+document.getElementById("in_type").addEventListener("change", setPayTypeUI);
+setPayTypeUI();
+
+  async function getInvoiceTotals_(invoice_id){
+  if (!invoice_id) return { grand: 0, settled: 0, balance: 0 };
+
+  let full = IN_CACHE.invoiceFull[invoice_id];
+  let sum  = IN_CACHE.paySummary[invoice_id];
+
+  if (!full || !sum){
+    const [fullRes, sumRes] = await Promise.all([
+      full ? Promise.resolve(full) : api({ action: "getInvoiceFull", invoice_id }),
+      sum  ? Promise.resolve(sum)  : api({ action: "getInvoicePaymentSummary", invoice_id })
+    ]);
+    full = fullRes; sum = sumRes;
+    IN_CACHE.invoiceFull[invoice_id] = full;
+    IN_CACHE.paySummary[invoice_id]  = sum;
+  }
+
+  const h = full?.header || {};
+  const grand = Number(h.grand_total || 0);
+  const settled = Number(sum?.settled || 0);
+  const balance = Math.max(0, grand - settled);
+  return { grand, settled, balance };
+}
+
+
   async function loadBankAccounts(){
     const r = await api({ action: "listBankAccountsForCompany" });
     bankAccounts = Array.isArray(r) ? r : [];
@@ -716,23 +764,35 @@ function setPaymentsHtml(html){
 function setPaidBalance(paid, bal){
   if (!infoBox) return;
 
-  const paidTxt = String(paid ?? "");
-  const balTxt  = String(bal ?? "");
+  const paidTxt = String(paid ?? "").trim();
+  const balTxt  = String(bal ?? "").trim();
 
   // remove old block if exists
   const old = infoBox.querySelector?.("#in_paid_balance_block");
   if (old) old.remove();
+
+  // if both empty -> do nothing
+  if (!paidTxt && !balTxt) return;
 
   const extra = document.createElement("div");
   extra.id = "in_paid_balance_block";
   extra.style.marginTop = "8px";
   extra.innerHTML = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <div class="userToggleBtn" style="cursor:default;">Already Paid: <b>${escapeHtml(paidTxt)}</b></div>
-      <div class="userToggleBtn" style="cursor:default;">Balance: <b>${escapeHtml(balTxt)}</b></div>
+      <div class="userToggleBtn" style="cursor:default;">Already Paid: <b>${escapeHtml(paidTxt || "₹0.00")}</b></div>
+      <div class="userToggleBtn" style="cursor:default;">Balance: <b>${escapeHtml(balTxt || "₹0.00")}</b></div>
     </div>
   `;
   infoBox.appendChild(extra);
+}
+
+
+async function refreshInvoiceUI_(invoice_id){
+  // clear cache so latest payments show
+  delete IN_CACHE.paySummary[invoice_id];
+  delete IN_CACHE.invoiceFull[invoice_id];
+
+  await renderInvoiceInfo(invoice_id);
 }
 
 
@@ -856,7 +916,9 @@ if (settled > 0 && settled < grand) { status = "PARTIAL"; badgeColor = "#f9ab00"
 if (settled >= grand) { status = "PAID"; badgeColor = "#188038"; }
 
 // list payments for this invoice (backend must support invoice_id filter)
-const payments = await api({ action: "listInPayments", invoice_id });
+let payments = await api({ action: "listInPayments", invoice_id });
+if (!Array.isArray(payments)) payments = [];
+
 
 let tableHtml = "";
 if (Array.isArray(payments) && payments.length){
@@ -955,12 +1017,23 @@ setPaymentsHtml(`
       if (mode === "CHEQUE" && !cheque_no) return alert("Cheque No required");
       if ((mode === "BANK" || mode === "UPI") && !bank_account_id) return alert("Select bank account");
 
-      if (pay_type === "INVOICE") {
+   let selectedInvoiceId = "";
+
+if (pay_type === "INVOICE") {
   const cid = String(document.getElementById("in_client")?.value || "").trim();
   const iid = String(document.getElementById("in_invoice")?.value || "").trim();
   if (!cid) return alert("Select client");
   if (!iid) return alert("Select invoice");
+  selectedInvoiceId = iid;
+
+  // ✅ block overpayment (received + tds > balance)
+  const net = Number(received_amount || 0) + Number(tds_amount || 0);
+  const t = await getInvoiceTotals_(iid);
+  if (net > (t.balance + 0.01)) {
+    return alert(`Overpayment not allowed.\nBalance: ₹${t.balance.toFixed(2)}\nNet Credit: ₹${net.toFixed(2)}`);
+  }
 }
+
 
 
       // (Next message) we’ll wire client/invoice selection and pass invoice_id/client_id.
@@ -988,7 +1061,23 @@ setPaymentsHtml(`
       if (r && r.error) return alert(String(r.error));
 
       alert("Saved Income: " + (r.pay_id || ""));
-      document.getElementById("in_status").textContent = "Saved: " + (r.pay_id || "");
+document.getElementById("in_status").textContent = "Saved: " + (r.pay_id || "");
+
+// ✅ refresh invoice info/payments immediately
+if (pay_type === "INVOICE" && selectedInvoiceId) {
+  await refreshInvoiceUI_(selectedInvoiceId);
+
+  // reset amount fields for next entry
+  document.getElementById("in_received").value = "0";
+  document.getElementById("in_tds_chk").checked = false;
+  document.getElementById("in_tds_amt").value = "0";
+  document.getElementById("in_note").value = "";
+  document.getElementById("in_ref_no").value = "";
+  document.getElementById("in_cheque_no").value = "";
+  setTdsUI();
+  calcNet();
+}
+
     } finally {
       setTimeout(unlock, 350);
     }
