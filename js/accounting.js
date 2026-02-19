@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async() => {
 
   const role = localStorage.getItem("role") || "";
   const content = document.getElementById("content");
@@ -641,6 +641,8 @@ const IN_CACHE = {
     <b>Net Credit:</b>
     <span id="in_net_credit">0</span>
   </div>
+ <label style="margin-top:10px;">Description / Reference</label>
+  <input id="in_note" placeholder="Optional note">
 </div>
 
 
@@ -842,66 +844,6 @@ function setPaidBalance(paid, bal){
 }
 
 
-async function loadClientsForQuotationAdvance(){
-  if (!elQClient) return;
-
-  // reuse same clients cache
-  if (!IN_CACHE.clients) await loadClientsForIncome();
-
-  const list = IN_CACHE.clients || [];
-  elQClient.innerHTML =
-    `<option value="">Select Client</option>` +
-    list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
-}
-
-async function loadQuotationsForClient(client_id){
-  if (!elQuotation) return;
-
-  elQuotation.innerHTML = `<option value="">Select Quotation</option>`;
-  if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
-  if (!client_id) return;
-
-  const rows = await api({ action: "listInvoices", q: client_id });
-  const list = Array.isArray(rows) ? rows : [];
-  const qOnly = list.filter(x => String(x.doc_type||"").toUpperCase() === "QUOTATION");
-
-  elQuotation.innerHTML =
-    `<option value="">Select Quotation</option>` +
-    qOnly.map(q => {
-      const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}`;
-      return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
-    }).join("");
-}
-
-async function renderQuotationInfo(quotation_id){
-  if (!quotation_id) return;
-
-  const full = await api({ action: "getInvoiceFull", invoice_id: quotation_id });
-  if (full && full.error) {
-    if (qInfoBox) qInfoBox.textContent = String(full.error);
-    return;
-  }
-
-  const h = full?.header || {};
-  if (qInfoBox) {
-    qInfoBox.innerHTML = `
-      <div><b>Client:</b> ${escapeHtml(h.client_name || "")}</div>
-      <div><b>Quotation Total:</b> ₹${Number(h.grand_total||0).toFixed(2)}</div>
-      <div><b>Date:</b> ${escapeHtml(h.invoice_date || "")}</div>
-    `;
-  }
-}
-
-// bind ONCE
-elQClient?.addEventListener("change", async ()=>{
-  await loadQuotationsForClient(String(elQClient.value||"").trim());
-});
-elQuotation?.addEventListener("change", async ()=>{
-  await renderQuotationInfo(String(elQuotation.value||"").trim());
-});
-
-// initial load ONCE
-await loadClientsForQuotationAdvance();
 
 
 
@@ -1118,6 +1060,72 @@ setPaymentsHtml(`
 
   // Initial load
   await loadClientsForIncome();
+    // ---------------------------
+// ✅ Quotation Advance wiring (correct place)
+// ---------------------------
+const elQClient   = document.getElementById("in_q_client");
+const elQuotation = document.getElementById("in_quotation");
+const qInfoBox    = document.getElementById("in_q_info");
+
+async function loadClientsForQuotationAdvance(){
+  if (!elQClient) return;
+  // reuse same cache
+  if (!IN_CACHE.clients) await loadClientsForIncome();
+  const list = IN_CACHE.clients || [];
+
+  elQClient.innerHTML =
+    `<option value="">Select Client</option>` +
+    list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
+}
+
+async function loadQuotationsForClient(client_id){
+  if (!elQuotation) return;
+  elQuotation.innerHTML = `<option value="">Select Quotation</option>`;
+  if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+  if (!client_id) return;
+
+  const rows = await api({ action: "listInvoices", q: client_id });
+  const list = Array.isArray(rows) ? rows : [];
+  const qOnly = list.filter(x => String(x.doc_type||"").toUpperCase() === "QUOTATION");
+
+  elQuotation.innerHTML =
+    `<option value="">Select Quotation</option>` +
+    qOnly.map(q => {
+      const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}`;
+      return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
+    }).join("");
+}
+
+async function renderQuotationInfo(quotation_id){
+  if (!quotation_id) {
+    if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+    return;
+  }
+  const full = await api({ action: "getInvoiceFull", invoice_id: quotation_id });
+  if (full && full.error) {
+    if (qInfoBox) qInfoBox.textContent = String(full.error);
+    return;
+  }
+  const h = full?.header || {};
+  if (qInfoBox) {
+    qInfoBox.innerHTML = `
+      <div><b>Client:</b> ${escapeHtml(h.client_name || "")}</div>
+      <div><b>Quotation Total:</b> ₹${Number(h.grand_total||0).toFixed(2)}</div>
+      <div><b>Date:</b> ${escapeHtml(h.invoice_date || "")}</div>
+    `;
+  }
+}
+
+elQClient?.addEventListener("change", async ()=>{
+  await loadQuotationsForClient(String(elQClient.value||"").trim());
+});
+elQuotation?.addEventListener("change", async ()=>{
+  await renderQuotationInfo(String(elQuotation.value||"").trim());
+});
+
+// initial load once
+await loadClientsForQuotationAdvance();
+
 // ---------------------------
 
 
@@ -1224,10 +1232,7 @@ if (pay_type === "LOAN_OTHER") {
 
 
         // placeholders for now until we wire dropdowns:
-             client_id: (pay_type === "QUOTATION_ADVANCE")
-  ? String(document.getElementById("in_q_client")?.value || "").trim()
-  : String(document.getElementById("in_client")?.value || "").trim(),
-
+            
 client_name: (pay_type === "QUOTATION_ADVANCE")
   ? String(document.getElementById("in_q_client")?.selectedOptions?.[0]?.textContent || "").trim()
   : String(document.getElementById("in_client")?.selectedOptions?.[0]?.textContent || "").trim(),
