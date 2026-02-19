@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
 }
 
 
-// try different dashboards starts here
+/*  try different dashboards starts here
 // --- Role-Based Entry Logic ---
   try {
     if (role === "owner" || role === "superadmin") {
@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   // --- End Role Logic ---
 
-  // try different dashboards ends here
+  // try different dashboards ends here */
   
   /* =========================
      SPEED CACHE (NEW)
