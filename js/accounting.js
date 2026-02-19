@@ -614,6 +614,24 @@ const IN_CACHE = {
           <input id="in_note" placeholder="Optional note">
         </div>
 
+                <div id="in_quotation_box" class="card" style="margin-top:12px; display:none;">
+          <h4 style="margin:0 0 8px 0;">Quotation Advance</h4>
+
+          <label>Client</label>
+          <select id="in_q_client"></select>
+
+          <label style="margin-top:10px;">Quotation No</label>
+          <select id="in_quotation"></select>
+
+          <div class="card" style="margin-top:10px;">
+            <div class="dashSmall" id="in_q_info">Select client + quotation…</div>
+          </div>
+
+          <label style="margin-top:10px;">Description / Reference</label>
+          <input id="in_q_note" placeholder="Optional note">
+        </div>
+
+
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           <button class="primary" id="in_save">💾 Save</button>
           <button class="primary" id="in_reset" style="background:#111;">Reset</button>
@@ -672,25 +690,33 @@ const IN_CACHE = {
   document.getElementById("in_tds_amt").addEventListener("input", calcNet);
 
   
-  function setPayTypeUI(){
+ function setPayTypeUI(){
   const t = String(document.getElementById("in_type").value || "INVOICE").toUpperCase();
-  const box = document.getElementById("in_invoice_box");
-  if (!box) return;
+  const invBox = document.getElementById("in_invoice_box");
+  const qBox = document.getElementById("in_quotation_box");
 
-  if (t === "INVOICE") {
-    box.style.display = "";
-  } else {
-    // hide invoice fields for QUOTATION_ADVANCE / LOAN_OTHER
-    box.style.display = "none";
+  if (invBox) invBox.style.display = (t === "INVOICE") ? "" : "none";
+  if (qBox) qBox.style.display = (t === "QUOTATION_ADVANCE") ? "" : "none";
 
-    // clear invoice selection + info
+  // clear display panels when switching
+  if (t !== "INVOICE") {
     if (elClient) elClient.value = "";
     if (elInvoice) elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
-    setInfo("");
-    setPaidBalance("", "");
-    setPaymentsHtml("");
+    setInfo(""); setPaidBalance("", ""); setPaymentsHtml("");
+  }
+
+  if (t !== "QUOTATION_ADVANCE") {
+    const qc = document.getElementById("in_q_client");
+    const qq = document.getElementById("in_quotation");
+    const qi = document.getElementById("in_q_info");
+    const qn = document.getElementById("in_q_note");
+    if (qc) qc.value = "";
+    if (qq) qq.innerHTML = `<option value="">Select Quotation</option>`;
+    if (qi) qi.innerHTML = "Select client + quotation…";
+    if (qn) qn.value = "";
   }
 }
+
 
 document.getElementById("in_type").addEventListener("change", setPayTypeUI);
 setPayTypeUI();
@@ -974,6 +1000,73 @@ setPaymentsHtml(`
 
   // Initial load
   await loadClientsForIncome();
+// ---------------------------
+// ✅ Quotation Advance wiring (must be OUTSIDE Save handler)
+// ---------------------------
+const elQClient = document.getElementById("in_q_client");
+const elQuotation = document.getElementById("in_quotation");
+const qInfoBox = document.getElementById("in_q_info");
+
+async function loadClientsForQuotationAdvance(){
+  if (!elQClient) return;
+
+  // reuse same clients cache
+  if (!IN_CACHE.clients) await loadClientsForIncome();
+
+  const list = IN_CACHE.clients || [];
+  elQClient.innerHTML =
+    `<option value="">Select Client</option>` +
+    list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
+}
+
+async function loadQuotationsForClient(client_id){
+  if (!elQuotation) return;
+
+  elQuotation.innerHTML = `<option value="">Select Quotation</option>`;
+  if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+  if (!client_id) return;
+
+  const rows = await api({ action: "listInvoices", q: client_id });
+  const list = Array.isArray(rows) ? rows : [];
+  const qOnly = list.filter(x => String(x.doc_type||"").toUpperCase() === "QUOTATION");
+
+  elQuotation.innerHTML =
+    `<option value="">Select Quotation</option>` +
+    qOnly.map(q => {
+      const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}`;
+      return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
+    }).join("");
+}
+
+async function renderQuotationInfo(quotation_id){
+  if (!quotation_id) return;
+
+  const full = await api({ action: "getInvoiceFull", invoice_id: quotation_id });
+  if (full && full.error) {
+    if (qInfoBox) qInfoBox.textContent = String(full.error);
+    return;
+  }
+
+  const h = full?.header || {};
+  if (qInfoBox) {
+    qInfoBox.innerHTML = `
+      <div><b>Client:</b> ${escapeHtml(h.client_name || "")}</div>
+      <div><b>Quotation Total:</b> ₹${Number(h.grand_total||0).toFixed(2)}</div>
+      <div><b>Date:</b> ${escapeHtml(h.invoice_date || "")}</div>
+    `;
+  }
+}
+
+// bind ONCE
+elQClient?.addEventListener("change", async ()=>{
+  await loadQuotationsForClient(String(elQClient.value||"").trim());
+});
+elQuotation?.addEventListener("change", async ()=>{
+  await renderQuotationInfo(String(elQuotation.value||"").trim());
+});
+
+// initial load ONCE
+await loadClientsForQuotationAdvance();
 
 
   document.getElementById("in_reset").addEventListener("click", ()=>{
@@ -1019,6 +1112,12 @@ setPaymentsHtml(`
 
    let selectedInvoiceId = "";
 
+
+
+
+
+
+      
 if (pay_type === "INVOICE") {
   const cid = String(document.getElementById("in_client")?.value || "").trim();
   const iid = String(document.getElementById("in_invoice")?.value || "").trim();
@@ -1033,6 +1132,14 @@ if (pay_type === "INVOICE") {
     return alert(`Overpayment not allowed.\nBalance: ₹${t.balance.toFixed(2)}\nNet Credit: ₹${net.toFixed(2)}`);
   }
 }
+
+      if (pay_type === "QUOTATION_ADVANCE") {
+  const cid = String(document.getElementById("in_q_client")?.value || "").trim();
+  const qid = String(document.getElementById("in_quotation")?.value || "").trim();
+  if (!cid) return alert("Select client");
+  if (!qid) return alert("Select quotation");
+}
+
 
 
 
@@ -1050,10 +1157,22 @@ if (pay_type === "INVOICE") {
         note,
 
         // placeholders for now until we wire dropdowns:
-              client_id: String(document.getElementById("in_client")?.value || "").trim(),
-        client_name: String(document.getElementById("in_client")?.selectedOptions?.[0]?.textContent || "").trim(),
-        invoice_id: String(document.getElementById("in_invoice")?.value || "").trim(),
-        quotation_id: "" // later for QUOTATION_ADVANCE flow
+             client_id: (pay_type === "QUOTATION_ADVANCE")
+  ? String(document.getElementById("in_q_client")?.value || "").trim()
+  : String(document.getElementById("in_client")?.value || "").trim(),
+
+client_name: (pay_type === "QUOTATION_ADVANCE")
+  ? String(document.getElementById("in_q_client")?.selectedOptions?.[0]?.textContent || "").trim()
+  : String(document.getElementById("in_client")?.selectedOptions?.[0]?.textContent || "").trim(),
+
+        invoice_id: (pay_type === "INVOICE")
+  ? String(document.getElementById("in_invoice")?.value || "").trim()
+  : "",
+
+        quotation_id: (pay_type === "QUOTATION_ADVANCE")
+  ? String(document.getElementById("in_quotation")?.value || "").trim()
+  : ""
+
 
       };
 
