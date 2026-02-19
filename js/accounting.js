@@ -703,27 +703,26 @@ const IN_CACHE = {
 
   
  function setPayTypeUI(){
-  const t = String(document.getElementById("in_type").value || "INVOICE").toUpperCase();
-  const invBox = document.getElementById("in_invoice_box");
-  const qBox = document.getElementById("in_quotation_box");
+  const t = String(document.getElementById("in_type")?.value || "INVOICE").toUpperCase();
+
+  const invBox  = document.getElementById("in_invoice_box");
+  const qBox    = document.getElementById("in_quotation_box");
   const loanBox = document.getElementById("in_loan_box");
-  if (invBox) invBox.style.display = (t === "INVOICE") ? "" : "none";
-  if (qBox) qBox.style.display = (t === "QUOTATION_ADVANCE") ? "" : "none";
+
+  if (invBox)  invBox.style.display  = (t === "INVOICE") ? "" : "none";
+  if (qBox)    qBox.style.display    = (t === "QUOTATION_ADVANCE") ? "" : "none";
   if (loanBox) loanBox.style.display = (t === "LOAN_OTHER") ? "" : "none";
-  // clear display panels when switching
-  // clear invoice ui safely (no external vars)
-if (t !== "INVOICE") {
-  const c = document.getElementById("in_client");
-  const inv = document.getElementById("in_invoice");
-  const info = document.getElementById("in_info");
-  const pay = document.getElementById("in_payments_box");
-  if (c) c.value = "";
-  if (inv) inv.innerHTML = `<option value="">Select Invoice</option>`;
-  if (info) info.innerHTML = "Select client + invoice…";
-  if (pay) pay.innerHTML = "";
-}
 
+  // Clear invoice UI when not invoice
+  if (t !== "INVOICE") {
+    if (elClient) elClient.value = "";
+    if (elInvoice) elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
+    setInfo("");
+    setPaidBalance("", "");
+    setPaymentsHtml("");
+  }
 
+  // Clear quotation UI when not quotation
   if (t !== "QUOTATION_ADVANCE") {
     const qc = document.getElementById("in_q_client");
     const qq = document.getElementById("in_quotation");
@@ -734,8 +733,8 @@ if (t !== "INVOICE") {
     if (qi) qi.innerHTML = "Select client + quotation…";
     if (qn) qn.value = "";
   }
-}
- // ✅ clear loan/other panel
+
+  // Clear loan/other UI when not loan/other
   if (t !== "LOAN_OTHER") {
     const lf = document.getElementById("in_loan_from");
     const ln = document.getElementById("in_loan_note");
@@ -1138,12 +1137,22 @@ await loadClientsForQuotationAdvance();
 
    let selectedInvoiceId = "";
 
+// ✅ collect notes safely (before validations)
+const noteInvoice = String(document.getElementById("in_note")?.value || "").trim();
+const noteQuotation = String(document.getElementById("in_q_note")?.value || "").trim();
+
+const loan_from = String(document.getElementById("in_loan_from")?.value || "").trim();
+const loan_note = String(document.getElementById("in_loan_note")?.value || "").trim();
+
+const noteFinal =
+  (pay_type === "LOAN_OTHER")
+    ? (loan_note ? `${loan_from} — ${loan_note}` : loan_from)
+    : (pay_type === "QUOTATION_ADVANCE")
+      ? noteQuotation
+      : noteInvoice;
 
 
-
-
-
-      
+// ✅ validations by type
 if (pay_type === "INVOICE") {
   const cid = String(document.getElementById("in_client")?.value || "").trim();
   const iid = String(document.getElementById("in_invoice")?.value || "").trim();
@@ -1151,7 +1160,7 @@ if (pay_type === "INVOICE") {
   if (!iid) return alert("Select invoice");
   selectedInvoiceId = iid;
 
-  // ✅ block overpayment (received + tds > balance)
+  // block overpayment (received + tds > balance)
   const net = Number(received_amount || 0) + Number(tds_amount || 0);
   const t = await getInvoiceTotals_(iid);
   if (net > (t.balance + 0.01)) {
@@ -1159,28 +1168,16 @@ if (pay_type === "INVOICE") {
   }
 }
 
-      if (pay_type === "QUOTATION_ADVANCE") {
+if (pay_type === "QUOTATION_ADVANCE") {
   const cid = String(document.getElementById("in_q_client")?.value || "").trim();
   const qid = String(document.getElementById("in_quotation")?.value || "").trim();
   if (!cid) return alert("Select client");
   if (!qid) return alert("Select quotation");
 }
-      if (pay_type === "LOAN_OTHER") {
+
+if (pay_type === "LOAN_OTHER") {
   if (!loan_from) return alert("From (name) required");
 }
-
-      
-const note = String(document.getElementById("in_note").value || "").trim();
-const loan_from = String(document.getElementById("in_loan_from")?.value || "").trim();
-const loan_note = String(document.getElementById("in_loan_note")?.value || "").trim();
-note: (pay_type === "LOAN_OTHER")
-  ? (loan_note ? `${loan_from} — ${loan_note}` : loan_from)
-  : note,
-
-
-
-
-      // (Next message) we’ll wire client/invoice selection and pass invoice_id/client_id.
       const payload = {
         pay_type,
         mode,
@@ -1191,7 +1188,10 @@ note: (pay_type === "LOAN_OTHER")
         received_amount,
         tds_checked,
         tds_amount,
-        note,
+        note: noteFinal,
+        invoice_id,
+        quotation_id,
+
 
         // placeholders for now until we wire dropdowns:
              client_id: (pay_type === "QUOTATION_ADVANCE")
