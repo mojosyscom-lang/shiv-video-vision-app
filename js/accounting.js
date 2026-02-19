@@ -1,4 +1,5 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+
   const role = localStorage.getItem("role") || "";
   const content = document.getElementById("content");
   if (!content) {
@@ -571,28 +572,7 @@ const IN_CACHE = {
         <label style="margin-top:10px;">Date</label>
 <input id="in_date" type="date">
 
-<!-- ✅ Common payment fields (applies to ALL pay types) -->
-<div id="in_common_box" class="card" style="margin-top:12px;">
-  <h4 style="margin:0 0 8px 0;">Payment Details</h4>
 
-  <label>Received Amount (₹)</label>
-  <input id="in_received" type="number" inputmode="decimal" value="0">
-
-  <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
-    <input id="in_tds_chk" type="checkbox">
-    <label for="in_tds_chk" style="margin:0;">TDS</label>
-  </div>
-
-  <div id="in_tds_row" style="display:none;margin-top:10px;">
-    <label>TDS Amount (₹)</label>
-    <input id="in_tds_amt" type="number" inputmode="decimal" value="0">
-  </div>
-
-  <div class="card" style="margin-top:10px;">
-    <b>Net Credit:</b>
-    <span id="in_net_credit">0</span>
-  </div>
-</div>
 
 <!-- ✅ Invoice-specific -->
 <div id="in_invoice_box" class="card" style="margin-top:12px;">
@@ -638,6 +618,29 @@ const IN_CACHE = {
 
   <label style="margin-top:10px;">Optional Description</label>
   <input id="in_loan_note" placeholder="Optional note / reference">
+</div>
+
+<!-- ✅ Common payment fields (applies to ALL pay types) -->
+<div id="in_common_box" class="card" style="margin-top:12px;">
+  <h4 style="margin:0 0 8px 0;">Payment Details</h4>
+
+  <label>Received Amount (₹)</label>
+  <input id="in_received" type="number" inputmode="decimal" value="0">
+
+  <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+    <input id="in_tds_chk" type="checkbox">
+    <label for="in_tds_chk" style="margin:0;">TDS</label>
+  </div>
+
+  <div id="in_tds_row" style="display:none;margin-top:10px;align-items:center;gap:12px;">
+    <label>TDS Amount (₹)</label>
+    <input id="in_tds_amt" type="number" inputmode="decimal" value="0">
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <b>Net Credit:</b>
+    <span id="in_net_credit">0</span>
+  </div>
 </div>
 
 
@@ -700,7 +703,9 @@ const IN_CACHE = {
   document.getElementById("in_received").addEventListener("input", calcNet);
   document.getElementById("in_tds_amt").addEventListener("input", calcNet);
 
-  
+  // ✅ declare first (so setPayTypeUI can access safely)
+let elClient, elInvoice, infoBox, payBox;
+
  function setPayTypeUI(){
   const t = String(document.getElementById("in_type")?.value || "INVOICE").toUpperCase();
 
@@ -799,12 +804,11 @@ setPayTypeUI();
     // ---------------------------
   // ✅ Client → Invoice wiring
   // ---------------------------
-  const elClient = document.getElementById("in_client");
-  const elInvoice = document.getElementById("in_invoice");
+  elClient = document.getElementById("in_client");
+elInvoice = document.getElementById("in_invoice");
+infoBox = document.getElementById("in_info");
+payBox = document.getElementById("in_payments_box");
 
-  const infoBox = document.getElementById("in_info"); // make sure this id exists in your HTML
-
-  const payBox = document.getElementById("in_payments_box");
 
 function setPaymentsHtml(html){
   if (payBox) payBox.innerHTML = html;
@@ -1162,6 +1166,7 @@ const noteFinal =
     : (pay_type === "QUOTATION_ADVANCE")
       ? noteQuotation
       : noteInvoice;
+      
 
 
 // ✅ validations by type
