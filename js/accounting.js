@@ -496,7 +496,687 @@ showDashboard();
     
    // Bank details section ends here
 
+// incomes section starts here
 
+/* ==========================================================
+   ✅ INCOMES (OWNER/SUPERADMIN ONLY)
+   - Invoice Payment + Quotation Advance + Loan/Other
+   - Invoice dropdown filtered by client
+   - Shows totals + already paid + balance + payment list
+   ========================================================== */
+if (type === "incomes") {
+
+  // 🔒 Security Gate
+  const isAdmin = (role === "owner" || role === "superadmin");
+  if (!isAdmin) {
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
+      <h2 style="color:#d93025;">🚫 Access Denied</h2>
+    </div>`;
+    return;
+  }
+
+  // Local safe helpers (won't break other sections)
+  function todayISO_(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  }
+  function num0_(v){ const n = Number(v); return isFinite(n) ? n : 0; }
+
+  // Safe lock button fallback
+  function lockBtn_(btn, txt){
+    if (typeof lockButton === "function") return lockButton(btn, txt);
+    if (!btn) return ()=>{};
+    const old = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = txt || "Saving…";
+    return ()=>{ btn.disabled = false; btn.textContent = old; };
+  }
+
+  // Local cache
+  const IN_CACHE = {
+    clients: null,
+    invoicesByClient: {},     // client_id -> invoices[]
+    quotationsByClient: {},   // client_id -> quotations[]
+    invoiceFull: {},          // invoice_id -> {header,items}
+    paySummary: {}            // invoice_id -> summary
+  };
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>INCOMES</h2>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Create Income</h3>
+
+        <label>Payment Type</label>
+        <select id="in_type">
+          <option value="INVOICE">Invoice Payment</option>
+          <option value="QUOTATION_ADVANCE">Advance (from Client on Quotation)</option>
+          <option value="LOAN_OTHER">Loan / Other Income</option>
+        </select>
+
+        <div class="card" style="margin-top:10px;padding:12px;border:1px solid #f0b;">
+          <div style="font-weight:800;color:#b00020;" id="in_mode_banner">MODE: CASH</div>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="in_mode">
+              <option value="BANK">Bank</option>
+              <option value="UPI">UPI</option>
+              <option value="CHEQUE">Cheque</option>
+              <option value="CASH" selected>Cash</option>
+            </select>
+
+            <select id="in_bank_account" style="display:none;flex:1;min-width:220px;"></select>
+            <input id="in_cheque_no" style="display:none;flex:1;min-width:160px;" placeholder="Cheque No">
+            <input id="in_ref_no" style="display:none;flex:1;min-width:160px;" placeholder="UTR / Reference (optional)">
+          </div>
+        </div>
+
+        <!-- ✅ COMMON PAYMENT DETAILS (visible for ALL types) -->
+        <div id="in_common_box" class="card" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0;">Payment Details</h4>
+
+          <label>Date</label>
+          <input id="in_date" type="date">
+
+          <label style="margin-top:10px;">Received Amount (₹)</label>
+          <input id="in_received" type="number" inputmode="decimal" value="0">
+
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+            <input id="in_tds_chk" type="checkbox">
+            <label for="in_tds_chk" style="margin:0;">TDS</label>
+          </div>
+
+          <div id="in_tds_row" style="display:none;margin-top:10px;">
+            <label>TDS Amount (₹)</label>
+            <input id="in_tds_amt" type="number" inputmode="decimal" value="0">
+          </div>
+
+          <div class="card" style="margin-top:10px;">
+            <b>Net Credit:</b>
+            <span id="in_net_credit">0</span>
+          </div>
+
+          <label style="margin-top:10px;">Description / Reference</label>
+          <input id="in_note" placeholder="Optional note">
+        </div>
+
+        <!-- ✅ INVOICE PAYMENT -->
+        <div id="in_invoice_box" class="card" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0;">Invoice Payment</h4>
+
+          <label>Client</label>
+          <select id="in_client"></select>
+
+          <label style="margin-top:10px;">Invoice No</label>
+          <select id="in_invoice"></select>
+
+          <div class="card" style="margin-top:10px;">
+            <div class="dashSmall" id="in_info">Select client + invoice…</div>
+            <div id="in_payments_box" style="margin-top:10px;"></div>
+          </div>
+        </div>
+
+        <!-- ✅ QUOTATION ADVANCE -->
+        <div id="in_quotation_box" class="card" style="margin-top:12px; display:none;">
+          <h4 style="margin:0 0 8px 0;">Quotation Advance</h4>
+
+          <label>Client</label>
+          <select id="in_q_client"></select>
+
+          <label style="margin-top:10px;">Quotation No</label>
+          <select id="in_quotation"></select>
+
+          <div class="card" style="margin-top:10px;">
+            <div class="dashSmall" id="in_q_info">Select client + quotation…</div>
+          </div>
+        </div>
+
+        <!-- ✅ LOAN / OTHER -->
+        <div id="in_loan_box" class="card" style="margin-top:12px; display:none;">
+          <h4 style="margin:0 0 8px 0;">Loan / Other Income</h4>
+
+          <label>From (name)</label>
+          <input id="in_loan_from" placeholder="Name / Party">
+
+          <label style="margin-top:10px;">Optional description</label>
+          <input id="in_loan_note" placeholder="Optional note">
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="primary" id="in_save">💾 Save</button>
+          <button class="primary" id="in_reset" style="background:#111;">Reset</button>
+        </div>
+
+        <p class="dashSmall" id="in_status" style="margin-top:10px;color:#777;"></p>
+      </div>
+    </div>
+  `;
+
+  // Elements
+  const elType      = document.getElementById("in_type");
+  const elMode      = document.getElementById("in_mode");
+  const elBanner    = document.getElementById("in_mode_banner");
+  const elBankSel   = document.getElementById("in_bank_account");
+  const elCheque    = document.getElementById("in_cheque_no");
+  const elRef       = document.getElementById("in_ref_no");
+
+  const elDate      = document.getElementById("in_date");
+  const elReceived  = document.getElementById("in_received");
+  const elTdsChk    = document.getElementById("in_tds_chk");
+  const elTdsRow    = document.getElementById("in_tds_row");
+  const elTdsAmt    = document.getElementById("in_tds_amt");
+  const elNetCredit = document.getElementById("in_net_credit");
+  const elNote      = document.getElementById("in_note");
+  const elStatus    = document.getElementById("in_status");
+
+  const invBox      = document.getElementById("in_invoice_box");
+  const qBox        = document.getElementById("in_quotation_box");
+  const loanBox     = document.getElementById("in_loan_box");
+
+  const elClient    = document.getElementById("in_client");
+  const elInvoice   = document.getElementById("in_invoice");
+  const infoBox     = document.getElementById("in_info");
+  const payBox      = document.getElementById("in_payments_box");
+
+  const elQClient   = document.getElementById("in_q_client");
+  const elQuotation = document.getElementById("in_quotation");
+  const qInfoBox    = document.getElementById("in_q_info");
+
+  const elLoanFrom  = document.getElementById("in_loan_from");
+  const elLoanNote  = document.getElementById("in_loan_note");
+
+  // Defaults
+  elDate.value = todayISO_();
+
+  function setModeUI_(){
+    const mode = String(elMode.value || "CASH").toUpperCase();
+    if (elBanner) elBanner.textContent = "MODE: " + mode;
+
+    if (elBankSel) elBankSel.style.display = (mode === "BANK" || mode === "UPI") ? "" : "none";
+    if (elRef)     elRef.style.display     = (mode === "BANK" || mode === "UPI") ? "" : "none";
+    if (elCheque)  elCheque.style.display  = (mode === "CHEQUE") ? "" : "none";
+  }
+
+  function calcNet_(){
+    const r = num0_(elReceived.value);
+    const tds = elTdsChk.checked ? num0_(elTdsAmt.value) : 0;
+    elNetCredit.textContent = String((r + tds).toFixed(2));
+  }
+
+  function setTdsUI_(){
+    const chk = !!elTdsChk.checked;
+    elTdsRow.style.display = chk ? "" : "none";
+    if (!chk) elTdsAmt.value = "0";
+    calcNet_();
+  }
+
+  function setPaymentsHtml_(html){ if (payBox) payBox.innerHTML = html || ""; }
+  function setInfo_(html){ if (infoBox) infoBox.innerHTML = html || ""; }
+
+  function setPayTypeUI_(){
+    const t = String(elType.value || "INVOICE").toUpperCase();
+
+    if (invBox)  invBox.style.display  = (t === "INVOICE") ? "" : "none";
+    if (qBox)    qBox.style.display    = (t === "QUOTATION_ADVANCE") ? "" : "none";
+    if (loanBox) loanBox.style.display = (t === "LOAN_OTHER") ? "" : "none";
+
+    // Clear panels when switching away
+    if (t !== "INVOICE"){
+      if (elClient) elClient.value = "";
+      if (elInvoice) elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
+      setInfo_("Select client + invoice…");
+      setPaymentsHtml_("");
+    }
+    if (t !== "QUOTATION_ADVANCE"){
+      if (elQClient) elQClient.value = "";
+      if (elQuotation) elQuotation.innerHTML = `<option value="">Select Quotation</option>`;
+      if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+    }
+    if (t !== "LOAN_OTHER"){
+      if (elLoanFrom) elLoanFrom.value = "";
+      if (elLoanNote) elLoanNote.value = "";
+    }
+  }
+
+  elMode.addEventListener("change", setModeUI_);
+  elTdsChk.addEventListener("change", setTdsUI_);
+  elReceived.addEventListener("input", calcNet_);
+  elTdsAmt.addEventListener("input", calcNet_);
+  elType.addEventListener("change", setPayTypeUI_);
+
+  // ---------------------------
+  // ✅ Load Bank Accounts
+  // ---------------------------
+  async function loadBankAccounts_(){
+    const r = await api({ action: "listBankAccountsForCompany" });
+    const list = Array.isArray(r) ? r : [];
+
+    if (!elBankSel) return;
+
+    if (!list.length){
+      elBankSel.innerHTML = `<option value="">No bank accounts</option>`;
+      return;
+    }
+
+    elBankSel.innerHTML = list.map(a=>{
+      const label = (a.label || a.bank_name || "Account") + (a.account_no_last4 ? ` ••••${a.account_no_last4}` : "");
+      return `<option value="${escapeAttr(a.bank_account_id||"")}">${escapeHtml(label)}</option>`;
+    }).join("");
+  }
+
+  // ---------------------------
+  // ✅ Clients
+  // ---------------------------
+  async function loadClients_(){
+    if (IN_CACHE.clients) return IN_CACHE.clients;
+
+    const rows = await api({ action: "listClients" });
+    const list = Array.isArray(rows) ? rows : [];
+    IN_CACHE.clients = list;
+    return list;
+  }
+
+  async function fillClientSelect_(sel){
+    const list = await loadClients_();
+    sel.innerHTML =
+      `<option value="">Select Client</option>` +
+      list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
+  }
+
+  // ---------------------------
+  // ✅ Invoice Flow
+  // ---------------------------
+  async function loadInvoicesForClient_(client_id){
+    elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
+    setInfo_("Select client + invoice…");
+    setPaymentsHtml_("");
+    if (!client_id) return;
+
+    if (IN_CACHE.invoicesByClient[client_id]){
+      const invOnly = IN_CACHE.invoicesByClient[client_id];
+      elInvoice.innerHTML =
+        `<option value="">Select Invoice</option>` +
+        invOnly.map(inv => {
+          const label = `${inv.invoice_no || inv.invoice_id} • ₹${Number(inv.grand_total||0).toFixed(2)}`;
+          return `<option value="${escapeAttr(inv.invoice_id||"")}">${escapeHtml(label)}</option>`;
+        }).join("");
+      return;
+    }
+
+    const rows = await api({ action: "listInvoices", q: client_id });
+    const list = Array.isArray(rows) ? rows : [];
+    const invOnly = list.filter(x => String(x.doc_type||"INVOICE").toUpperCase() === "INVOICE");
+
+    IN_CACHE.invoicesByClient[client_id] = invOnly;
+
+    elInvoice.innerHTML =
+      `<option value="">Select Invoice</option>` +
+      invOnly.map(inv => {
+        const label = `${inv.invoice_no || inv.invoice_id} • ₹${Number(inv.grand_total||0).toFixed(2)}`;
+        return `<option value="${escapeAttr(inv.invoice_id||"")}">${escapeHtml(label)}</option>`;
+      }).join("");
+  }
+
+  async function getInvoiceTotals_(invoice_id){
+    if (!invoice_id) return { grand: 0, settled: 0, balance: 0, txns: 0, tds: 0 };
+
+    let full = IN_CACHE.invoiceFull[invoice_id];
+    let sum  = IN_CACHE.paySummary[invoice_id];
+
+    if (!full || !sum){
+      const [fullRes, sumRes] = await Promise.all([
+        full ? Promise.resolve(full) : api({ action: "getInvoiceFull", invoice_id }),
+        sum  ? Promise.resolve(sum)  : api({ action: "getInvoicePaymentSummary", invoice_id })
+      ]);
+      full = fullRes; sum = sumRes;
+      IN_CACHE.invoiceFull[invoice_id] = full;
+      IN_CACHE.paySummary[invoice_id]  = sum;
+    }
+
+    const h = full?.header || {};
+    const grand = Number(h.grand_total || 0);
+    const settled = Number(sum?.settled || 0);
+    const balance = Math.max(0, grand - settled);
+    return {
+      grand, settled, balance,
+      txns: Number(sum?.txns || 0),
+      tds: Number(sum?.tds || 0),
+      header: h
+    };
+  }
+
+  async function refreshInvoiceUI_(invoice_id){
+    delete IN_CACHE.invoiceFull[invoice_id];
+    delete IN_CACHE.paySummary[invoice_id];
+    await renderInvoiceInfo_(invoice_id);
+  }
+
+  async function renderInvoiceInfo_(invoice_id){
+    if (!invoice_id) {
+      setInfo_("Select client + invoice…");
+      setPaymentsHtml_("");
+      return;
+    }
+
+    const t = await getInvoiceTotals_(invoice_id);
+    const h = t.header || {};
+
+    const gstType = String(h.gst_type || "").toUpperCase();
+
+    setInfo_(`
+      <div><b>Client:</b> ${escapeHtml(h.client_name || "")} • ${escapeHtml(h.client_phone || "")}</div>
+      <div><b>Venue:</b> ${escapeHtml(h.venue || "")}</div>
+      <div><b>Dates:</b> ${escapeHtml(h.setup_date || "")} • ${escapeHtml(h.start_date || "")} → ${escapeHtml(h.end_date || "")}</div>
+      <div><b>GST Type:</b> ${escapeHtml(gstType)}</div>
+      <div style="margin-top:6px;"><b>Invoice Total:</b> ₹${t.grand.toFixed(2)}</div>
+      <div style="margin-top:6px;"><b>Already Paid:</b> ₹${t.settled.toFixed(2)} &nbsp; | &nbsp; <b>Balance:</b> ₹${t.balance.toFixed(2)}</div>
+    `);
+
+    // Default received = balance if empty/0
+    if (!Number(elReceived.value || 0)) {
+      elReceived.value = String(t.balance.toFixed(2));
+      calcNet_();
+    }
+
+    let status = "UNPAID";
+    let badgeColor = "#d93025";
+    if (t.settled > 0 && t.settled < t.grand) { status = "PARTIAL"; badgeColor = "#f9ab00"; }
+    if (t.settled >= t.grand) { status = "PAID"; badgeColor = "#188038"; }
+
+    let payments = await api({ action: "listInPayments", invoice_id });
+    if (!Array.isArray(payments)) payments = [];
+
+    const tableHtml = payments.length ? `
+      <div style="overflow:auto;margin-top:10px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <th align="left">Date</th>
+            <th align="left">Mode</th>
+            <th align="right">Received</th>
+            <th align="right">TDS</th>
+            <th align="left">Note</th>
+          </tr>
+          ${payments.map(p => `
+            <tr style="border-top:1px solid #eee;">
+              <td>${escapeHtml(p.pay_date || "")}</td>
+              <td>${escapeHtml(p.mode || "")}</td>
+              <td align="right">₹${Number(p.received_amount || 0).toFixed(2)}</td>
+              <td align="right">₹${Number(p.tds_amount || 0).toFixed(2)}</td>
+              <td>${escapeHtml(p.note || "")}</td>
+            </tr>
+          `).join("")}
+        </table>
+      </div>
+    ` : "";
+
+    setPaymentsHtml_(`
+      <div class="card" style="border-left:6px solid ${badgeColor};">
+        <div style="font-weight:800;color:${badgeColor};">${status}</div>
+        <div style="margin-top:6px;">
+          Paid: ₹${t.settled.toFixed(2)} (${t.txns} txns) |
+          TDS: ₹${t.tds.toFixed(2)} |
+          Balance: ₹${t.balance.toFixed(2)}
+        </div>
+        ${tableHtml}
+      </div>
+    `);
+  }
+
+  elClient.addEventListener("change", async ()=>{
+    await loadInvoicesForClient_(String(elClient.value||"").trim());
+  });
+
+  elInvoice.addEventListener("change", async ()=>{
+    await renderInvoiceInfo_(String(elInvoice.value||"").trim());
+  });
+
+  // ---------------------------
+  // ✅ Quotation Flow
+  // ---------------------------
+  async function loadQuotationsForClient_(client_id){
+    elQuotation.innerHTML = `<option value="">Select Quotation</option>`;
+    if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+    if (!client_id) return;
+
+    if (IN_CACHE.quotationsByClient[client_id]){
+      const qOnly = IN_CACHE.quotationsByClient[client_id];
+      elQuotation.innerHTML =
+        `<option value="">Select Quotation</option>` +
+        qOnly.map(q => {
+          const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}`;
+          return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
+        }).join("");
+      return;
+    }
+
+    const rows = await api({ action: "listInvoices", q: client_id });
+    const list = Array.isArray(rows) ? rows : [];
+    const qOnly = list.filter(x => String(x.doc_type||"").toUpperCase() === "QUOTATION");
+
+    IN_CACHE.quotationsByClient[client_id] = qOnly;
+
+    elQuotation.innerHTML =
+      `<option value="">Select Quotation</option>` +
+      qOnly.map(q => {
+        const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}`;
+        return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
+      }).join("");
+  }
+
+  async function renderQuotationInfo_(quotation_id){
+    if (!quotation_id) {
+      if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+      return;
+    }
+    const full = await api({ action: "getInvoiceFull", invoice_id: quotation_id });
+    if (full && full.error) {
+      if (qInfoBox) qInfoBox.textContent = String(full.error);
+      return;
+    }
+    const h = full?.header || {};
+    if (qInfoBox) {
+      qInfoBox.innerHTML = `
+        <div><b>Client:</b> ${escapeHtml(h.client_name || "")}</div>
+        <div><b>Quotation Total:</b> ₹${Number(h.grand_total||0).toFixed(2)}</div>
+        <div><b>Date:</b> ${escapeHtml(h.invoice_date || "")}</div>
+      `;
+    }
+  }
+
+  elQClient.addEventListener("change", async ()=>{
+    await loadQuotationsForClient_(String(elQClient.value||"").trim());
+  });
+  elQuotation.addEventListener("change", async ()=>{
+    await renderQuotationInfo_(String(elQuotation.value||"").trim());
+  });
+
+  // ---------------------------
+  // ✅ Reset
+  // ---------------------------
+  document.getElementById("in_reset").addEventListener("click", ()=>{
+    elType.value = "INVOICE";
+    elMode.value = "CASH";
+    elDate.value = todayISO_();
+    elReceived.value = "0";
+    elTdsChk.checked = false;
+    elTdsAmt.value = "0";
+    elNote.value = "";
+    if (elRef) elRef.value = "";
+    if (elCheque) elCheque.value = "";
+    if (elStatus) elStatus.textContent = "";
+
+    if (elClient) elClient.value = "";
+    if (elInvoice) elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
+    setInfo_("Select client + invoice…");
+    setPaymentsHtml_("");
+
+    if (elQClient) elQClient.value = "";
+    if (elQuotation) elQuotation.innerHTML = `<option value="">Select Quotation</option>`;
+    if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+
+    if (elLoanFrom) elLoanFrom.value = "";
+    if (elLoanNote) elLoanNote.value = "";
+
+    setModeUI_();
+    setTdsUI_();
+    calcNet_();
+    setPayTypeUI_();
+  });
+
+  // ---------------------------
+  // ✅ Save
+  // ---------------------------
+  document.getElementById("in_save").addEventListener("click", async ()=>{
+    const btn = document.getElementById("in_save");
+    const unlock = lockBtn_(btn, "Saving…");
+
+    try {
+      const pay_type = String(elType.value || "INVOICE").toUpperCase();
+      const mode = String(elMode.value || "CASH").toUpperCase();
+      const pay_date = String(elDate.value || "").trim();
+
+      const received_amount = num0_(elReceived.value);
+      const tds_checked = !!elTdsChk.checked;
+      const tds_amount = tds_checked ? num0_(elTdsAmt.value) : 0;
+
+      const bank_account_id = String(elBankSel?.value || "").trim();
+      const cheque_no = String(elCheque?.value || "").trim();
+      const ref_no = String(elRef?.value || "").trim();
+
+      // Base note (common)
+      const commonNote = String(elNote?.value || "").trim();
+
+      // Required validations
+      if (!received_amount || received_amount <= 0) return alert("Received Amount required");
+      if (!tds_checked && tds_amount > 0) return alert("TDS amount must be 0 unless checkbox ticked");
+      if (mode === "CHEQUE" && !cheque_no) return alert("Cheque No required");
+      if ((mode === "BANK" || mode === "UPI") && !bank_account_id) return alert("Select bank account");
+
+      let client_id = "";
+      let client_name = "";
+      let invoice_id = "";
+      let quotation_id = "";
+
+      // Type-specific validations + mapping
+      if (pay_type === "INVOICE"){
+        client_id = String(elClient.value || "").trim();
+        invoice_id = String(elInvoice.value || "").trim();
+        client_name = String(elClient?.selectedOptions?.[0]?.textContent || "").trim();
+
+        if (!client_id) return alert("Select client");
+        if (!invoice_id) return alert("Select invoice");
+
+        // Overpayment block (net = received + tds <= balance)
+        const net = Number(received_amount || 0) + Number(tds_amount || 0);
+        const t = await getInvoiceTotals_(invoice_id);
+        if (net > (t.balance + 0.01)) {
+          return alert(`Overpayment not allowed.\nBalance: ₹${t.balance.toFixed(2)}\nNet Credit: ₹${net.toFixed(2)}`);
+        }
+      }
+
+      if (pay_type === "QUOTATION_ADVANCE"){
+        client_id = String(elQClient.value || "").trim();
+        quotation_id = String(elQuotation.value || "").trim();
+        client_name = String(elQClient?.selectedOptions?.[0]?.textContent || "").trim();
+
+        if (!client_id) return alert("Select client");
+        if (!quotation_id) return alert("Select quotation");
+      }
+
+      if (pay_type === "LOAN_OTHER"){
+        const from = String(elLoanFrom.value || "").trim();
+        const ln = String(elLoanNote.value || "").trim();
+        if (!from) return alert("From (name) required");
+
+        client_name = from;          // store in client_name column
+        client_id = "";              // not applicable
+        invoice_id = "";
+        quotation_id = "";
+
+        // Combine loan note + common note nicely
+        // (You can change format if you want)
+        const combined = [ln, commonNote].filter(Boolean).join(" | ");
+        // overwrite common note
+        // eslint-disable-next-line no-unused-vars
+      }
+
+      // Loan note combination (without breaking other types)
+      let finalNote = commonNote;
+      if (pay_type === "LOAN_OTHER"){
+        const from = String(elLoanFrom.value || "").trim();
+        const ln = String(elLoanNote.value || "").trim();
+        finalNote = [from, ln, commonNote].filter(Boolean).join(" | ");
+      }
+
+      const payload = {
+        pay_type,
+        mode,
+        pay_date,
+        bank_account_id,
+        cheque_no,
+        ref_no,
+        received_amount,
+        tds_checked,
+        tds_amount,
+        note: finalNote,
+
+        client_id,
+        client_name,
+        invoice_id: (pay_type === "INVOICE") ? invoice_id : "",
+        quotation_id: (pay_type === "QUOTATION_ADVANCE") ? quotation_id : ""
+      };
+
+      const r = await api({ action: "addInPayment", ...payload });
+      if (r && r.error) return alert(String(r.error));
+
+      alert("Saved Income: " + (r.pay_id || ""));
+      if (elStatus) elStatus.textContent = "Saved: " + (r.pay_id || "");
+
+      // Refresh invoice UI only for invoice payments
+      if (pay_type === "INVOICE" && invoice_id){
+        await refreshInvoiceUI_(invoice_id);
+      }
+
+      // Reset amount fields for next entry (keep type + mode)
+      elReceived.value = "0";
+      elTdsChk.checked = false;
+      elTdsAmt.value = "0";
+      elNote.value = "";
+      if (elRef) elRef.value = "";
+      if (elCheque) elCheque.value = "";
+      if (elLoanFrom) elLoanFrom.value = "";
+      if (elLoanNote) elLoanNote.value = "";
+
+      setTdsUI_();
+      calcNet_();
+
+    } finally {
+      setTimeout(unlock, 200);
+    }
+  });
+
+  // ---------------------------
+  // ✅ Initial loads
+  // ---------------------------
+  (async ()=>{
+    await loadBankAccounts_();
+    await fillClientSelect_(elClient);
+    await fillClientSelect_(elQClient);
+
+    setModeUI_();
+    setTdsUI_();
+    calcNet_();
+    setPayTypeUI_();
+  })();
+
+  return;
+}
+
+    
+    // incomes section ends here
     
    
 // GST bills section starts here
