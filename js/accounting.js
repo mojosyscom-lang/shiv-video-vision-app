@@ -821,15 +821,26 @@ function setPaymentsHtml(html){
 function setPaidBalance(paid, bal){
   if (!infoBox) return;
 
+  const paidTxt = String(paid ?? "").trim();
+  const balTxt  = String(bal ?? "").trim();
 
+  const old = infoBox.querySelector?.("#in_paid_balance_block");
+  if (old) old.remove();
 
+  if (!paidTxt && !balTxt) return;
 
-  
-// ✅ Quotation Advance wiring (must be OUTSIDE Save handler)
-// ---------------------------
-const elQClient = document.getElementById("in_q_client");
-const elQuotation = document.getElementById("in_quotation");
-const qInfoBox = document.getElementById("in_q_info");
+  const extra = document.createElement("div");
+  extra.id = "in_paid_balance_block";
+  extra.style.marginTop = "8px";
+  extra.innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="userToggleBtn" style="cursor:default;">Already Paid: <b>${escapeHtml(paidTxt || "₹0.00")}</b></div>
+      <div class="userToggleBtn" style="cursor:default;">Balance: <b>${escapeHtml(balTxt || "₹0.00")}</b></div>
+    </div>
+  `;
+  infoBox.appendChild(extra);
+}
+
 
 async function loadClientsForQuotationAdvance(){
   if (!elQClient) return;
