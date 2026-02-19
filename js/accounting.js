@@ -8423,3 +8423,51 @@ async function apiUploadBase64(action, file, extraPayload = {}) {
 }
 
 
+
+
+
+/* ==========================================================
+   🚀 ROLE-BASED ROUTER (Bottom of File)
+   This decides what the user sees immediately after login.
+========================================================== */
+async function initializeAppByRole() {
+  const role = localStorage.getItem("role") || "";
+  const content = document.getElementById("content");
+
+  if (!content) {
+    console.error("❌ #content div is missing from your HTML!");
+    return;
+  }
+
+  console.log("Checking permissions for role:", role);
+
+  try {
+    if (role === "owner" || role === "superadmin") {
+      // Owners see the Dashboard
+      await showDashboard();
+    } 
+    else if (role === "staff") {
+      // Staff go directly to Inventory Transactions
+      await loadSection("inventoryTxn");
+    } 
+    else {
+      // Unknown or no role
+      content.innerHTML = `
+        <div class="card" style="text-align:center; padding:50px;">
+           <h2 style="color:red;">Unauthorized Access</h2>
+           <p>Please log in with a valid account.</p>
+           <button class="primary" onclick="location.href='index.html'">Go to Login</button>
+        </div>`;
+    }
+  } catch (err) {
+    console.error("Initialization Error:", err);
+    content.innerHTML = "<div class='card'>Error loading your workspace. Please refresh.</div>";
+  }
+}
+
+// 🚦 The ONLY trigger needed
+document.addEventListener("DOMContentLoaded", initializeAppByRole);
+
+// Keep these globally accessible for your menu buttons
+window.loadSection = loadSection;
+window.showDashboard = showDashboard;
