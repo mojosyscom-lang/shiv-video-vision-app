@@ -631,6 +631,17 @@ const IN_CACHE = {
           <input id="in_q_note" placeholder="Optional note">
         </div>
 
+        <div id="in_loan_box" class="card" style="margin-top:12px; display:none;">
+  <h4 style="margin:0 0 8px 0;">Loan / Other Income</h4>
+
+  <label>From / Source</label>
+  <input id="in_loan_from" placeholder="Example: Loan, Interest, Other">
+
+  <label style="margin-top:10px;">Description / Reference</label>
+  <input id="in_loan_note" placeholder="Optional note">
+</div>
+
+
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           <button class="primary" id="in_save">💾 Save</button>
@@ -694,16 +705,23 @@ const IN_CACHE = {
   const t = String(document.getElementById("in_type").value || "INVOICE").toUpperCase();
   const invBox = document.getElementById("in_invoice_box");
   const qBox = document.getElementById("in_quotation_box");
-
+  const loanBox = document.getElementById("in_loan_box");
   if (invBox) invBox.style.display = (t === "INVOICE") ? "" : "none";
   if (qBox) qBox.style.display = (t === "QUOTATION_ADVANCE") ? "" : "none";
-
+  if (loanBox) loanBox.style.display = (t === "LOAN_OTHER") ? "" : "none";
   // clear display panels when switching
-  if (t !== "INVOICE") {
-    if (elClient) elClient.value = "";
-    if (elInvoice) elInvoice.innerHTML = `<option value="">Select Invoice</option>`;
-    setInfo(""); setPaidBalance("", ""); setPaymentsHtml("");
-  }
+  // clear invoice ui safely (no external vars)
+if (t !== "INVOICE") {
+  const c = document.getElementById("in_client");
+  const inv = document.getElementById("in_invoice");
+  const info = document.getElementById("in_info");
+  const pay = document.getElementById("in_payments_box");
+  if (c) c.value = "";
+  if (inv) inv.innerHTML = `<option value="">Select Invoice</option>`;
+  if (info) info.innerHTML = "Select client + invoice…";
+  if (pay) pay.innerHTML = "";
+}
+
 
   if (t !== "QUOTATION_ADVANCE") {
     const qc = document.getElementById("in_q_client");
@@ -1140,6 +1158,11 @@ if (pay_type === "INVOICE") {
   if (!qid) return alert("Select quotation");
 }
 
+const loan_from = String(document.getElementById("in_loan_from")?.value || "").trim();
+const loan_note = String(document.getElementById("in_loan_note")?.value || "").trim();
+note: (pay_type === "LOAN_OTHER")
+  ? (loan_from ? `${loan_from} — ${loan_note}` : loan_note)
+  : note,
 
 
 
