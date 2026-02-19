@@ -519,13 +519,7 @@ if (type === "incomes") {
 
   content.innerHTML = `<div class="card"><h2>INCOMES</h2><p>Loading…</p></div>`;
 
-  function todayISO(){
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth()+1).padStart(2,"0");
-    const dd = String(d.getDate()).padStart(2,"0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
+  
   function num0(v){ const n = Number(v); return isFinite(n) ? n : 0; }
 
   let bankAccounts = [];
@@ -575,44 +569,49 @@ const IN_CACHE = {
         </div>
 
         <label style="margin-top:10px;">Date</label>
-        <input id="in_date" type="date">
+<input id="in_date" type="date">
 
-        <div id="in_invoice_box" class="card" style="margin-top:12px;">
-          <h4 style="margin:0 0 8px 0;">Invoice Payment</h4>
+<!-- ✅ Common payment fields (applies to ALL pay types) -->
+<div id="in_common_box" class="card" style="margin-top:12px;">
+  <h4 style="margin:0 0 8px 0;">Payment Details</h4>
 
-          <label>Client</label>
-          <select id="in_client"></select>
+  <label>Received Amount (₹)</label>
+  <input id="in_received" type="number" inputmode="decimal" value="0">
 
-          <label style="margin-top:10px;">Invoice No</label>
-          <select id="in_invoice"></select>
+  <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+    <input id="in_tds_chk" type="checkbox">
+    <label for="in_tds_chk" style="margin:0;">TDS</label>
+  </div>
 
-          <div class="card" style="margin-top:10px;">
-  <div class="dashSmall" id="in_info">Select client + invoice…</div>
-  <div id="in_payments_box" style="margin-top:10px;"></div>
+  <div id="in_tds_row" style="display:none;margin-top:10px;">
+    <label>TDS Amount (₹)</label>
+    <input id="in_tds_amt" type="number" inputmode="decimal" value="0">
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <b>Net Credit:</b>
+    <span id="in_net_credit">0</span>
+  </div>
 </div>
 
+<!-- ✅ Invoice-specific -->
+<div id="in_invoice_box" class="card" style="margin-top:12px;">
+  <h4 style="margin:0 0 8px 0;">Invoice Payment</h4>
 
-          <label style="margin-top:10px;">Received Amount (₹)</label>
-          <input id="in_received" type="number" inputmode="decimal" value="0">
+  <label>Client</label>
+  <select id="in_client"></select>
 
-          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
-            <input id="in_tds_chk" type="checkbox">
-            <label for="in_tds_chk" style="margin:0;">TDS</label>
-          </div>
+  <label style="margin-top:10px;">Invoice No</label>
+  <select id="in_invoice"></select>
 
-          <div id="in_tds_row" style="display:none;margin-top:10px;">
-            <label>TDS Amount (₹)</label>
-            <input id="in_tds_amt" type="number" inputmode="decimal" value="0">
-          </div>
+  <div class="card" style="margin-top:10px;">
+    <div class="dashSmall" id="in_info">Select client + invoice…</div>
+    <div id="in_payments_box" style="margin-top:10px;"></div>
+  </div>
 
-          <div class="card" style="margin-top:10px;">
-            <b>Net Credit to Invoice:</b>
-            <span id="in_net_credit">0</span>
-          </div>
-
-          <label style="margin-top:10px;">Description / Reference</label>
-          <input id="in_note" placeholder="Optional note">
-        </div>
+  <label style="margin-top:10px;">Description / Reference</label>
+  <input id="in_note" placeholder="Optional note">
+</div>
 
                 <div id="in_quotation_box" class="card" style="margin-top:12px; display:none;">
           <h4 style="margin:0 0 8px 0;">Quotation Advance</h4>
@@ -708,6 +707,8 @@ const IN_CACHE = {
   const invBox  = document.getElementById("in_invoice_box");
   const qBox    = document.getElementById("in_quotation_box");
   const loanBox = document.getElementById("in_loan_box");
+const commonBox = document.getElementById("in_common_box");
+if (commonBox) commonBox.style.display = ""; // always visible
 
   if (invBox)  invBox.style.display  = (t === "INVOICE") ? "" : "none";
   if (qBox)    qBox.style.display    = (t === "QUOTATION_ADVANCE") ? "" : "none";
