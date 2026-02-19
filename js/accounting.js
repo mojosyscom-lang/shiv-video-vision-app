@@ -634,12 +634,13 @@ const IN_CACHE = {
         <div id="in_loan_box" class="card" style="margin-top:12px; display:none;">
   <h4 style="margin:0 0 8px 0;">Loan / Other Income</h4>
 
-  <label>From / Source</label>
-  <input id="in_loan_from" placeholder="Example: Loan, Interest, Other">
+  <label>From (Name)</label>
+  <input id="in_loan_from" placeholder="Example: Bank Loan / Person Name / Other">
 
-  <label style="margin-top:10px;">Description / Reference</label>
-  <input id="in_loan_note" placeholder="Optional note">
+  <label style="margin-top:10px;">Optional Description</label>
+  <input id="in_loan_note" placeholder="Optional note / reference">
 </div>
+
 
 
 
@@ -734,7 +735,14 @@ if (t !== "INVOICE") {
     if (qn) qn.value = "";
   }
 }
-
+ // ✅ clear loan/other panel
+  if (t !== "LOAN_OTHER") {
+    const lf = document.getElementById("in_loan_from");
+    const ln = document.getElementById("in_loan_note");
+    if (lf) lf.value = "";
+    if (ln) ln.value = "";
+  }
+}
 
 document.getElementById("in_type").addEventListener("change", setPayTypeUI);
 setPayTypeUI();
@@ -1120,7 +1128,7 @@ await loadClientsForQuotationAdvance();
       const cheque_no = String(document.getElementById("in_cheque_no").value || "").trim();
       const ref_no = String(document.getElementById("in_ref_no").value || "").trim();
 
-      const note = String(document.getElementById("in_note").value || "").trim();
+     
 
       // REQUIRED rules you confirmed
       if (!received_amount || received_amount <= 0) return alert("Received Amount required");
@@ -1157,12 +1165,18 @@ if (pay_type === "INVOICE") {
   if (!cid) return alert("Select client");
   if (!qid) return alert("Select quotation");
 }
+      if (pay_type === "LOAN_OTHER") {
+  if (!loan_from) return alert("From (name) required");
+}
 
+      
+const note = String(document.getElementById("in_note").value || "").trim();
 const loan_from = String(document.getElementById("in_loan_from")?.value || "").trim();
 const loan_note = String(document.getElementById("in_loan_note")?.value || "").trim();
 note: (pay_type === "LOAN_OTHER")
-  ? (loan_from ? `${loan_from} — ${loan_note}` : loan_note)
+  ? (loan_note ? `${loan_from} — ${loan_note}` : loan_from)
   : note,
+
 
 
 
