@@ -586,8 +586,10 @@ const IN_CACHE = {
           <select id="in_invoice"></select>
 
           <div class="card" style="margin-top:10px;">
-            <div class="dashSmall" id="in_info">Select client + invoice…</div>
-          </div>
+  <div class="dashSmall" id="in_info">Select client + invoice…</div>
+  <div id="in_payments_box" style="margin-top:10px;"></div>
+</div>
+
 
           <label style="margin-top:10px;">Received Amount (₹)</label>
           <input id="in_received" type="number" inputmode="decimal" value="0">
@@ -699,27 +701,39 @@ const IN_CACHE = {
   const elInvoice = document.getElementById("in_invoice");
 
   const infoBox = document.getElementById("in_info"); // make sure this id exists in your HTML
-  
+
+  const payBox = document.getElementById("in_payments_box");
+
+function setPaymentsHtml(html){
+  if (payBox) payBox.innerHTML = html;
+}
+
 
   function setInfo(html){
     if (infoBox) infoBox.innerHTML = html;
   }
- function setPaidBalance(paid, bal){
-  // ✅ show inside info card (because separate fields not created)
-  const paidTxt = String(paid ?? "");
-  const balTxt  = String(bal ?? "");
+function setPaidBalance(paid, bal){
   if (!infoBox) return;
 
-  const extra = `
-    <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">
+  const paidTxt = String(paid ?? "");
+  const balTxt  = String(bal ?? "");
+
+  // remove old block if exists
+  const old = infoBox.querySelector?.("#in_paid_balance_block");
+  if (old) old.remove();
+
+  const extra = document.createElement("div");
+  extra.id = "in_paid_balance_block";
+  extra.style.marginTop = "8px";
+  extra.innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <div class="userToggleBtn" style="cursor:default;">Already Paid: <b>${escapeHtml(paidTxt)}</b></div>
       <div class="userToggleBtn" style="cursor:default;">Balance: <b>${escapeHtml(balTxt)}</b></div>
     </div>
   `;
-
-  // append after main info (don’t overwrite if setInfo already called)
-  infoBox.innerHTML = infoBox.innerHTML + extra;
+  infoBox.appendChild(extra);
 }
+
 
 
  async function loadClientsForIncome(){
@@ -733,9 +747,15 @@ const IN_CACHE = {
     return;
   }
 
-  const rows = await api({ action: "listClients" });
-  const list = Array.isArray(rows) ? rows : [];
-  IN_CACHE.clients = list;
+ const rows = await api({ action: "listClients" });
+const list = Array.isArray(rows) ? rows : [];
+IN_CACHE.clients = list;
+
+elClient.innerHTML =
+  `<option value="">Select Client</option>` +
+  list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
+}
+
 
   }
 
@@ -784,15 +804,23 @@ const IN_CACHE = {
       return;
     }
 
-    const full = await api({ action: "getInvoiceFull", invoice_id });
-    if (full && full.error) return alert(String(full.error));
+ let full = IN_CACHE.invoiceFull[invoice_id];
+let sum  = IN_CACHE.paySummary[invoice_id];
 
+if (!full || !sum){
+  const [fullRes, sumRes] = await Promise.all([
+    full ? Promise.resolve(full) : api({ action: "getInvoiceFull", invoice_id }),
+    sum  ? Promise.resolve(sum)  : api({ action: "getInvoicePaymentSummary", invoice_id })
+  ]);
+  full = fullRes; sum = sumRes;
+  IN_CACHE.invoiceFull[invoice_id] = full;
+  IN_CACHE.paySummary[invoice_id]  = sum;
+}
+
+ 
     const h = full.header || {};
     const grand = Number(h.grand_total || 0);
     const gstType = String(h.gst_type || "").toUpperCase();
-
-    // ✅ payment summary (Already Paid / Balance)
-    const sum = await api({ action: "getInvoicePaymentSummary", invoice_id });
     const settled = Number(sum?.settled || 0);
     const balance = Math.max(0, grand - settled);
 
@@ -819,6 +847,57 @@ setInfo(`
       rec.value = String(balance.toFixed(2));
       calcNet();
     }
+
+    const txns = Number(sum?.txns || 0);
+const tds  = Number(sum?.tds || 0);
+
+let status = "UNPAID";
+let badgeColor = "#d93025";
+if (settled > 0 && settled < grand) { status = "PARTIAL"; badgeColor = "#f9ab00"; }
+if (settled >= grand) { status = "PAID"; badgeColor = "#188038"; }
+
+// list payments for this invoice (backend must support invoice_id filter)
+const payments = await api({ action: "listInPayments", invoice_id });
+
+let tableHtml = "";
+if (Array.isArray(payments) && payments.length){
+  tableHtml = `
+    <div style="overflow:auto;margin-top:10px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th align="left">Date</th>
+          <th align="left">Mode</th>
+          <th align="right">Received</th>
+          <th align="right">TDS</th>
+          <th align="left">Note</th>
+        </tr>
+        ${payments.map(p => `
+          <tr style="border-top:1px solid #eee;">
+            <td>${escapeHtml(p.pay_date || "")}</td>
+            <td>${escapeHtml(p.mode || "")}</td>
+            <td align="right">₹${Number(p.received_amount || 0).toFixed(2)}</td>
+            <td align="right">₹${Number(p.tds_amount || 0).toFixed(2)}</td>
+            <td>${escapeHtml(p.note || "")}</td>
+          </tr>
+        `).join("")}
+      </table>
+    </div>
+  `;
+}
+
+setPaymentsHtml(`
+  <div class="card" style="border-left:6px solid ${badgeColor};">
+    <div style="font-weight:800;color:${badgeColor};">${status}</div>
+    <div style="margin-top:6px;">
+      Paid: ₹${settled.toFixed(2)} (${txns} txns) |
+      TDS: ₹${tds.toFixed(2)} |
+      Balance: ₹${balance.toFixed(2)}
+    </div>
+    ${tableHtml}
+  </div>
+`);
+
+    
   }
 
   // Bind
