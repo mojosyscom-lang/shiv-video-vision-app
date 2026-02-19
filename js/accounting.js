@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
 
   const role = localStorage.getItem("role") || "";
   const content = document.getElementById("content");
