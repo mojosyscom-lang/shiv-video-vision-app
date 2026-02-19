@@ -506,7 +506,7 @@ showDashboard();
    - Shows totals + GST + already paid + balance
    ========================================================== */
 if (type === "incomes") {
-  (async () => {
+ 
 
   // 🔒 Security Gate
   const isAdmin = (role === "owner" || role === "superadmin");
@@ -737,7 +737,7 @@ function setPaidBalance(paid, bal){
 
 
 
- async function loadClientsForIncome(){
+async function loadClientsForIncome(){
   if (!elClient) return;
 
   if (IN_CACHE.clients) {
@@ -748,17 +748,15 @@ function setPaidBalance(paid, bal){
     return;
   }
 
- const rows = await api({ action: "listClients" });
-const list = Array.isArray(rows) ? rows : [];
-IN_CACHE.clients = list;
+  const rows = await api({ action: "listClients" });
+  const list = Array.isArray(rows) ? rows : [];
+  IN_CACHE.clients = list;
 
-elClient.innerHTML =
-  `<option value="">Select Client</option>` +
-  list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
+  elClient.innerHTML =
+    `<option value="">Select Client</option>` +
+    list.map(c => `<option value="${escapeAttr(c.client_id||"")}">${escapeHtml(c.client_name||"")}</option>`).join("");
 }
 
-
-  }
 
   async function loadInvoicesForClient(client_id){
     if (!elInvoice) return;
@@ -997,9 +995,7 @@ setPaymentsHtml(`
   });
 
   return;
-  })();
-  return;
-}
+ 
 }
 
 
