@@ -2260,7 +2260,138 @@ if (type === "reports") {
           </div>
         </div>
       </div>
+   
+
+        <!-- ✅ PURCHASE GST (GST BILLS) SUMMARY -->
+        <div class="card" style="background:#eef6ff; border:1px solid #cfe2ff; margin-top:12px;">
+          <h3>GST Bills (Purchase) Summary</h3>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+            <div style="min-width:220px;">
+              <label>Month</label>
+              <input type="month" id="gstb_rep_month">
+            </div>
+
+            <button class="primary" id="btn_gstb_report">Generate GST Bills Report</button>
+          </div>
+
+          <div id="gstb_rep_result"
+               style="margin-top:15px; display:none; background:#fff; padding:15px; border-radius:8px; border:1px solid #eee;">
+            <h4 id="gstb_rep_title"
+                style="margin-top:0; color:#111; border-bottom:2px solid #333; padding-bottom:5px;">Purchase Summary</h4>
+
+            <div style="display:flex; justify-content:space-between; padding:5px 0;">
+              <span>Total Bills:</span><b id="gstb_count">0</b>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; padding:5px 0;">
+              <span>Taxable Value:</span><b>₹ <span id="gstb_sub">0.00</span></b>
+            </div>
+
+            <hr>
+
+            <div style="display:flex; justify-content:space-between; padding:3px 0; color:#555;">
+              <span>CGST:</span><span>₹ <span id="gstb_cgst">0.00</span></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:3px 0; color:#555;">
+              <span>SGST:</span><span>₹ <span id="gstb_sgst">0.00</span></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:3px 0; color:#555;">
+              <span>IGST:</span><span>₹ <span id="gstb_igst">0.00</span></span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; font-weight:bold; color:#d93025; padding:5px 0; border-top:1px solid #eee;">
+              <span>Total GST:</span><span>₹ <span id="gstb_total_gst">0.00</span></span>
+            </div>
+
+            <hr>
+
+            <div style="display:flex; justify-content:space-between; font-size:1.2em; font-weight:bold; color:#188038; background:#e6f4ea; padding:8px; border-radius:4px;">
+              <span>Grand Total:</span><span>₹ <span id="gstb_grand">0.00</span></span>
+            </div>
+
+            <div class="card" style="margin-top:12px;">
+              <h4 style="margin:0 0 8px 0;">Top Vendors</h4>
+              <div id="gstb_vendor_table" style="overflow:auto;"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
     `;
+
+
+// -------- functions GST Purchase report generation starts here 
+
+        // --- GST BILLS (PURCHASE) REPORT ---
+    const gstbMonthEl = document.getElementById("gstb_rep_month");
+    if (gstbMonthEl) {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      gstbMonthEl.value = `${y}-${m}`;
+    }
+
+    document.getElementById("btn_gstb_report")?.addEventListener("click", async () => {
+      const month = String(document.getElementById("gstb_rep_month")?.value || "").trim();
+      if (!month) return alert("Please select a month.");
+
+      const btn = document.getElementById("btn_gstb_report");
+      const unlock = lockButton(btn, "Processing...");
+
+      try {
+        const r = await api({ action: "getGSTBillsSummaryReport", month, vendor_limit: 50 });
+        if (r?.error) return alert(r.error);
+
+        document.getElementById("gstb_rep_result").style.display = "block";
+        document.getElementById("gstb_rep_title").textContent = `Purchase Summary: ${r.period}`;
+
+        const money = (v)=> (Number(v||0)).toFixed(2);
+
+        document.getElementById("gstb_count").textContent = String(r.bill_count || 0);
+        document.getElementById("gstb_sub").textContent = money(r.subtotal);
+        document.getElementById("gstb_cgst").textContent = money(r.cgst);
+        document.getElementById("gstb_sgst").textContent = money(r.sgst);
+        document.getElementById("gstb_igst").textContent = money(r.igst);
+        document.getElementById("gstb_total_gst").textContent = money(r.gst_total);
+        document.getElementById("gstb_grand").textContent = money(r.grand_total);
+
+        const vendors = Array.isArray(r.vendors) ? r.vendors : [];
+        const tbl = `
+          <table style="width:100%; border-collapse:collapse;">
+            <tr>
+              <th align="left">Vendor</th>
+              <th align="right">Bills</th>
+              <th align="right">Taxable</th>
+              <th align="right">GST</th>
+              <th align="right">Grand</th>
+            </tr>
+            ${vendors.map(v => `
+              <tr style="border-top:1px solid #eee;">
+                <td>${_escapeHtml(v.vendor_name || "")}</td>
+                <td align="right">${Number(v.bill_count || 0)}</td>
+                <td align="right">₹${money(v.subtotal)}</td>
+                <td align="right">₹${money(v.gst_total)}</td>
+                <td align="right"><b>₹${money(v.grand_total)}</b></td>
+              </tr>
+            `).join("")}
+          </table>
+        `;
+        document.getElementById("gstb_vendor_table").innerHTML = tbl;
+
+      } catch (e) {
+        console.error("GST BILLS REPORT ERROR:", e);
+        alert("GST Bills report failed. Check console.");
+      } finally {
+        unlock?.();
+      }
+    });
+
+    // ------------ functions GST Purchase report generation ends here
+
+
+
+    
 
     // --- REPORT GENERATION ---
     document.getElementById("btn_gen_report")?.addEventListener("click", async () => {
