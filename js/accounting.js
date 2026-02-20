@@ -4168,7 +4168,7 @@ function updateConvertBtnVisibility_(){
   const doc = String(h.doc_type || currentDocType || "").toUpperCase();
   const st  = String(h.status || "ACTIVE").toUpperCase();
   const end = String(h.end_date || "").trim();
-  const today = todayISO_();
+  const today = todayISO();
 
   const dateOK = !!end && (end <= today); // end_date same day OR past
   const show = (doc === "QUOTATION" && st !== "CONVERTED" && !!editingInvoiceId && dateOK);
