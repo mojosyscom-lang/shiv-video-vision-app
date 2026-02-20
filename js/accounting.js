@@ -4424,6 +4424,308 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
 
 
 
+    
+// company profile starts here
+
+if (type === "companyProfile") {
+  const isAdmin = (role === "ownerss" || role === "superadmin");
+  if (!isAdmin) {
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
+      <h2 style="color:#d93025;">🚫 Access Denied</h2>
+    </div>`;
+    return;
+  }
+
+  content.innerHTML = `<div class="card"><h2>Company Profile</h2><p>Loading…</p></div>`;
+
+  const prof = await api({ action: "getCompanyProfile" });
+  if (prof && prof.error) {
+    content.innerHTML = `<div class="card"><h2>Company Profile</h2><p style="color:#d93025;">${escapeHtml(String(prof.error))}</p></div>`;
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Company Profile</h2>
+
+      <div class="card" style="margin-top:12px;">
+        <label>Company Name</label>
+        <input id="cp_name" value="${escapeAttr(prof?.company_name || "")}">
+
+        <label style="margin-top:10px;">Short Description</label>
+        <input id="cp_short" value="${escapeAttr(prof?.short_desc || "")}" placeholder="LED Wall Rentals">
+
+        <label style="margin-top:10px;">Address</label>
+        <textarea id="cp_address" rows="3">${escapeHtml(prof?.address || "")}</textarea>
+
+        <label style="margin-top:10px;">Phone</label>
+        <input id="cp_phone" value="${escapeAttr(prof?.phone || "")}">
+
+        <label style="margin-top:10px;">GSTIN</label>
+        <input id="cp_gstin" value="${escapeAttr(prof?.gstin || "")}">
+
+        <label style="margin-top:10px;">Place of Supply</label>
+        <input id="cp_place" value="${escapeAttr(prof?.place_of_supply || "")}" placeholder="Gujarat">
+
+        <label style="margin-top:10px;">Terms</label>
+        <textarea id="cp_terms" rows="4">${escapeHtml(prof?.terms || "")}</textarea>
+
+        <label style="margin-top:10px;">Logo URL</label>
+        <textarea id="cp_logo_url" rows="4">${escapeHtml(prof?.logo_url || "")}</textarea>
+
+        <label style="margin-top:10px;">Bank QR Code URL</label>
+        <textarea id="cp_bank_qr_url" rows="4">${escapeHtml(prof?.bank_qr_url || "")}</textarea>
+
+        <label style="margin-top:10px;">Print Background URL</label>
+        <textarea id="cp_print_bg_url" rows="4">${escapeHtml(prof?.print_bg_url || "")}</textarea>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="primary" id="cp_save">💾 Save</button>
+          <button class="primary" id="cp_reload" style="background:#111;">Reload</button>
+        </div>
+
+        <p class="dashSmall" id="cp_status" style="margin-top:10px;color:#777;"></p>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("cp_reload")?.addEventListener("click", ()=> loadSection("companyProfile"));
+
+  document.getElementById("cp_save")?.addEventListener("click", async ()=>{
+    const btn = document.getElementById("cp_save");
+    const unlock = lockButton(btn, "Saving…");
+    try {
+      const payload = {
+        company_name: String(document.getElementById("cp_name")?.value || "").trim(),
+        short_desc: String(document.getElementById("cp_short")?.value || "").trim(),
+        address: String(document.getElementById("cp_address")?.value || "").trim(),
+        phone: String(document.getElementById("cp_phone")?.value || "").trim(),
+        gstin: String(document.getElementById("cp_gstin")?.value || "").trim(),
+        place_of_supply: String(document.getElementById("cp_place")?.value || "").trim(),
+        terms: String(document.getElementById("cp_terms")?.value || "").trim(),
+        logo_url: String(document.getElementById("cp_logo_url")?.value || "").trim(),
+        bank_qr_url: String(document.getElementById("cp_bank_qr_url")?.value || "").trim(),
+        print_bg_url: String(document.getElementById("cp_print_bg_url")?.value || "").trim()
+      };
+
+      const r = await api({ action: "saveCompanyProfile", ...payload });
+      if (r && r.error) return alert(String(r.error));
+
+      document.getElementById("cp_status").textContent = "Saved ✅";
+      alert("Company Profile Saved ✅");
+    } finally {
+      setTimeout(unlock, 350);
+    }
+  });
+
+  return;
+}
+    
+    // company profile ends here
+
+
+    
+    // company bank details starts here
+
+    if (type === "companyBankAccounts") {
+  const isAdmin = (role === "ownerss" || role === "superadmin");
+  if (!isAdmin) {
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
+      <h2 style="color:#d93025;">🚫 Access Denied</h2>
+    </div>`;
+    return;
+  }
+
+  content.innerHTML = `<div class="card"><h2>Company Bank Accounts</h2><p>Loading…</p></div>`;
+
+  async function loadList(){
+    const rows = await api({ action: "listBankAccountsForCompany" });
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  const list = await loadList();
+
+  const rowHtml = (a)=>`
+    <tr style="border-top:1px solid #eee;">
+      <td>${escapeHtml(a.label||"")}</td>
+      <td>${escapeHtml(a.bank_name||"")}</td>
+      <td>${escapeHtml(a.ifsc||"")}</td>
+      <td>${escapeHtml(a.upi_id||"")}</td>
+      <td>${escapeHtml(a.account_no_last4 ? ("••••"+a.account_no_last4) : "")}</td>
+      <td>${String(a.is_active||"").toUpperCase()==="TRUE" ? "✅" : "⛔"}</td>
+      <td align="right">
+        <button class="userToggleBtn" data-edit="${escapeAttr(a.bank_account_id||"")}">Edit</button>
+        <button class="userToggleBtn" data-toggle="${escapeAttr(a.bank_account_id||"")}" data-active="${String(a.is_active||"TRUE")}">
+          ${String(a.is_active||"").toUpperCase()==="TRUE" ? "Deactivate" : "Activate"}
+        </button>
+      </td>
+    </tr>
+  `;
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Company Bank Accounts</h2>
+
+      <div class="card" style="margin-top:12px;background:#f9f9f9;border:1px solid #ddd;">
+        <h3 style="margin-top:0;">Add / Edit Bank Account</h3>
+
+        <input type="hidden" id="ba_id" value="">
+
+        <label>Label (Required)</label>
+        <input id="ba_label" placeholder="Main Bank / UPI">
+
+        <label style="margin-top:10px;">Bank Name</label>
+        <input id="ba_bank" placeholder="HDFC / SBI">
+
+        <label style="margin-top:10px;">Branch Name</label>
+        <input id="ba_branch" placeholder="Ahmedabad">
+
+        <label style="margin-top:10px;">Account Name</label>
+        <input id="ba_accname" placeholder="Shiv Video Vision">
+
+        <label style="margin-top:10px;">Account Last 4 Digits</label>
+        <input id="ba_last4" inputmode="numeric" maxlength="4" placeholder="1234">
+
+        <label style="margin-top:10px;">IFSC</label>
+        <input id="ba_ifsc" placeholder="HDFC0000123">
+
+        <label style="margin-top:10px;">UPI ID</label>
+        <input id="ba_upi" placeholder="name@upi">
+
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
+          <input type="checkbox" id="ba_active" checked style="width:20px;height:20px;">
+          <label for="ba_active" style="margin:0;">Active</label>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="primary" id="ba_save">💾 Save</button>
+          <button class="primary" id="ba_clear" style="background:#111;">Clear</button>
+        </div>
+
+        <p class="dashSmall" id="ba_status" style="margin-top:10px;color:#777;"></p>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Existing Accounts</h3>
+        ${list.length===0 ? `<p class="dashSmall">No accounts yet.</p>` : `
+          <div style="overflow:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="text-align:left;font-size:12px;color:#666;">
+                  <th>LABEL</th>
+                  <th>BANK</th>
+                  <th>IFSC</th>
+                  <th>UPI</th>
+                  <th>LAST4</th>
+                  <th>ACTIVE</th>
+                  <th align="right">ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.map(rowHtml).join("")}
+              </tbody>
+            </table>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  function clearForm(){
+    document.getElementById("ba_id").value = "";
+    document.getElementById("ba_label").value = "";
+    document.getElementById("ba_bank").value = "";
+    document.getElementById("ba_branch").value = "";
+    document.getElementById("ba_accname").value = "";
+    document.getElementById("ba_last4").value = "";
+    document.getElementById("ba_ifsc").value = "";
+    document.getElementById("ba_upi").value = "";
+    document.getElementById("ba_active").checked = true;
+    document.getElementById("ba_status").textContent = "";
+  }
+
+  document.getElementById("ba_clear")?.addEventListener("click", clearForm);
+
+  document.getElementById("ba_save")?.addEventListener("click", async ()=>{
+    const btn = document.getElementById("ba_save");
+    const unlock = lockButton(btn, "Saving…");
+    try {
+      const bank_account_id = String(document.getElementById("ba_id").value || "").trim();
+
+      const payload = {
+        bank_account_id,
+        label: String(document.getElementById("ba_label").value || "").trim(),
+        bank_name: String(document.getElementById("ba_bank").value || "").trim(),
+        branch_name: String(document.getElementById("ba_branch").value || "").trim(),
+        account_name: String(document.getElementById("ba_accname").value || "").trim(),
+        account_no_last4: String(document.getElementById("ba_last4").value || "").trim(),
+        ifsc: String(document.getElementById("ba_ifsc").value || "").trim(),
+        upi_id: String(document.getElementById("ba_upi").value || "").trim(),
+        is_active: !!document.getElementById("ba_active").checked
+      };
+
+      if (!payload.label) return alert("Label required");
+      if (!payload.bank_name && !payload.upi_id) return alert("Bank Name or UPI ID required");
+      if (payload.account_no_last4 && !/^\d{4}$/.test(payload.account_no_last4)) return alert("Account last4 must be 4 digits");
+
+      const r = bank_account_id
+        ? await api({ action: "updateCompanyBankAccount", ...payload })
+        : await api({ action: "addCompanyBankAccount", ...payload });
+
+      if (r && r.error) return alert(String(r.error));
+
+      alert("Saved ✅");
+      loadSection("companyBankAccounts");
+    } finally {
+      setTimeout(unlock, 350);
+    }
+  });
+
+  // Edit + Toggle buttons
+  document.querySelectorAll("button[data-edit]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.getAttribute("data-edit");
+      const a = list.find(x => String(x.bank_account_id||"") === String(id||""));
+      if (!a) return;
+
+      document.getElementById("ba_id").value = String(a.bank_account_id||"");
+      document.getElementById("ba_label").value = String(a.label||"");
+      document.getElementById("ba_bank").value = String(a.bank_name||"");
+      document.getElementById("ba_branch").value = String(a.branch_name||"");
+      document.getElementById("ba_accname").value = String(a.account_name||"");
+      document.getElementById("ba_last4").value = String(a.account_no_last4||"");
+      document.getElementById("ba_ifsc").value = String(a.ifsc||"");
+      document.getElementById("ba_upi").value = String(a.upi_id||"");
+      document.getElementById("ba_active").checked = (String(a.is_active||"TRUE").toUpperCase() === "TRUE");
+
+      document.getElementById("ba_status").textContent = "Editing: " + String(a.label||"");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+
+  document.querySelectorAll("button[data-toggle]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.getAttribute("data-toggle");
+      const cur = String(btn.getAttribute("data-active")||"TRUE").toUpperCase() === "TRUE";
+      const next = !cur;
+
+      if (!confirm((next?"Activate":"Deactivate") + " this bank account?")) return;
+
+      const unlock = lockButton(btn, "Saving…");
+      try {
+        const r = await api({ action: "setCompanyBankAccountActive", bank_account_id: id, is_active: next });
+        if (r && r.error) return alert(String(r.error));
+        loadSection("companyBankAccounts");
+      } finally {
+        setTimeout(unlock, 350);
+      }
+    });
+  });
+
+  return;
+}
+
+    // company bank details ends here
 
 
     
