@@ -254,6 +254,16 @@ document.addEventListener("DOMContentLoaded", async() => {
   ========================== */
 
   async function showDashboard() {
+
+      // 🔒 Security Gate
+  const isAdmin = (role === "owner" || role === "superadmin");
+  if (!isAdmin) {
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
+      <h2 style="color:#d93025;">🚫 Access Denied</h2>
+    </div>`;
+    return;
+  }
+    
     content.innerHTML = `
       <div class="card">
         <h2>Dashboard</h2>
