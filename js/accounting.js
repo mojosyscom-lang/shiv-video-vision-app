@@ -2320,11 +2320,174 @@ if (type === "reports") {
             
           </div>
         </div>
+
+
+<!-- ✅ TDS YEARLY SUMMARY -->
+<div class="card" style="background:#f3f0ff; border:1px solid #d6ccff; margin-top:12px;">
+  <h3>TDS (Yearly) Summary</h3>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+    <div style="min-width:220px;">
+      <label>Year</label>
+      <select id="tds_rep_year">
+        ${years.map(y => `<option value="${y}">${y}</option>`).join("")}
+      </select>
+    </div>
+
+    <button class="primary" id="btn_tds_report">Generate TDS Yearly Report</button>
+  </div>
+
+  <div id="tds_rep_result"
+       style="margin-top:15px; display:none; background:#fff; padding:15px; border-radius:8px; border:1px solid #eee;">
+    <h4 id="tds_rep_title"
+        style="margin-top:0; color:#111; border-bottom:2px solid #333; padding-bottom:5px;">TDS Summary</h4>
+
+    <div style="display:flex; justify-content:space-between; padding:5px 0;">
+      <span>Total Payments:</span><b id="tds_count">0</b>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; padding:5px 0;">
+      <span>Total Received:</span><b>₹ <span id="tds_received">0.00</span></b>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; padding:5px 0;">
+      <span>Total TDS:</span><b style="color:#d93025;">₹ <span id="tds_total">0.00</span></b>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; padding:5px 0; border-top:1px solid #eee; margin-top:6px; padding-top:10px;">
+      <span>Net Received (After TDS):</span><b style="color:#188038;">₹ <span id="tds_net">0.00</span></b>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px 0;">Top Clients (by TDS)</h4>
+      <div id="tds_client_table" style="overflow:auto;"></div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:12px;">
+      <button class="primary" id="btn_pdf_tds" style="flex:1; background:#111;">🖨 Save PDF</button>
+    </div>
+  </div>
+</div>
+
+        
 </div>
       </div>
     `;
 
+// -------- functions TDS report starts here
+// --- TDS (YEARLY) DEFAULT YEAR ---
+const tdsYearEl = document.getElementById("tds_rep_year");
+if (tdsYearEl) tdsYearEl.value = String(new Date().getFullYear());
 
+// --- TDS (YEARLY) REPORT ---
+document.getElementById("btn_tds_report")?.addEventListener("click", async () => {
+  const year = String(document.getElementById("tds_rep_year")?.value || "").trim();
+  if (!year) return alert("Please select a year.");
+
+  const btn = document.getElementById("btn_tds_report");
+  const unlock = lockButton(btn, "Processing...");
+
+  try {
+    const r = await api({ action: "getTDSYearlyReport", year, client_limit: 50 });
+    if (r?.error) return alert(r.error);
+
+    document.getElementById("tds_rep_result").style.display = "block";
+    document.getElementById("tds_rep_title").textContent = `TDS Summary: ${r.period}`;
+
+    const money = (v)=> (Number(v||0)).toFixed(2);
+
+    document.getElementById("tds_count").textContent = String(r.pay_count || 0);
+    document.getElementById("tds_received").textContent = money(r.received_total);
+    document.getElementById("tds_total").textContent = money(r.tds_total);
+    document.getElementById("tds_net").textContent = money(r.net_total);
+
+    const clients = Array.isArray(r.clients) ? r.clients : [];
+    const tbl = `
+      <table style="width:100%; border-collapse:collapse;">
+        <tr>
+          <th align="left">Client</th>
+          <th align="right">Payments</th>
+          <th align="right">Received</th>
+          <th align="right">TDS</th>
+          <th align="right">Net</th>
+        </tr>
+        ${clients.map(c => `
+          <tr style="border-top:1px solid #eee;">
+            <td>${_escapeHtml(c.client_name || "")}</td>
+            <td align="right">${Number(c.pay_count || 0)}</td>
+            <td align="right">₹${money(c.received_total)}</td>
+            <td align="right">₹${money(c.tds_total)}</td>
+            <td align="right"><b>₹${money(c.net_total)}</b></td>
+          </tr>
+        `).join("")}
+      </table>
+    `;
+    document.getElementById("tds_client_table").innerHTML = tbl;
+
+    window.latestTDSReport = r;
+  } catch (e) {
+    console.error("TDS REPORT ERROR:", e);
+    alert("TDS report failed. Check console.");
+  } finally {
+    unlock?.();
+  }
+});
+
+// --- TDS (YEARLY) PDF PRINT ---
+document.getElementById("btn_pdf_tds")?.addEventListener("click", () => {
+  const r = window.latestTDSReport;
+  if (!r) return alert("Generate TDS report first.");
+
+  const company = localStorage.getItem("company") || "Shiv Video Vision";
+  const win = window.open("", "_blank");
+  if (!win) return alert("Popup blocked. Please allow popups to save PDF.");
+
+  const money = (v)=> (Number(v||0)).toFixed(2);
+
+  const html = `
+    <html>
+      <head>
+        <title>TDS Yearly Report</title>
+        <style>
+          body{font-family:sans-serif;padding:30px;}
+          .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;}
+          .muted{color:#666;font-size:12px;}
+          .box{border:1px solid #eee;border-radius:8px;padding:14px;margin-top:12px;}
+        </style>
+      </head>
+      <body>
+        <h2 style="margin-bottom:0;">${_escapeHtml(company)}</h2>
+        <p class="muted" style="margin-top:4px;">TDS (Yearly) Summary</p>
+        <h3 style="margin-top:18px;">Period: ${_escapeHtml(String(r.period || ""))}</h3>
+
+        <div class="box">
+          <div class="row"><span>Total Payments</span><b>${Number(r.pay_count || 0)}</b></div>
+          <div class="row"><span>Total Received</span><b>₹${money(r.received_total)}</b></div>
+          <div class="row"><span>Total TDS</span><b style="color:#d93025;">₹${money(r.tds_total)}</b></div>
+          <div class="row" style="border-bottom:none;"><span>Net Received</span><b style="color:#188038;">₹${money(r.net_total)}</b></div>
+        </div>
+
+        <div class="box">
+          <h4 style="margin:0 0 10px 0;">Top Clients (by TDS)</h4>
+          ${document.getElementById("tds_client_table")?.innerHTML || "<div class='muted'>No client data</div>"}
+        </div>
+
+        <div style="margin-top:30px; font-size:12px; color:#999; text-align:center;">
+          Generated on ${_escapeHtml(new Date().toLocaleString())}
+        </div>
+
+        <script>window.print();</script>
+      </body>
+    </html>
+  `;
+  win.document.write(html);
+  win.document.close();
+});
+
+    // --------- functions tds reports ends here
+
+
+    
 // -------- functions GST Purchase report generation starts here 
 
         // --- GST BILLS (PURCHASE) REPORT ---
