@@ -2259,7 +2259,7 @@ if (type === "reports") {
             </div>
           </div>
         </div>
-      </div>
+      
    
 
         <!-- ✅ PURCHASE GST (GST BILLS) SUMMARY -->
@@ -2314,9 +2314,13 @@ if (type === "reports") {
               <h4 style="margin:0 0 8px 0;">Top Vendors</h4>
               <div id="gstb_vendor_table" style="overflow:auto;"></div>
             </div>
+<div style="display:flex; gap:10px; margin-top:12px;">
+  <button class="primary" id="btn_pdf_gstb" style="flex:1; background:#111;">🖨 Save PDF</button>
+</div>
+            
           </div>
         </div>
-
+</div>
       </div>
     `;
 
@@ -2377,8 +2381,9 @@ if (type === "reports") {
             `).join("")}
           </table>
         `;
+        
         document.getElementById("gstb_vendor_table").innerHTML = tbl;
-
+window.latestGSTBReport = r;
       } catch (e) {
         console.error("GST BILLS REPORT ERROR:", e);
         alert("GST Bills report failed. Check console.");
@@ -2387,6 +2392,52 @@ if (type === "reports") {
       }
     });
 
+   // --- GST BILLS (PURCHASE) PDF PRINT ---
+document.getElementById("btn_pdf_gstb")?.addEventListener("click", () => {
+  const r = window.latestGSTBReport;
+  if (!r) return alert("Generate GST Bills report first.");
+
+  const company = localStorage.getItem("company") || "Shiv Video Vision";
+  const win = window.open("", "_blank");
+  if (!win) return alert("Popup blocked. Please allow popups to save PDF.");
+
+  const money = (v)=> (Number(v||0)).toFixed(2);
+
+  win.document.write(
+    `<html><head><title>GST Bills Purchase Report</title>
+      <style>
+        body{font-family:sans-serif;padding:30px;}
+        .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;}
+        .box{border:1px solid #eee;border-radius:8px;padding:14px;margin-top:12px;}
+      </style>
+    </head><body>` +
+    `<h2 style="margin-bottom:0;">${_escapeHtml(company)}</h2>` +
+    `<p style="margin-top:0; color:#666;">GST Bills (Purchase) Summary</p>` +
+    `<h3>Period: ${_escapeHtml(String(r.period || ""))}</h3>` +
+
+    `<div class="box">` +
+      `<div class="row"><span>Total Bills</span><b>${Number(r.bill_count || 0)}</b></div>` +
+      `<div class="row"><span>Taxable Value</span><b>₹${money(r.subtotal)}</b></div>` +
+      `<div class="row"><span>CGST</span><span>₹${money(r.cgst)}</span></div>` +
+      `<div class="row"><span>SGST</span><span>₹${money(r.sgst)}</span></div>` +
+      `<div class="row"><span>IGST</span><span>₹${money(r.igst)}</span></div>` +
+      `<div class="row"><span>Total GST</span><b>₹${money(r.gst_total)}</b></div>` +
+      `<div class="row" style="border-bottom:none;"><span>Grand Total</span><b>₹${money(r.grand_total)}</b></div>` +
+    `</div>` +
+
+    `<div class="box">` +
+      `<h4 style="margin:0 0 10px 0;">Top Vendors</h4>` +
+      (document.getElementById("gstb_vendor_table")?.innerHTML || `<div style="color:#666;">No vendor data</div>`) +
+    `</div>` +
+
+    `<div style="margin-top:30px; font-size:12px; color:#999; text-align:center;">
+      Generated on ${_escapeHtml(new Date().toLocaleString())}
+    </div>` +
+    `<script>window.print();</script></body></html>`
+  );
+
+  win.document.close();
+});
     // ------------ functions GST Purchase report generation ends here
 
 
