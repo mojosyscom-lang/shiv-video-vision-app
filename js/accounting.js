@@ -621,8 +621,36 @@ if (type === "incomes") {
           <select id="in_quotation"></select>
 
           <div class="card" style="margin-top:10px;">
-            <div class="dashSmall" id="in_q_info">Select client + quotation…</div>
-          </div>
+  <div class="dashSmall" style="margin-bottom:8px;">Quotation Info (read-only)</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="card" style="padding:10px;">
+      <div class="dashSmall">Client</div>
+      <div id="qa_client_name" style="font-weight:700;">—</div>
+      <div class="dashSmall" style="margin-top:6px;">Phone</div>
+      <div id="qa_client_phone">—</div>
+    </div>
+
+    <div class="card" style="padding:10px;">
+      <div class="dashSmall">Venue</div>
+      <div id="qa_venue" style="font-weight:700;">—</div>
+      <div class="dashSmall" style="margin-top:6px;">Dates</div>
+      <div id="qa_dates">—</div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:10px;margin-top:10px;">
+    <div class="dashSmall">LED Wall on Rent (from items)</div>
+    <div id="qa_led" style="font-weight:700;">—</div>
+  </div>
+
+  <div class="card" style="padding:10px;margin-top:10px;display:flex;justify-content:space-between;">
+    <div class="dashSmall">Quotation Total</div>
+    <div style="font-weight:800;">₹ <span id="qa_total">0.00</span></div>
+  </div>
+
+  <div class="dashSmall" id="in_q_info" style="margin-top:8px;color:#777;">Select client + quotation…</div>
+</div>
         </div>
 
         <!-- ✅ LOAN / OTHER -->
@@ -954,6 +982,15 @@ if (type === "incomes") {
     await renderInvoiceInfo_(String(elInvoice.value||"").trim());
   });
 
+  elQClient.addEventListener("change", async ()=>{
+  await loadQuotationsForClient_(String(elQClient.value || "").trim());
+  await renderQuotationInfo_(String(elQuotation.value || "").trim());
+});
+
+elQuotation.addEventListener("change", async ()=>{
+  await renderQuotationInfo_(String(elQuotation.value || "").trim());
+});
+
   // ---------------------------
   // ✅ Quotation Flow
   // ---------------------------
@@ -986,6 +1023,71 @@ if (type === "incomes") {
         return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
       }).join("");
   }
+
+  function pickLedFromItems_(items){
+  const arr = Array.isArray(items) ? items : [];
+  // best-effort: first line that looks like LED wall
+  const led = arr.find(x => String(x.item_name || "").toLowerCase().includes("led"));
+  if (!led) return "—";
+  return String(led.item_name || "—");
+}
+
+async function renderQuotationInfo_(quotation_id){
+  // reset
+  const setTxt = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = (val == null || val === "" ? "—" : String(val));
+  };
+
+  setTxt("qa_client_name", "—");
+  setTxt("qa_client_phone", "—");
+  setTxt("qa_venue", "—");
+  setTxt("qa_dates", "—");
+  setTxt("qa_led", "—");
+  const totEl = document.getElementById("qa_total");
+  if (totEl) totEl.textContent = "0.00";
+
+  if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
+  if (!quotation_id) return;
+
+  // find quotation object from cache (from dropdown load)
+  const clientId = String(elQClient?.value || "").trim();
+  const list = (clientId && IN_CACHE.quotationsByClient[clientId]) ? IN_CACHE.quotationsByClient[clientId] : [];
+  const q = list.find(x => String(x.invoice_id || "") === String(quotation_id));
+
+  if (!q){
+    if (qInfoBox) qInfoBox.textContent = "Quotation not found in cache.";
+    return;
+  }
+
+  // basic header fields from list row
+  setTxt("qa_client_name", q.client_name || "");
+  setTxt("qa_client_phone", q.client_phone || q.client_phone1 || "");
+  setTxt("qa_venue", q.venue || "");
+  const dates = [
+    q.setup_date ? `Setup: ${prettyISODate(q.setup_date)}` : "",
+    q.start_date ? `Start: ${prettyISODate(q.start_date)}` : "",
+    q.end_date ? `End: ${prettyISODate(q.end_date)}` : ""
+  ].filter(Boolean).join(" | ");
+  setTxt("qa_dates", dates || "—");
+
+  if (totEl) totEl.textContent = Number(q.grand_total || 0).toFixed(2);
+
+  // try to load full doc to extract LED size from items
+  try {
+    if (!IN_CACHE.invoiceFull[quotation_id]){
+      const full = await api({ action: "getInvoiceFull", invoice_id: quotation_id });
+      if (full && !full.error) IN_CACHE.invoiceFull[quotation_id] = full;
+    }
+    const full = IN_CACHE.invoiceFull[quotation_id];
+    const items = full?.items || [];
+    setTxt("qa_led", pickLedFromItems_(items));
+  } catch (e) {
+    // don’t break UI
+  }
+
+  if (qInfoBox) qInfoBox.textContent = "Quotation loaded.";
+}
 
   async function renderQuotationInfo_(quotation_id){
     if (!quotation_id) {
