@@ -3649,6 +3649,9 @@ currentItems = planned
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           ${canEdit ? `<button class="primary" id="btn_inv_save">💾 Save</button>` : ``}
+          <button class="primary" id="btn_quote_convert" style="background:#0b57d0; display:none;">
+  🔁 Convert to Invoice
+</button>
           ${isSuper ? `<button class="primary" id="btn_inv_export_csv" style="background:#1fa971;">Export CSV (List)</button>` : ``}
         </div>
 
@@ -4042,6 +4045,9 @@ document.getElementById("inv_end")?.addEventListener("change", refreshDefaultDay
 
     try {
       const doc_type = currentDocType; // "INVOICE" | "QUOTATION"
+      if (String(doc_type||"").toUpperCase() === "QUOTATION" && String(currentHeaderCache?.status||"").toUpperCase() === "CONVERTED") {
+  return alert("This quotation is CONVERTED and locked. You cannot edit it.");
+}
       const invoice_date = String(document.getElementById("inv_date")?.value || "").trim();
 
       const clientFull = selectedClientFromPick();
@@ -4129,6 +4135,8 @@ currentHeaderCache = {
   doc_type,
   invoice_date
 };
+      updateConvertBtnVisibility_();
+      
 
 const no = lastSavedInvoiceNo;
 alert(editingInvoiceId ? "Saved" : (doc_type === "QUOTATION" ? ("Quotation saved: " + no) : ("Invoice saved: " + no)));
@@ -4149,7 +4157,46 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
   }
 
   document.getElementById("btn_inv_save")?.addEventListener("click", saveDoc);
+// ✅ safe place (function exists below)
+setTimeout(updateConvertBtnVisibility_, 0);
 
+function updateConvertBtnVisibility_(){
+  const btn = document.getElementById("btn_quote_convert");
+  if (!btn) return;
+
+  const h = currentHeaderCache || {};
+  const doc = String(h.doc_type || currentDocType || "").toUpperCase();
+  const st  = String(h.status || "ACTIVE").toUpperCase();
+  const end = String(h.end_date || "").trim();
+  const today = todayISO_();
+
+  const dateOK = !!end && (end <= today); // end_date same day OR past
+  const show = (doc === "QUOTATION" && st !== "CONVERTED" && !!editingInvoiceId && dateOK);
+
+  btn.style.display = show ? "" : "none";
+}
+
+document.getElementById("btn_quote_convert")?.addEventListener("click", async ()=>{
+  const btn = document.getElementById("btn_quote_convert");
+  const unlock = lockButton(btn, "Converting...");
+
+  try {
+    if (!editingInvoiceId) return alert("Open a quotation first.");
+
+    const ok = confirm("Convert this QUOTATION to INVOICE?\nThis will LOCK the quotation and apply advances.");
+    if (!ok) return;
+
+    const r = await api({ action: "convertQuotationToInvoice", quotation_id: editingInvoiceId });
+    if (r && r.error) return alert(String(r.error));
+
+    alert(`Converted ✅\nNew Invoice No: ${r.new_invoice_no || ""}\nApplied Advance: ₹${Number(r.applied_total||0).toFixed(2)}`);
+
+    // Reload invoice list / section so user can see the new invoice
+    loadSection("invoice");
+  } finally {
+    setTimeout(unlock, 450);
+  }
+});
   function buildPrintHtml(header, items){
     const showHSN = String(header.gst_type || "").toUpperCase() !== "NONE";
     const title = (header.doc_type === "QUOTATION") ? "QUOTATION" : "INVOICE";
