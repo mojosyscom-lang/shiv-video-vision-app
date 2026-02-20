@@ -1024,12 +1024,30 @@ elQuotation.addEventListener("change", async ()=>{
       }).join("");
   }
 
-  function pickLedFromItems_(items){
+function pickLedFromItems_(items){
   const arr = Array.isArray(items) ? items : [];
-  // best-effort: first line that looks like LED wall
-  const led = arr.find(x => String(x.item_name || "").toLowerCase().includes("led"));
+
+  // exact preferred
+  let led = arr.find(x => String(x.item_name || "").trim().toLowerCase() === "led wall on rent");
+  if (!led) led = arr.find(x => String(x.item_name || "").toLowerCase().includes("led wall on rent"));
+  if (!led) led = arr.find(x => String(x.item_name || "").toLowerCase().includes("led"));
+
   if (!led) return "—";
-  return String(led.item_name || "—");
+
+  const name = String(led.item_name || "").trim();
+
+  // best-effort size extraction from any text fields
+  const hay = [
+    led.item_name,
+    led.description,
+    led.desc,
+    led.note
+  ].map(v => String(v || "")).join(" ");
+
+  const m = hay.match(/(\d+(?:\.\d+)?)\s*(?:'|ft)?\s*[xX]\s*(\d+(?:\.\d+)?)\s*(?:'|ft)?/);
+  const size = m ? `${m[1]}' x ${m[2]}'` : "";
+
+  return size ? `${name} (${size})` : name;
 }
 
 async function renderQuotationInfo_(quotation_id){
@@ -1089,32 +1107,7 @@ async function renderQuotationInfo_(quotation_id){
   if (qInfoBox) qInfoBox.textContent = "Quotation loaded.";
 }
 
-  async function renderQuotationInfo_(quotation_id){
-    if (!quotation_id) {
-      if (qInfoBox) qInfoBox.textContent = "Select client + quotation…";
-      return;
-    }
-    const full = await api({ action: "getInvoiceFull", invoice_id: quotation_id });
-    if (full && full.error) {
-      if (qInfoBox) qInfoBox.textContent = String(full.error);
-      return;
-    }
-    const h = full?.header || {};
-    if (qInfoBox) {
-      qInfoBox.innerHTML = `
-        <div><b>Client:</b> ${escapeHtml(h.client_name || "")}</div>
-        <div><b>Quotation Total:</b> ₹${Number(h.grand_total||0).toFixed(2)}</div>
-        <div><b>Date:</b> ${escapeHtml(h.invoice_date || "")}</div>
-      `;
-    }
-  }
 
-  elQClient.addEventListener("change", async ()=>{
-    await loadQuotationsForClient_(String(elQClient.value||"").trim());
-  });
-  elQuotation.addEventListener("change", async ()=>{
-    await renderQuotationInfo_(String(elQuotation.value||"").trim());
-  });
 
   // ---------------------------
   // ✅ Reset
