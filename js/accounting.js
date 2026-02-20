@@ -4799,6 +4799,11 @@ listBox.querySelectorAll("[data-inv-wa]").forEach(btn=>{
         lastSavedInvoiceId = id;
 
         const h = full.header;
+        // ✅ Needed for Convert button logic
+currentHeaderCache = h || null;
+
+// ✅ Show/hide Convert button after loading
+setTimeout(updateConvertBtnVisibility_, 0);
         lastSavedInvoiceNo = String(h.invoice_no || "");
         setDocTypeUI(String(h.doc_type||"INVOICE"));
 
