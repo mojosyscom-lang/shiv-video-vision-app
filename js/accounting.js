@@ -5060,7 +5060,7 @@ if (type === "companyProfile") {
 
           if (totalBox) {
             totalBox.textContent =
-              `Total upad: ₹${Math.round(total)}`
+              `Total Advance: ₹${Math.round(total)}`
               + (month ? ` • Month: ${month}` : "")
               + (worker ? ` • Worker: ${worker}` : "");
           }
