@@ -297,12 +297,16 @@ document.addEventListener("DOMContentLoaded", async() => {
       <div class="dashGrid">
         <div class="dashStat dashBlue">
           <div class="dashStatLabel">Total Income  (${escapeHtml((dash && dash.month) || month)})</div>
-          <div class="dashStatValue">₹${data.total_income || 0}</div>
-          <div style="margin-top:10px; font-size:13px; opacity:0.8;">
-  ${ (data.last_income_transactions || []).map(t => 
-      `<div>₹ ${t.amount}</div>`
-    ).join("") }
-</div>
+          <div class="dashStatValue">₹${Number(dash?.total_income || 0).toFixed(0)}</div>
+           <div class="dashSmall" style="margin-top:8px; line-height:1.7;">
+    ${
+      (dash?.last_income_transactions || []).length
+        ? (dash.last_income_transactions || []).map(t =>
+            `<div>₹${Number(t.amount || 0).toFixed(0)}</div>`
+          ).join("")
+        : `<div>No recent income transactions</div>`
+    }
+  </div>
         </div>
 
         <div class="dashStat dashGreen">
