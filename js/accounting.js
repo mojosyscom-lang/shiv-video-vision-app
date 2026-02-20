@@ -637,9 +637,9 @@ if (type === "incomes") {
           <label style="margin-top:10px;">Received Amount (₹)</label>
           <input id="in_received" type="number" inputmode="decimal" value="0">
 
-          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+          <div style="margin-top:10px;display:flex;align-items:center;gap:2px;">
             <input id="in_tds_chk" type="checkbox">
-            <label for="in_tds_chk" style="margin:0;align:center;">TDS</label>
+            <label for="in_tds_chk" style="margin:0;align-items:left;">TDS</label>
           </div>
 
           <div id="in_tds_row" style="display:none;margin-top:10px;">
