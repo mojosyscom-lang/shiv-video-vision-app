@@ -574,35 +574,7 @@ if (type === "incomes") {
           </div>
         </div>
 
-        <!-- ✅ COMMON PAYMENT DETAILS (visible for ALL types) -->
-        <div id="in_common_box" class="card" style="margin-top:12px;">
-          <h4 style="margin:0 0 8px 0;">Payment Details</h4>
-
-          <label>Date</label>
-          <input id="in_date" type="date">
-
-          <label style="margin-top:10px;">Received Amount (₹)</label>
-          <input id="in_received" type="number" inputmode="decimal" value="0">
-
-          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
-            <input id="in_tds_chk" type="checkbox">
-            <label for="in_tds_chk" style="margin:0;">TDS</label>
-          </div>
-
-          <div id="in_tds_row" style="display:none;margin-top:10px;">
-            <label>TDS Amount (₹)</label>
-            <input id="in_tds_amt" type="number" inputmode="decimal" value="0">
-          </div>
-
-          <div class="card" style="margin-top:10px;">
-            <b>Net Credit:</b>
-            <span id="in_net_credit">0</span>
-          </div>
-
-          <label style="margin-top:10px;">Description / Reference</label>
-          <input id="in_note" placeholder="Optional note">
-        </div>
-
+     
         <!-- ✅ INVOICE PAYMENT -->
         <div id="in_invoice_box" class="card" style="margin-top:12px;">
           <h4 style="margin:0 0 8px 0;">Invoice Payment</h4>
@@ -644,6 +616,36 @@ if (type === "incomes") {
           <label style="margin-top:10px;">Optional description</label>
           <input id="in_loan_note" placeholder="Optional note">
         </div>
+
+           <!-- ✅ COMMON PAYMENT DETAILS (visible for ALL types) -->
+        <div id="in_common_box" class="card" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px 0;">Payment Details</h4>
+
+          <label>Date</label>
+          <input id="in_date" type="date">
+
+          <label style="margin-top:10px;">Received Amount (₹)</label>
+          <input id="in_received" type="number" inputmode="decimal" value="0">
+
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+            <input id="in_tds_chk" type="checkbox">
+            <label for="in_tds_chk" style="margin:0;align:center;">TDS</label>
+          </div>
+
+          <div id="in_tds_row" style="display:none;margin-top:10px;">
+            <label>TDS Amount (₹)</label>
+            <input id="in_tds_amt" type="number" inputmode="decimal" value="0">
+          </div>
+
+          <div class="card" style="margin-top:10px;">
+            <b>Net Credit:</b>
+            <span id="in_net_credit">0</span>
+          </div>
+
+          <label style="margin-top:10px;">Description / Reference</label>
+          <input id="in_note" placeholder="Optional note">
+        </div>
+
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           <button class="primary" id="in_save">💾 Save</button>
