@@ -2520,7 +2520,7 @@ document.getElementById("btn_tds_report")?.addEventListener("click", async () =>
             <td>${_escapeHtml(c.client_name || "")}</td>
             <td align="right">${Number(c.pay_count || 0)}</td>
             <td align="right">₹${money(c.received_total)}</td>
-            <td align="right">₹${money(c.tds_total)}</td>
+            <td align="right" color="red">₹${money(c.tds_total)}</td>
             <td align="right"><b>₹${money(c.net_total)}</b></td>
           </tr>
         `).join("")}
