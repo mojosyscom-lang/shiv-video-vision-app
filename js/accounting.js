@@ -286,22 +286,22 @@ document.addEventListener("DOMContentLoaded", async() => {
 
       <div class="dashGrid">
         <div class="dashStat dashBlue">
-          <div class="dashStatLabel">Total Workers</div>
+          <div class="dashStatLabel">Total Workers (${escapeHtml((dash && dash.month) || month)})</div>
           <div class="dashStatValue">${Number(dash?.total_workers || 0)}</div>
         </div>
 
         <div class="dashStat dashGreen">
-          <div class="dashStatLabel">Monthly Salary</div>
+          <div class="dashStatLabel">Total Salary (${escapeHtml((dash && dash.month) || month)})</div>
           <div class="dashStatValue">₹${Number(dash?.monthly_salary_total || 0).toFixed(0)}</div>
         </div>
 
         <div class="dashStat dashOrange">
-          <div class="dashStatLabel">Monthly Expense</div>
+          <div class="dashStatLabel">Expenses (${escapeHtml((dash && dash.month) || month)})</div>
           <div class="dashStatValue">₹${Number(dash?.monthly_expense_total || 0).toFixed(0)}</div>
         </div>
 
         <div class="dashStat dashPurple">
-          <div class="dashStatLabel">Total Upad (Month)</div>
+          <div class="dashStatLabel">Total Advance Paid (${escapeHtml((dash && dash.month) || month)})</div>
           <div class="dashStatValue">₹${Number(upadTotal || 0).toFixed(0)}</div>
         </div>
       </div>
@@ -4944,7 +4944,7 @@ if (type === "companyProfile") {
        ✅ UPDATED: Upad Section
        ========================================================== */
     if (type === "upad") {
-      content.innerHTML = `<div class="card"><h2>Upad</h2><p>Loading…</p></div>`;
+      content.innerHTML = `<div class="card"><h2>Advance</h2><p>Loading…</p></div>`;
 
       const [meta, workers, monthsMerged] = await Promise.all([
         cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" })),
@@ -4960,10 +4960,10 @@ if (type === "companyProfile") {
 
       content.innerHTML = `
         <div class="card">
-          <h2>Upad</h2>
+          <h2>Advance</h2>
 
           <div class="card" style="margin-top:12px;">
-            <h3 style="margin-top:0;">Add Upad</h3>
+            <h3 style="margin-top:0;">Add Advance</h3>
 
             <label>Worker</label>
             <select id="upad_worker">
@@ -4978,11 +4978,11 @@ if (type === "companyProfile") {
 <label style="margin-top:10px;">Description (Optional)</label>
 <input id="upad_desc" type="text" placeholder="Reason / Notes (optional)">
 
-            <button class="primary" id="btn_upad" style="margin-top:14px;">Add Upad</button>
+            <button class="primary" id="btn_upad" style="margin-top:14px;">Add Advance</button>
           </div>
 
           <div class="card" style="margin-top:12px;">
-            <h3 style="margin-top:0;">Upad Summary</h3>
+            <h3 style="margin-top:0;">Advance Summary</h3>
 
             <label>Month</label>
             <select id="upad_filter_month">
@@ -8416,7 +8416,7 @@ async function isDuplicateUpad({ company, date, worker, amount, month }) {
     });
 
     if (duplicate) {
-      const proceed = confirm("⚠ Same UPAD entry already exists.\nDo you want to add anyway?");
+      const proceed = confirm("⚠ Same Advance entry already exists.\nDo you want to add anyway?");
       if (!proceed) return;
     }
 const description = String(document.getElementById("upad_desc")?.value || "").trim();
@@ -8431,7 +8431,7 @@ const description = String(document.getElementById("upad_desc")?.value || "").tr
     });
 
     if (r && r.queued) alert("Saved offline. Will sync when online.");
-    else alert("Upad added");
+    else alert("Advance added");
 
     document.getElementById("upad_amount").value = "";
     document.getElementById("upad_desc").value = "";
@@ -8553,7 +8553,7 @@ window.__lastSalaryMonth = month || "";
             <th align="left">Worker</th>
             <th align="right">Salary</th>
             <th align="right">Prorated</th>
-            <th align="right">Upad</th>
+            <th align="right">Advance</th>
             <th align="right">Holidays</th>
             <th align="right">Deduction</th>
             <th align="right">Paid</th>
