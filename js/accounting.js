@@ -2832,7 +2832,162 @@ document.getElementById("btn_pdf_gstb")?.addEventListener("click", () => {
 }
 
 
+// -------- Exports section starts here 
 
+    /* ==========================================================
+   ✅ EXPORTS (PDF) — Monthly/Yearly Filter + Category Checklist
+   - Generates ONE multi-page PDF (each category starts new page)
+   - Uses company print_bg_url + invoice-style header
+   ========================================================== */
+if (type === "exports") {
+
+  // 🔒 Access: Owner + Superadmin only (match backend)
+  const canExport = (role === "owner" || role === "superadmin");
+  if (!canExport) {
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
+      <h2 style="color:#d93025;">🚫 Access Denied</h2>
+      <p>Exports are available for Owner / Superadmin only.</p>
+    </div>`;
+    return;
+  }
+
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const now = new Date();
+  const curM = months[now.getMonth()];
+  const curY = now.getFullYear();
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>Exports (PDF)</h2>
+      <p style="color:#666; margin-top:-6px;">Select Month/Year and choose categories. “All Categories” creates one multi-page PDF.</p>
+
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin:12px 0;">
+        <div style="min-width:160px;">
+          <label style="font-weight:700;">Month</label>
+          <select id="ex_month" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;">
+            ${months.map(m => `<option value="${m}" ${m===curM?"selected":""}>${m}</option>`).join("")}
+          </select>
+        </div>
+        <div style="min-width:140px;">
+          <label style="font-weight:700;">Year</label>
+          <select id="ex_year" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;">
+            ${Array.from({length: 11}, (_,i)=> (curY-5+i)).map(y => `<option value="${y}" ${y===curY?"selected":""}>${y}</option>`).join("")}
+          </select>
+        </div>
+
+        <button id="ex_generate" class="btn" style="padding:10px 14px; border-radius:12px;">Generate PDF</button>
+      </div>
+
+      <div class="card" style="background:#fafafa; border:1px solid #eee;">
+        <div style="font-weight:800; margin-bottom:8px;">Categories</div>
+
+        <label style="display:flex; gap:10px; align-items:center; padding:6px 0;">
+          <input type="checkbox" id="ex_all" checked />
+          <span><b>All Categories</b> (one PDF)</span>
+        </label>
+
+        <div id="ex_list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:10px;">
+          ${[
+            ["upad","Advance (Upad)"],
+            ["expenses","Expenses"],
+            ["salary","Salary"],
+            ["holidays","Holidays"],
+            ["clients","Clients"],
+            ["orders","Orders"],
+            ["inventory","Inventory (Txn)"],
+            ["invoices","Invoices / Quotations"],
+            ["gst_bills","GST Bills"],
+            ["incomes","Incomes (IN Payments)"],
+            ["inventory_master","Inventory Master"]
+          ].map(([val, label]) => `
+            <label style="display:flex; gap:10px; align-items:center; padding:6px 0;">
+              <input type="checkbox" class="ex_cat" value="${val}" />
+              <span>${label}</span>
+            </label>
+          `).join("")}
+        </div>
+      </div>
+
+      <div id="ex_out" style="margin-top:14px;"></div>
+    </div>
+  `;
+
+  const elAll = document.getElementById("ex_all");
+  const cats = Array.from(document.querySelectorAll(".ex_cat"));
+  const out = document.getElementById("ex_out");
+  const btn = document.getElementById("ex_generate");
+
+  // default: all checked => disable cats
+  function setCatsEnabled_(enabled){
+    cats.forEach(c => { c.disabled = !enabled; if (!enabled) c.checked = false; });
+  }
+  setCatsEnabled_(false);
+
+  elAll.addEventListener("change", () => {
+    if (elAll.checked) {
+      setCatsEnabled_(false);
+    } else {
+      setCatsEnabled_(true);
+      // pre-check a sensible default set
+      cats.slice(0,3).forEach(c => c.checked = true);
+    }
+  });
+
+  btn.addEventListener("click", async () => {
+    const mon = document.getElementById("ex_month")?.value || "";
+    const yr = document.getElementById("ex_year")?.value || "";
+    const monthLabel = `${mon}-${yr}`;
+
+    let selected = [];
+    if (elAll.checked) {
+      selected = ["all"];
+    } else {
+      selected = cats.filter(c => c.checked).map(c => c.value);
+      if (!selected.length) return alert("Please select at least one category (or choose All).");
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Generating…";
+    out.innerHTML = `<div class="card"><p>Creating PDF…</p></div>`;
+
+    try {
+      const res = await api({ action: "exportAllPdf", month: monthLabel, categories: selected });
+      if (res?.error) throw new Error(res.error);
+
+      const url = res?.file_url || "";
+      if (!url) throw new Error("PDF URL missing in response.");
+
+      out.innerHTML = `
+        <div class="card">
+          <h3 style="margin:0 0 6px;">✅ Export Ready</h3>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <a class="btn" href="${url}" target="_blank" rel="noopener" style="text-decoration:none; padding:10px 14px; border-radius:12px;">Open PDF</a>
+            <button id="ex_copy" class="btn" style="padding:10px 14px; border-radius:12px;">Copy Link</button>
+          </div>
+          <div style="margin-top:8px; color:#666; font-size:12px; word-break:break-all;">${url}</div>
+        </div>
+      `;
+
+      document.getElementById("ex_copy")?.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(url); alert("Link copied."); } catch(e){ alert(url); }
+      });
+
+    } catch (err) {
+      console.error(err);
+      out.innerHTML = `<div class="card" style="border:1px solid #f1b0b7; background:#fff5f5;">
+        <h3 style="margin:0 0 6px; color:#b00020;">❌ Export failed</h3>
+        <div style="color:#333;">${String(err?.message || err)}</div>
+      </div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Generate PDF";
+    }
+  });
+
+  return;
+}
+
+    // ---------- Exports section ends here
     
 /* ==========================================================
    ✅ INVOICE (UPDATED)
