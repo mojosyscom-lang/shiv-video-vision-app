@@ -1,3 +1,31 @@
+/* =========================
+   ✅ GLOBAL DATE FORMATTERS
+   (Exports + Invoice + everywhere)
+   ========================= */
+
+// Underscore version (some code expects this exact name)
+function fmtDDMMYYYYTime_(dt){
+  try{
+    var d = (dt instanceof Date) ? dt : new Date(dt);
+    if (!d || isNaN(d.getTime())) return String(dt || "");
+    var dd = String(d.getDate()).padStart(2, "0");
+    var mm = String(d.getMonth() + 1).padStart(2, "0");
+    var yy = String(d.getFullYear());
+    var hh = String(d.getHours()).padStart(2, "0");
+    var mi = String(d.getMinutes()).padStart(2, "0");
+    return dd + "-" + mm + "-" + yy + " " + hh + ":" + mi;
+  } catch(e){
+    return String(dt || "");
+  }
+}
+
+// Non-underscore alias (if any code calls this)
+function fmtDDMMYYYYTime(dt){
+  return fmtDDMMYYYYTime_(dt);
+}
+
+
+
 document.addEventListener("DOMContentLoaded", async() => {
 
   const role = localStorage.getItem("role") || "";
