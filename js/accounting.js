@@ -2937,6 +2937,8 @@ function numOr(v, fallback){
   const n = Number(v);
   return isFinite(n) ? n : fallback;
 }
+ 
+
 
 const INVOICE_LOGO_URL = String(company.logo_url || "").trim();
 
