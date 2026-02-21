@@ -71,7 +71,37 @@ document.addEventListener("DOMContentLoaded", async() => {
   /* =========================
      Helpers (UPDATED)
   ========================== */
+  /* =========================
+     ✅ GLOBAL DATE FORMATTERS
+     (Used by Invoice + Exports + others)
+     ========================= */
 
+  // Always available underscore version (some modules call this)
+  if (typeof window.fmtDDMMYYYYTime_ !== "function") {
+    window.fmtDDMMYYYYTime_ = function(dt) {
+      try {
+        const d = (dt instanceof Date) ? dt : new Date(dt);
+        if (!d || isNaN(d.getTime())) return String(dt || "");
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const yy = String(d.getFullYear());
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mi = String(d.getMinutes()).padStart(2, "0");
+        return dd + "-" + mm + "-" + yy + " " + hh + ":" + mi;
+      } catch (e) {
+        return String(dt || "");
+      }
+    };
+  }
+
+  // Non-underscore alias (if any module uses it)
+  if (typeof window.fmtDDMMYYYYTime !== "function") {
+    window.fmtDDMMYYYYTime = function(dt) {
+      return window.fmtDDMMYYYYTime_(dt);
+    };
+  }
+
+  
   // ✅ IMPORTANT: Local date ISO (prevents month shift in India time)
   function todayISO() {
     const d = new Date();
@@ -2883,10 +2913,10 @@ if (type === "exports") {
 
         <label style="display:flex; gap:10px; align-items:center; padding:6px 0;">
           <input type="checkbox" id="ex_all" checked />
-          <span><b>All Categories</b> (one PDF)</span>
+          <span style="align-items:center;"><b>All Categories</b> (one PDF)</span>
         </label>
 
-        <div id="ex_list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:10px;">
+        <div id="ex_list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items:left; gap:8px; margin-top:10px;">
           ${[
             ["upad","Advance (Upad)"],
             ["expenses","Expenses"],
@@ -2900,7 +2930,7 @@ if (type === "exports") {
             ["incomes","Incomes (IN Payments)"],
             ["inventory_master","Inventory Master"]
           ].map(([val, label]) => `
-            <label style="display:flex; gap:10px; align-items:center; padding:6px 0;">
+            <label style="display:flex; gap:10px; align-items:left; padding:6px 0;">
               <input type="checkbox" class="ex_cat" value="${val}" />
               <span>${label}</span>
             </label>
