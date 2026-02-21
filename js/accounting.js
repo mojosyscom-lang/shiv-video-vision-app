@@ -704,7 +704,7 @@ if (type === "incomes") {
           <label style="margin-top:10px;">Received Amount (₹)</label>
           <input id="in_received" type="number" inputmode="decimal" value="0">
 
-          <div style="margin-top:10px;display:flex;align-items:left;">
+          <div style="margin-top:10px;display:flex;text-align:left;">
             <input id="in_tds_chk" type="checkbox">
             <label for="in_tds_chk" style="margin:0;">TDS</label>
           </div>
@@ -2913,10 +2913,10 @@ if (type === "exports") {
 
         <label style="display:flex; gap:10px; align-items:center; padding:6px 0;">
           <input type="checkbox" id="ex_all" checked />
-          <span style="align-items:center;"><b>All Categories</b> (one PDF)</span>
+          <span style="text-align:left;"><b>All Categories</b> (one PDF)</span>
         </label>
 
-        <div id="ex_list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items:left; gap:8px; margin-top:10px;">
+        <div id="ex_list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); justify-items:start; gap:8px; margin-top:10px;">
           ${[
             ["upad","Advance (Upad)"],
             ["expenses","Expenses"],
@@ -2930,7 +2930,7 @@ if (type === "exports") {
             ["incomes","Incomes (IN Payments)"],
             ["inventory_master","Inventory Master"]
           ].map(([val, label]) => `
-            <label style="display:flex; gap:10px; align-items:left; padding:6px 0;">
+            <label style="display:flex; gap:10px; align-items:center; justify-content:flex-start; padding:6px 0; text-align:left;">
               <input type="checkbox" class="ex_cat" value="${val}" />
               <span>${label}</span>
             </label>
