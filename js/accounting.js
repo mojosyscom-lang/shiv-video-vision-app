@@ -1004,7 +1004,8 @@ elQuotation.addEventListener("change", async ()=>{
       elQuotation.innerHTML =
         `<option value="">Select Quotation</option>` +
         qOnly.map(q => {
-          const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}`;
+          const st = String(q.status || "ACTIVE").toUpperCase();
+const label = `${q.invoice_no || q.invoice_id} • ₹${Number(q.grand_total||0).toFixed(2)}` + (st && st !== "ACTIVE" ? ` • ${st}` : "");
           return `<option value="${escapeAttr(q.invoice_id||"")}">${escapeHtml(label)}</option>`;
         }).join("");
       return;
@@ -1012,7 +1013,17 @@ elQuotation.addEventListener("change", async ()=>{
 
     const rows = await api({ action: "listInvoices", q: client_id });
     const list = Array.isArray(rows) ? rows : [];
-    const qOnly = list.filter(x => String(x.doc_type||"").toUpperCase() === "QUOTATION");
+    const qOnly = list.filter(x => {
+  const isQ = String(x.doc_type||"").toUpperCase() === "QUOTATION";
+  if (!isQ) return false;
+
+  const st = String(x.status || "ACTIVE").toUpperCase();
+  // ✅ hide converted/cancelled so user cannot take advance
+  if (st === "CONVERTED") return false;
+  if (st === "CANCELLED") return false;
+
+  return true;
+});
 
     IN_CACHE.quotationsByClient[client_id] = qOnly;
 
@@ -1104,7 +1115,10 @@ async function renderQuotationInfo_(quotation_id){
     // don’t break UI
   }
 
-  if (qInfoBox) qInfoBox.textContent = "Quotation loaded.";
+  const st = String(q.status || "ACTIVE").toUpperCase();
+if (qInfoBox) qInfoBox.textContent = (st === "ACTIVE")
+  ? "Quotation loaded."
+  : ("Quotation status: " + st);
 }
 
 
@@ -1193,14 +1207,22 @@ async function renderQuotationInfo_(quotation_id){
         }
       }
 
-      if (pay_type === "QUOTATION_ADVANCE"){
-        client_id = String(elQClient.value || "").trim();
-        quotation_id = String(elQuotation.value || "").trim();
-        client_name = String(elQClient?.selectedOptions?.[0]?.textContent || "").trim();
+    if (pay_type === "QUOTATION_ADVANCE"){
+  client_id = String(elQClient.value || "").trim();
+  quotation_id = String(elQuotation.value || "").trim();
+  client_name = String(elQClient?.selectedOptions?.[0]?.textContent || "").trim();
 
-        if (!client_id) return alert("Select client");
-        if (!quotation_id) return alert("Select quotation");
-      }
+  if (!client_id) return alert("Select client");
+  if (!quotation_id) return alert("Select quotation");
+
+  // ✅ UI hard-block: prevent advance if quotation status is converted/cancelled
+  const list = IN_CACHE.quotationsByClient[client_id] || [];
+  const q = list.find(x => String(x.invoice_id||"") === String(quotation_id));
+  const st = String(q?.status || "ACTIVE").toUpperCase();
+
+  if (st === "CONVERTED") return alert("This quotation is CONVERTED. You cannot add advance.");
+  if (st === "CANCELLED") return alert("This quotation is CANCELLED. You cannot add advance.");
+}
 
       if (pay_type === "LOAN_OTHER"){
         const from = String(elLoanFrom.value || "").trim();
@@ -4957,7 +4979,7 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
 // company profile starts here
 
 if (type === "companyProfile") {
-  const isAdmin = (role === "ownerss" || role === "superadmin");
+  const isAdmin = (role === "superadmin");
   if (!isAdmin) {
     content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
       <h2 style="color:#d93025;">🚫 Access Denied</h2>
@@ -5000,13 +5022,34 @@ if (type === "companyProfile") {
         <textarea id="cp_terms" rows="4">${escapeHtml(prof?.terms || "")}</textarea>
 
         <label style="margin-top:10px;">Logo URL</label>
-        <textarea id="cp_logo_url" rows="4">${escapeHtml(prof?.logo_url || "")}</textarea>
+<div style="display:flex; gap:10px; align-items:flex-start;">
+  <textarea id="cp_logo_url" rows="4" style="flex:1;">${escapeHtml(prof?.logo_url || "")}</textarea>
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <input id="cp_logo_file" type="file" accept="image/png,image/jpeg" style="display:none;">
+    <button class="primary" id="cp_logo_upload" style="white-space:nowrap;">⬆️ Upload</button>
+    <a id="cp_logo_open" href="#" target="_blank" style="font-size:12px; display:none;">Open</a>
+  </div>
+</div>
 
-        <label style="margin-top:10px;">Bank QR Code URL</label>
-        <textarea id="cp_bank_qr_url" rows="4">${escapeHtml(prof?.bank_qr_url || "")}</textarea>
+<label style="margin-top:10px;">Bank QR Code URL</label>
+<div style="display:flex; gap:10px; align-items:flex-start;">
+  <textarea id="cp_bank_qr_url" rows="4" style="flex:1;">${escapeHtml(prof?.bank_qr_url || "")}</textarea>
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <input id="cp_bank_file" type="file" accept="image/png,image/jpeg" style="display:none;">
+    <button class="primary" id="cp_bank_upload" style="white-space:nowrap;">⬆️ Upload</button>
+    <a id="cp_bank_open" href="#" target="_blank" style="font-size:12px; display:none;">Open</a>
+  </div>
+</div>
 
-        <label style="margin-top:10px;">Print Background URL</label>
-        <textarea id="cp_print_bg_url" rows="4">${escapeHtml(prof?.print_bg_url || "")}</textarea>
+<label style="margin-top:10px;">Print Background URL</label>
+<div style="display:flex; gap:10px; align-items:flex-start;">
+  <textarea id="cp_print_bg_url" rows="4" style="flex:1;">${escapeHtml(prof?.print_bg_url || "")}</textarea>
+  <div style="display:flex; flex-direction:column; gap:8px;">
+    <input id="cp_print_file" type="file" accept="image/png,image/jpeg" style="display:none;">
+    <button class="primary" id="cp_print_upload" style="white-space:nowrap;">⬆️ Upload</button>
+    <a id="cp_print_open" href="#" target="_blank" style="font-size:12px; display:none;">Open</a>
+  </div>
+</div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           <button class="primary" id="cp_save">💾 Save</button>
@@ -5019,6 +5062,85 @@ if (type === "companyProfile") {
   `;
 
   document.getElementById("cp_reload")?.addEventListener("click", ()=> loadSection("companyProfile"));
+
+  function _readFileAsBase64_(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result || "");
+      // result like: data:image/png;base64,AAA...
+      const idx = s.indexOf("base64,");
+      if (idx === -1) return reject(new Error("Base64 parse failed"));
+      resolve(s.slice(idx + 7));
+    };
+    reader.onerror = () => reject(reader.error || new Error("File read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function _uploadCompanyAsset_(kind, fileInputId, urlTextareaId, openLinkId, statusId){
+  const inp = document.getElementById(fileInputId);
+  const ta = document.getElementById(urlTextareaId);
+  const openA = document.getElementById(openLinkId);
+  const status = document.getElementById(statusId);
+
+  const file = inp?.files?.[0];
+  if (!file) return;
+
+  const mt = String(file.type || "").toLowerCase();
+  if (!(mt === "image/png" || mt === "image/jpeg")) {
+    alert("Only PNG/JPEG allowed");
+    inp.value = "";
+    return;
+  }
+
+  status.textContent = "Uploading…";
+
+  try {
+    const base64 = await _readFileAsBase64_(file);
+
+    const r = await api({
+      action: "uploadCompanyAsset",
+      kind,
+      filename: file.name,
+      mimeType: file.type,
+      base64
+    });
+
+    if (r && r.error) throw new Error(String(r.error));
+    if (!r || !r.url) throw new Error("Upload failed: no url");
+
+    ta.value = String(r.url);
+    status.textContent = "Uploaded ✅ (Saved in field, now click Save)";
+
+    if (openA) {
+      openA.href = String(r.url);
+      openA.style.display = "inline";
+    }
+  } catch (e) {
+    console.error(e);
+    status.textContent = "Upload failed ❌";
+    alert(String(e.message || e));
+  } finally {
+    inp.value = "";
+  }
+}
+
+// Wire buttons
+document.getElementById("cp_logo_upload")?.addEventListener("click", ()=>{
+  document.getElementById("cp_logo_file")?.click();
+});
+document.getElementById("cp_bank_upload")?.addEventListener("click", ()=>{
+  document.getElementById("cp_bank_file")?.click();
+});
+document.getElementById("cp_print_upload")?.addEventListener("click", ()=>{
+  document.getElementById("cp_print_file")?.click();
+});
+
+// On file select → upload
+document.getElementById("cp_logo_file")?.addEventListener("change", ()=> _uploadCompanyAsset_("logo", "cp_logo_file", "cp_logo_url", "cp_logo_open", "cp_status"));
+document.getElementById("cp_bank_file")?.addEventListener("change", ()=> _uploadCompanyAsset_("bank_qr", "cp_bank_file", "cp_bank_qr_url", "cp_bank_open", "cp_status"));
+document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploadCompanyAsset_("print_bg", "cp_print_file", "cp_print_bg_url", "cp_print_open", "cp_status"));
 
   document.getElementById("cp_save")?.addEventListener("click", async ()=>{
     const btn = document.getElementById("cp_save");
@@ -5057,7 +5179,7 @@ if (type === "companyProfile") {
     // company bank details starts here
 
     if (type === "companyBankAccounts") {
-  const isAdmin = (role === "ownerss" || role === "superadmin");
+  const isAdmin = (role === "superadmin");
   if (!isAdmin) {
     content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
       <h2 style="color:#d93025;">🚫 Access Denied</h2>
