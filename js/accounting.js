@@ -4324,7 +4324,7 @@ function isBlankOrZero(v){
   <div style="margin-top:8px;"><b>Terms:</b> ${escapeHtml(terms)}</div>
 
   ${
-    String(header.doc_type || "").toUpperCase() === "QUOTATION"
+    String(header.doc_type || "").toUpperCase() === "QUOTATIONsSHOW"
       ? ``
       : `
         <div class="payRow" style="margin-top:10px;">
@@ -4725,9 +4725,12 @@ setTimeout(() => {
             ? `<span style="font-size:11px;background:#111;color:#fff;padding:2px 6px;border-radius:6px;">QTN</span>`
             : `<span style="font-size:11px;background:#1fa971;color:#fff;padding:2px 6px;border-radius:6px;">INV</span>`;
           const st = String(inv.status||"ACTIVE").toUpperCase();
-          const stBadge = (st === "CANCELLED")
-            ? `<span style="font-size:11px;background:#d93025;color:#fff;padding:2px 6px;border-radius:6px;">CANCELLED</span>`
-            : ``;
+          const stBadge =
+  (st === "CANCELLED")
+    ? `<span style="font-size:11px;background:#d93025;color:#fff;padding:2px 6px;border-radius:6px;">CANCELLED</span>`
+    : (st === "CONVERTED")
+      ? `<span style="font-size:11px;background:#0b57d0;color:#fff;padding:2px 6px;border-radius:6px;">CONVERTED</span>`
+      : ``;
 
           return `
           <tr style="border-top:1px solid #eee;vertical-align:top;">
@@ -4737,7 +4740,7 @@ setTimeout(() => {
             <td align="right"><b>₹ ${money(inv.grand_total||0)}</b></td>
             <td align="right" style="white-space:nowrap;">
 <button class="userToggleBtn" data-inv-print="${escapeAttr(inv.invoice_id||"")}">Print</button>
-<button class="userToggleBtn" data-inv-wa="${escapeAttr(inv.invoice_id||"")}">WhatsApp</button>
+<button class="userToggleBtn" data-inv-pdf="${escapeAttr(inv.invoice_id||"")}">Save PDF</button>
      
               <button class="userToggleBtn" data-view="${escapeAttr(inv.invoice_id||"")}">View</button>
               ${canEdit ? `<button class="userToggleBtn" data-edit="${escapeAttr(inv.invoice_id||"")}">Edit</button>` : ``}
@@ -4760,10 +4763,23 @@ listBox.querySelectorAll("[data-inv-print]").forEach(btn=>{
   });
 });
 
-listBox.querySelectorAll("[data-inv-wa]").forEach(btn=>{
+listBox.querySelectorAll("[data-inv-pdf]").forEach(btn=>{
   btn.addEventListener("click", async ()=>{
-    const id = btn.getAttribute("data-inv-wa");
-    await whatsappFromInvoiceId(id);
+    const id = btn.getAttribute("data-inv-pdf");
+
+    const unlock = lockButton(btn, "Saving PDF...");
+    try {
+      const r = await api({ action: "generateInvoicePdf", invoice_id: String(id) });
+      if (r && r.error) return alert(String(r.error));
+
+      const url = r.public_url || r.file_url || r.url || "";
+      if (!url) return alert("PDF URL missing");
+
+      // ✅ open PDF in new tab (user can download/share manually)
+      window.open(url, "_blank");
+    } finally {
+      setTimeout(unlock, 350);
+    }
   });
 });
 
