@@ -4425,6 +4425,11 @@ function fmtDDMMYYYYTime(dt){
   }
 }
 
+  // Backward/compat alias (some modules call the underscore version)
+function fmtDDMMYYYYTime_(dt){
+  return fmtDDMMYYYYTime(dt);
+}
+
   
   function buildPrintHtml(header, items){
     const showHSN = String(header.gst_type || "").toUpperCase() !== "NONE";
