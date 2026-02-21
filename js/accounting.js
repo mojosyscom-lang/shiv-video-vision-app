@@ -2850,15 +2850,16 @@ if (type === "invoice") {
   const canEdit = (role === "owner" || role === "superadmin");
 
   // Prefetch
-  const [companyRes, clientsRes, ordersRes, invRes, invMasterRes, gstListRes, gstDefRes] = await Promise.all([
-    api({ action: "getCompanyProfile" }),
-    api({ action: "listClients" }),
-    api({ action: "listOrders", month: "" }),
-    api({ action: "listInvoices", month: "", q: "" }),
-    api({ action: "listInventoryMaster" }),
-    api({ action: "listGST" }).catch(() => []),
-    api({ action: "getDefaultGST" }).catch(() => null)
-  ]);
+const [companyRes, clientsRes, ordersRes, invRes, invMasterRes, gstListRes, gstDefRes, bankAccRes] = await Promise.all([
+  api({ action: "getCompanyProfile" }),
+  api({ action: "listClients" }),
+  api({ action: "listOrders", month: "" }),
+  api({ action: "listInvoices", month: "", q: "" }),
+  api({ action: "listInventoryMaster" }),
+  api({ action: "listGST" }).catch(() => []),
+  api({ action: "getDefaultGST" }).catch(() => null),
+  api({ action: "listBankAccountsForCompany" }).catch(() => [])
+]);
 
   const company = (companyRes && !companyRes.error) ? companyRes : {
     company_name: (localStorage.getItem("company") || ""),
@@ -2868,6 +2869,12 @@ if (type === "invoice") {
     place_of_supply: "",
     terms: ""
   };
+
+const bankAccList = Array.isArray(bankAccRes) ? bankAccRes : [];
+const activeBank =
+  bankAccList.find(x => String(x.is_default||"").toUpperCase()==="TRUE") ||
+  bankAccList[0] ||
+  null;// take first active - backend already filters inactive
 
   const allClients = Array.isArray(clientsRes) ? clientsRes : [];
   const activeClients = allClients.filter(c => String(c.status || "ACTIVE").toUpperCase() === "ACTIVE");
@@ -2910,7 +2917,11 @@ function roundQtyNoDecimals(n){
 }
 
   // helpers starts here
-const INVOICE_BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/print-bg.png";
+/**
+ * Single source of truth: 
+ * Only use the URL provided by the backend database.
+ */
+const INVOICE_BG_URL = String(company.print_bg_url || "").trim();
   // ✅ LED Wall conversion: cabinets -> sq ft
 const LED_WALL_SQFT_PER_CABINET = 2.691;
 
@@ -2927,16 +2938,26 @@ function numOr(v, fallback){
   return isFinite(n) ? n : fallback;
 }
 
-const BANK_QR_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/bank-qr.png"; // ✅ change filename if needed
+const INVOICE_LOGO_URL = String(company.logo_url || "").trim();
 
-const BANK_DETAILS = {
-  title: "Bank Details",
-  bank: "Kotak Mahindra Bank",
-  branch: "Vaisnodevi Branch",
-  name: "Shiv Video Vision",
-  ac: "6053510619",
-  ifsc: "KKBK0003083"
-};
+const BANK_QR_URL =
+  String(company.bank_qr_url || "").trim();
+
+const BANK_DETAILS = (() => {
+  // If no bank account found, keep safe blanks
+  const b = activeBank || {};
+  
+ 
+  return {
+    title: (b.label ? String(b.label) : "Bank Details"),
+    bank: String(b.bank_name || ""),
+    branch: String(b.branch_name || ""),
+    name: String(b.account_name || ""),
+    ac:  String(b.account_no_full || ""),
+    ifsc: String(b.ifsc || ""),
+    upi: String(b.upi_id || "")
+  };
+})();
 
 // ----- led calculation for invoice section starts here
 // ===============================
@@ -5202,7 +5223,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
       <td>${escapeHtml(a.bank_name||"")}</td>
       <td>${escapeHtml(a.ifsc||"")}</td>
       <td>${escapeHtml(a.upi_id||"")}</td>
-      <td>${escapeHtml(a.account_no_last4 ? ("••••"+a.account_no_last4) : "")}</td>
+     <td>${String(a.is_default||"").toUpperCase()==="TRUE" ? "⭐" : ""}</td>
+<td>${escapeHtml(a.account_no_full || a.account_no_last4 || "")}</td>
       <td>${String(a.is_active||"").toUpperCase()==="TRUE" ? "✅" : "⛔"}</td>
       <td align="right">
         <button class="userToggleBtn" data-edit="${escapeAttr(a.bank_account_id||"")}">Edit</button>
@@ -5234,8 +5256,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
         <label style="margin-top:10px;">Account Name</label>
         <input id="ba_accname" placeholder="Shiv Video Vision">
 
-        <label style="margin-top:10px;">Account Last 4 Digits</label>
-        <input id="ba_last4" inputmode="numeric" maxlength="4" placeholder="1234">
+        <label style="margin-top:10px;">Account Number (Full)</label>
+        <input id="ba_accno" inputmode="numeric" placeholder="Enter full account number">
 
         <label style="margin-top:10px;">IFSC</label>
         <input id="ba_ifsc" placeholder="HDFC0000123">
@@ -5247,6 +5269,11 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
           <input type="checkbox" id="ba_active" checked style="width:20px;height:20px;">
           <label for="ba_active" style="margin:0;">Active</label>
         </div>
+
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
+  <input type="checkbox" id="ba_default" style="width:20px;height:20px;">
+  <label for="ba_default" style="margin:0;">Default for Invoice Print</label>
+</div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           <button class="primary" id="ba_save">💾 Save</button>
@@ -5267,7 +5294,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
                   <th>BANK</th>
                   <th>IFSC</th>
                   <th>UPI</th>
-                  <th>LAST4</th>
+                  <th>DEFAULT</th>
+                  <th>ACCOUNT NO</th>
                   <th>ACTIVE</th>
                   <th align="right">ACTION</th>
                 </tr>
@@ -5288,11 +5316,12 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
     document.getElementById("ba_bank").value = "";
     document.getElementById("ba_branch").value = "";
     document.getElementById("ba_accname").value = "";
-    document.getElementById("ba_last4").value = "";
+    document.getElementById("ba_accno").value = "";
     document.getElementById("ba_ifsc").value = "";
     document.getElementById("ba_upi").value = "";
     document.getElementById("ba_active").checked = true;
     document.getElementById("ba_status").textContent = "";
+    document.getElementById("ba_default").checked = false;
   }
 
   document.getElementById("ba_clear")?.addEventListener("click", clearForm);
@@ -5309,7 +5338,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
         bank_name: String(document.getElementById("ba_bank").value || "").trim(),
         branch_name: String(document.getElementById("ba_branch").value || "").trim(),
         account_name: String(document.getElementById("ba_accname").value || "").trim(),
-        account_no_last4: String(document.getElementById("ba_last4").value || "").trim(),
+        account_no_full: String(document.getElementById("ba_accno").value || "").trim(),
+        is_default: !!document.getElementById("ba_default").checked,
         ifsc: String(document.getElementById("ba_ifsc").value || "").trim(),
         upi_id: String(document.getElementById("ba_upi").value || "").trim(),
         is_active: !!document.getElementById("ba_active").checked
@@ -5344,7 +5374,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
       document.getElementById("ba_bank").value = String(a.bank_name||"");
       document.getElementById("ba_branch").value = String(a.branch_name||"");
       document.getElementById("ba_accname").value = String(a.account_name||"");
-      document.getElementById("ba_last4").value = String(a.account_no_last4||"");
+      document.getElementById("ba_accno").value = (a.account_no_full || "");
+      document.getElementById("ba_default").checked = String(a.is_default||"").toUpperCase()==="TRUE";
       document.getElementById("ba_ifsc").value = String(a.ifsc||"");
       document.getElementById("ba_upi").value = String(a.upi_id||"");
       document.getElementById("ba_active").checked = (String(a.is_active||"TRUE").toUpperCase() === "TRUE");
