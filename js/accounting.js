@@ -47,6 +47,57 @@ document.addEventListener("DOMContentLoaded", async() => {
    ========================================================== */
 
 (function initNotificationsPhase1(){
+  function notifStampIST_(iso){
+  const s = String(iso || "").trim();
+  if (!s) return "";
+
+  // Format date parts in IST
+  const now = new Date();
+
+  const fmtDate = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+
+  const fmtTime = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+
+  const d = new Date(s);
+  const todayStr = fmtDate.format(now); // dd/mm/yyyy
+  const dStr = fmtDate.format(d);       // dd/mm/yyyy
+  const tStr = fmtTime.format(d);       // HH:MM
+
+  // If today => show time only
+  if (dStr === todayStr) return tStr;
+
+  // Else => dd-mm-yyyy HH:MM
+  const parts = dStr.split("/"); // [dd, mm, yyyy]
+  return `${parts[0]}-${parts[1]}-${parts[2]} ${tStr}`;
+}
+
+function isTodayIST_(iso){
+  const s = String(iso || "").trim();
+  if (!s) return false;
+
+  const fmtDate = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+
+  const now = new Date();
+  const d = new Date(s);
+  return fmtDate.format(now) === fmtDate.format(d);
+}
+  
+  
   // ---- small css escape
   function cssEsc_(s){
     return String(s || "").replace(/["\\]/g, "\\$&");
@@ -157,8 +208,15 @@ document.addEventListener("DOMContentLoaded", async() => {
     try {
       const res = await api({ action: "listNotifications", only_unread: "0", limit: 25 });
       const arr = Array.isArray(res) ? res : [];
+      // ✅ Keep panel clean: show all UNREAD, plus today's READ
+const visible = arr.filter(n => {
+  const st = String(n.status || "").toUpperCase();
+  if (st !== "READ") return true; // keep unread forever until user sees
+  return isTodayIST_(n.created_at || n.sent_at || "");
+});
 
-      const unreadCount = arr.filter(x => String(x.status || "").toUpperCase() !== "READ").length;
+      
+      const unreadCount = visible.filter(x => String(x.status || "").toUpperCase() !== "READ").length;
       if (unreadCount > 0) {
         badge.style.display = "block";
         badge.textContent = String(unreadCount);
@@ -168,27 +226,30 @@ document.addEventListener("DOMContentLoaded", async() => {
 
       // render list
       if (!listEl) return;
-      if (!arr.length) {
+      if (!visible.length) {
         listEl.innerHTML = `<div style="color:#666; font-size:13px;">No notifications yet.</div>`;
         return;
       }
 
-      listEl.innerHTML = arr.map(n => {
+      listEl.innerHTML = visible.map(n => {
         const isRead = String(n.status || "").toUpperCase() === "READ";
         const title = escapeHtml(n.title || "");
+        const by = escapeHtml(n.created_by || "SYSTEM");
+        const stamp = escapeHtml(notifStampIST_(n.created_at || n.sent_at || ""));
         const body = escapeHtml(n.body || "");
         const oid = escapeAttr(n.order_id || "");
         const id = escapeAttr(n.notif_id || "");
         return `
           <div style="padding:10px; border:1px solid #eee; border-radius:12px; margin-bottom:10px; background:${isRead ? "#fafafa" : "#fff"};">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <div style="font-weight:800; font-size:13px;">${title}</div>
+              <div style="font-weight:900; font-size:13px;">
+  ${title} <span style="font-weight:700; color:#666;">| Created by: ${by}</span>
+</div>
+<div style="margin-top:3px; font-size:11px; color:#777;">${stamp}</div>
               ${isRead ? `<span style="font-size:11px; color:#777;">Read</span>` : `<span style="font-size:11px; color:#d93025; font-weight:800;">New</span>`}
             </div>
             <div style="margin-top:6px; font-size:12.5px; color:#333; line-height:1.35;">${body}</div>
-            <div style="margin-top:10px; display:flex; gap:8px;">
-                      ${isRead ? "" : `<button class="userToggleBtn" data-notif-read="1" data-notif-id="${id}" style="padding:8px 10px; border-radius:10px;">Mark Read</button>`}
-            </div>
+        
           </div>
         `;
       }).join("");
@@ -201,10 +262,14 @@ document.addEventListener("DOMContentLoaded", async() => {
   // open/close panel
   if (bellBtn) {
     bellBtn.onclick = async () => {
-      if (panel.style.display === "none") {
-        panel.style.display = "block";
-        await fetchNotifs_();
-      } else {
+     if (panel.style.display === "none") {
+  panel.style.display = "block";
+  await fetchNotifs_();
+
+  // ✅ auto-mark all as read for THIS user
+  try { await api({ action: "markAllNotificationsRead" }); } catch(e){}
+  await fetchNotifs_();
+} else {
         panel.style.display = "none";
       }
     };
@@ -213,15 +278,7 @@ document.addEventListener("DOMContentLoaded", async() => {
   // click handlers inside panel
   if (panel) {
     panel.addEventListener("click", async (e) => {
-         const readBtn = e.target.closest("[data-notif-read='1']");
-        if (readBtn) {
-        const notif_id = String(readBtn.getAttribute("data-notif-id") || "");
-        if (!notif_id) return;
-        try {
-          await api({ action: "markNotificationRead", notif_id });
-          await fetchNotifs_();
-        } catch(_){}
-      }
+        
     });
   }
 
