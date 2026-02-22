@@ -3136,7 +3136,7 @@ if (type === "letterpad") {
     const monthRaw = String(monthInput?.value || "").trim(); // "YYYY-MM"
 const month = monthRaw; // backend expects "YYYY-MM"
     if (!month) {
-      listBox.innerHTML = `<p style="color:#d93025;">Enter month like 2026-02</p>`;
+      listBox.innerHTML = `<p style="color:#d93025;">Please select a month.</p>`;
       return;
     }
     listBox.innerHTML = `<p>Loading…</p>`;
