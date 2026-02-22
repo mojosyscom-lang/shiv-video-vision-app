@@ -2936,8 +2936,8 @@ if (type === "letterpad") {
   const companyAddr = (company && !company.error) ? (company.address || "") : "";
 
   // A4 in px (96dpi-ish) for consistent scaling on mobile
-  const A4_W = 794;
-  const A4_H = 1123;
+  // const A4_W = 794;
+  // const A4_H = 1123;
 
   content.innerHTML = `
     <div class="card">
@@ -2948,18 +2948,18 @@ if (type === "letterpad") {
     <div class="card" style="overflow:hidden;">
       <div style="display:flex; justify-content:center;">
         <div id="lp_scale_wrap" style="width:100%; overflow:auto;">
-          <div id="lp_page" style="
-            position:relative;
-            width:${A4_W}px;
-            min-height:${A4_H}px;
-            box-sizing:border-box;
-            padding:72px 56px;
-            background:#fff;
-            box-shadow:0 8px 30px rgba(0,0,0,0.08);
-            transform-origin: top center;
-            margin: 0 auto;
-          ">
-            ${printBg ? `<img src="${escapeAttr(printBg)}" style="position:absolute; inset:0; width:${A4_W}px; height:${A4_H}px; object-fit:cover; z-index:0;" />` : ``}
+        <div id="lp_page" style="
+  position:relative;
+  width:100%;
+  max-width:794px;
+  aspect-ratio: 210 / 297;
+  box-sizing:border-box;
+  padding: clamp(18px, 5vw, 72px) clamp(14px, 4vw, 56px);
+  background:#fff;
+  box-shadow:0 8px 30px rgba(0,0,0,0.08);
+  margin: 0 auto;
+">
+            ${printBg ? `<img src="${escapeAttr(printBg)}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;" />` : ``}
 
             <div style="position:relative; z-index:1;">
               <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start;">
@@ -2992,7 +2992,7 @@ if (type === "letterpad") {
                 margin-top:10px;
                 font-size:13px;
                 line-height:1.55;
-                min-height:650px;
+                min-height: clamp(220px, 45vh, 520px);
                 outline:none;
                 padding:10px 8px;
                 border:1px dashed rgba(0,0,0,0.25);
@@ -3015,22 +3015,23 @@ if (type === "letterpad") {
       <style>
         #lp_topic:empty:before { content:"Topic (tap to type)…"; color:#888; }
         #lp_matter:empty:before { content:"Matter (tap to type)…"; color:#888; }
+        .userToggleBtn{ padding:8px 12px !important; min-width:44px; }
       </style>
     </div>
 
     <!-- ✅ Toolbar moved BELOW preview, single-line, short labels -->
     <div class="card">
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:nowrap; overflow-x:auto; padding-bottom:6px;">
-        <button class="userToggleBtn" data-cmd="bold" title="Bold"><b>B</b></button>
-        <button class="userToggleBtn" data-cmd="italic" title="Italic"><i>I</i></button>
-        <button class="userToggleBtn" data-cmd="underline" title="Underline"><u>U</u></button>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+       <button class="userToggleBtn" data-cmd="bold" title="Bold">𝐁</button>
+<button class="userToggleBtn" data-cmd="italic" title="Italic">𝘐</button>
+<button class="userToggleBtn" data-cmd="underline" title="Underline">U̲</button>
 
         <span style="width:6px; flex:0 0 auto;"></span>
 
-        <button class="userToggleBtn" data-cmd="justifyLeft" title="Left">L</button>
-        <button class="userToggleBtn" data-cmd="justifyCenter" title="Center">C</button>
-        <button class="userToggleBtn" data-cmd="justifyRight" title="Right">R</button>
-        <button class="userToggleBtn" data-cmd="justifyFull" title="Justify">J</button>
+     <button class="userToggleBtn" data-cmd="justifyLeft" title="Left">⬅︎</button>
+<button class="userToggleBtn" data-cmd="justifyCenter" title="Center">↔︎</button>
+<button class="userToggleBtn" data-cmd="justifyRight" title="Right">➡︎</button>
+<button class="userToggleBtn" data-cmd="justifyFull" title="Justify">☰</button>
 
         <select id="lp_fontsize" class="input" style="max-width:120px; flex:0 0 auto;">
           <option value="">Size</option>
@@ -3040,8 +3041,8 @@ if (type === "letterpad") {
           <option value="5">XL</option>
         </select>
 
-        <button class="userToggleBtn" data-cmd="insertUnorderedList" title="List">•</button>
-        <button class="userToggleBtn" data-cmd="removeFormat" title="Clear">X</button>
+        <button class="userToggleBtn" data-cmd="insertUnorderedList" title="List">•≡</button>
+<button class="userToggleBtn" data-cmd="removeFormat" title="Clear">🧹</button>
 
         <div style="flex:1 0 auto;"></div>
 
@@ -3056,15 +3057,15 @@ if (type === "letterpad") {
       <h3>Letterpads</h3>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <label style="font-size:12px;color:#555;">Month</label>
-        <input id="lp_month" class="input" style="max-width:150px;" placeholder="YYYY-MM" />
+       <input id="lp_month" type="month" class="input" style="max-width:170px;" />
         <button class="userToggleBtn" id="btn_lp_load_list">Load</button>
       </div>
       <div id="lp_list_box" style="margin-top:12px;"></div>
-      <p style="color:#777;font-size:12px;margin-top:10px;">Tip: enter month like <b>2026-02</b>.</p>
+      <p style="color:#777;font-size:12px;margin-top:10px;">Pick month like GST Bills report.</p>
     </div>
   `;
 
-  const pageEl = document.getElementById("lp_page");
+  /* const pageEl = document.getElementById("lp_page");
   const wrapEl = document.getElementById("lp_scale_wrap");
 
   function applyScale_(){
@@ -3078,7 +3079,7 @@ if (type === "letterpad") {
     pageEl.style.marginBottom = (scale < 1 ? `${(A4_H*(1-scale))}px` : "0px");
   }
   window.addEventListener("resize", applyScale_);
-  setTimeout(applyScale_, 50);
+  setTimeout(applyScale_, 50);   */
 
   // date preview sync
   const dateInput = document.getElementById("lp_date");
@@ -3132,7 +3133,8 @@ if (type === "letterpad") {
   const listBox = document.getElementById("lp_list_box");
   async function loadList_(){
     if (!listBox) return;
-    const month = String(monthInput?.value || "").trim();
+    const monthRaw = String(monthInput?.value || "").trim(); // "YYYY-MM"
+const month = monthRaw; // backend expects "YYYY-MM"
     if (!month) {
       listBox.innerHTML = `<p style="color:#d93025;">Enter month like 2026-02</p>`;
       return;
@@ -3158,7 +3160,7 @@ if (type === "letterpad") {
         </tr>
         ${list.map(r => `
           <tr style="border-top:1px solid #eee;">
-            <td style="white-space:nowrap;">${escapeHtml(String(r.letter_date||""))}</td>
+            <td style="white-space:nowrap;">${escapeHtml(String(r.letter_date_ddmmyyyy || r.letter_date || ""))}</td>
             <td>${escapeHtml(String(r.topic_preview||""))}</td>
             <td align="right">
               <button class="userToggleBtn" data-lp-open="1" data-id="${escapeAttr(String(r.letter_id||""))}">Open</button>
@@ -3178,7 +3180,7 @@ if (type === "letterpad") {
         syncDate_();
         if (topicEl) topicEl.innerHTML = String(res.topic_html || "");
         if (matterEl) matterEl.innerHTML = String(res.matter_html || "");
-        setTimeout(applyScale_, 30);
+       // setTimeout(applyScale_, 30);
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
     });
