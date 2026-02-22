@@ -6025,7 +6025,7 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
                 <th align="left">Description</th>
                 <th align="left">Month</th>
                 <th align="left">Added By</th>
-                ${showActions ? `<th align="right">Actions</th>` : ``}
+                ${(canEdit || canDelete) ? `<th align="right">Actions</th>` : ``}
               </tr>
               ${lastUpadRows.map(r => {
                 const rowId = getUpadRowId(r);
@@ -8707,7 +8707,7 @@ const canDelete = (role === "superadmin");
             <th align="right">Amount</th>
             <th align="left">Month</th>
             <th align="left">Added By</th>
-            ${showActions ? `<th align="right">Actions</th>` : ``}
+            ${(canEdit || canDelete) ? `<th align="right">Actions</th>` : ``}
           </tr>
           ${lastExpenseRows.map(r => {
             const rowId = r.rowIndex ?? "";
@@ -9886,7 +9886,7 @@ const canDelete = (role === "superadmin");
           <th align="left">Worker</th>
           <th align="left">Month</th>
           <th align="left">Reason</th>
-          ${showActions ? `<th align="right">Actions</th>` : ``}
+          ${(canEdit || canDelete) ? `<th align="right">Actions</th>` : ``}
         </tr>
         ${filtered.map(r => {
           const rowId = holRowId(r); // ✅ FIX
