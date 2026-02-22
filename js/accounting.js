@@ -2876,15 +2876,14 @@ document.getElementById("btn_pdf_gstb")?.addEventListener("click", () => {
 // ------------ letterpad section ends here -----------//
 
 
-  /* ==========================================================
-   ✅ LETTERPAD (Rich topic + matter, A4 preview, PDF export)
-   - Topic is ALSO rich-text (same style as matter)
-   - Uses company print_bg_url background
-   - Footer: Authorized Signatory only
+ /* ==========================================================
+   ✅ LETTERPAD (Rich topic + matter + save/list + iPhone friendly)
+   - Topic is ALSO rich-text
+   - Export PDF auto-saves to sheet
+   - Month filter list + click to load
    ========================================================== */
 if (type === "letterpad") {
 
-  // 🔒 Access: owner/superadmin only (same as backend)
   const canUse = (role === "owner" || role === "superadmin");
   if (!canUse) {
     content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
@@ -2893,7 +2892,6 @@ if (type === "letterpad") {
     return;
   }
 
-  // Helpers
   function todayISO_(){
     const d = new Date();
     const y = d.getFullYear();
@@ -2902,155 +2900,212 @@ if (type === "letterpad") {
     return `${y}-${m}-${day}`;
   }
 
+  function monthKeyFromIso_(iso){
+    const s = String(iso||"").trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return `${m[1]}-${m[2]}`;
+    return "";
+  }
+
+  function safeOpenOrDownload_(url){
+    if (!url) return;
+    try {
+      // iOS Safari: window.open may fail; use anchor click + fallback to location
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // fallback
+      setTimeout(() => {
+        if (document.visibilityState !== "hidden") {
+          window.location.assign(url);
+        }
+      }, 400);
+    } catch(e){
+      window.location.assign(url);
+    }
+  }
+
   const company = await api({ action: "getCompanyProfile" });
   const printBg = (company && !company.error) ? (company.print_bg_url || "") : "";
   const logoUrl = (company && !company.error) ? (company.logo_url || "") : "";
   const companyName = (company && !company.error) ? (company.company_name || company.company || "") : "";
   const companyAddr = (company && !company.error) ? (company.address || "") : "";
 
-  // UI
+  // A4 in px (96dpi-ish) for consistent scaling on mobile
+  const A4_W = 794;
+  const A4_H = 1123;
+
   content.innerHTML = `
     <div class="card">
       <h2>Letterpad</h2>
-      <p style="color:#666; margin-top:-6px;">Click Topic or Matter to type. Toolbar applies to the active area.</p>
-
-      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0;">
-        <button class="userToggleBtn" data-cmd="bold"><b>B</b></button>
-        <button class="userToggleBtn" data-cmd="italic"><i>I</i></button>
-        <button class="userToggleBtn" data-cmd="underline"><u>U</u></button>
-
-        <span style="width:8px;"></span>
-
-        <button class="userToggleBtn" data-cmd="justifyLeft">Left</button>
-        <button class="userToggleBtn" data-cmd="justifyCenter">Center</button>
-        <button class="userToggleBtn" data-cmd="justifyRight">Right</button>
-        <button class="userToggleBtn" data-cmd="justifyFull">Justify</button>
-
-        <span style="width:8px;"></span>
-
-        <select id="lp_fontsize" class="input" style="max-width:140px;">
-          <option value="">Size</option>
-          <option value="2">Small</option>
-          <option value="3">Normal</option>
-          <option value="4">Large</option>
-          <option value="5">X-Large</option>
-        </select>
-
-        <button class="userToggleBtn" data-cmd="insertUnorderedList">• List</button>
-        <button class="userToggleBtn" data-cmd="removeFormat">Clear</button>
-
-        <div style="flex:1"></div>
-
-        <label style="font-size:12px;color:#555;">Date</label>
-        <input id="lp_date" class="input" style="max-width:160px;" value="${todayISO_()}" />
-
-        <button class="primary" id="btn_lp_export">Export PDF</button>
-      </div>
+      <p style="color:#666; margin-top:-6px;">Tap Topic or Matter to type. Toolbar applies to active area.</p>
     </div>
 
-    <div class="card" style="overflow:auto;">
-      <div id="lp_page_wrap" style="display:flex; justify-content:center;">
-        <div id="lp_page" style="
-          position:relative;
-          width:210mm;
-          min-height:297mm;
-          box-sizing:border-box;
-          padding:18mm 14mm;
-          background:#fff;
-          box-shadow:0 8px 30px rgba(0,0,0,0.08);
-        ">
-          ${printBg ? `<img src="${escapeAttr(printBg)}" style="position:absolute; inset:0; width:210mm; height:297mm; object-fit:cover; z-index:0;" />` : ``}
+    <div class="card" style="overflow:hidden;">
+      <div style="display:flex; justify-content:center;">
+        <div id="lp_scale_wrap" style="width:100%; overflow:auto;">
+          <div id="lp_page" style="
+            position:relative;
+            width:${A4_W}px;
+            min-height:${A4_H}px;
+            box-sizing:border-box;
+            padding:72px 56px;
+            background:#fff;
+            box-shadow:0 8px 30px rgba(0,0,0,0.08);
+            transform-origin: top center;
+            margin: 0 auto;
+          ">
+            ${printBg ? `<img src="${escapeAttr(printBg)}" style="position:absolute; inset:0; width:${A4_W}px; height:${A4_H}px; object-fit:cover; z-index:0;" />` : ``}
 
-          <div style="position:relative; z-index:1;">
-            <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start;">
-              <div style="display:flex; gap:10px; align-items:flex-start;">
-                ${logoUrl ? `<img src="${escapeAttr(logoUrl)}" style="width:52px;height:52px;object-fit:contain;border-radius:6px;" />` : ``}
-                <div>
-                  <div style="font-weight:800; font-size:16px;">${escapeHtml(companyName)}</div>
-                  <div style="font-size:11px; color:#333; white-space:pre-wrap; margin-top:2px;">${escapeHtml(companyAddr)}</div>
+            <div style="position:relative; z-index:1;">
+              <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start;">
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                  ${logoUrl ? `<img src="${escapeAttr(logoUrl)}" style="width:54px;height:54px;object-fit:contain;border-radius:8px;" />` : ``}
+                  <div>
+                    <div style="font-weight:800; font-size:16px;">${escapeHtml(companyName)}</div>
+                    <div style="font-size:11px; color:#333; white-space:pre-wrap; margin-top:2px;">${escapeHtml(companyAddr)}</div>
+                  </div>
+                </div>
+
+                <div style="text-align:right; font-size:12px;">
+                  <div><b>Date:</b> <span id="lp_date_preview"></span></div>
                 </div>
               </div>
 
-              <div style="text-align:right; font-size:12px;">
-                <div><b>Date:</b> <span id="lp_date_preview"></span></div>
+              <div style="border-bottom:2px solid #f57c00; margin:10px 0 12px;"></div>
+
+              <div id="lp_topic" contenteditable="true" style="
+                font-size:14px;
+                font-weight:700;
+                min-height:28px;
+                outline:none;
+                padding:6px 8px;
+                border:1px dashed rgba(0,0,0,0.25);
+                border-radius:10px;
+              "></div>
+
+              <div id="lp_matter" contenteditable="true" style="
+                margin-top:10px;
+                font-size:13px;
+                line-height:1.55;
+                min-height:650px;
+                outline:none;
+                padding:10px 8px;
+                border:1px dashed rgba(0,0,0,0.25);
+                border-radius:10px;
+              "></div>
+
+              <div style="position:absolute; left:56px; right:56px; bottom:72px; display:flex; justify-content:flex-end;">
+                <div style="text-align:center; width:220px; font-size:12px;">
+                  <div>For ${escapeHtml(companyName)}</div>
+                  <div style="border-bottom:1px solid #222; margin:38px 0 6px;"></div>
+                  <div>Authorized Signatory</div>
+                </div>
               </div>
+
             </div>
-
-            <div style="border-bottom:2px solid #f57c00; margin:10px 0 12px;"></div>
-
-            <div id="lp_topic" contenteditable="true" style="
-              font-size:14px;
-              font-weight:700;
-              min-height:26px;
-              outline:none;
-              padding:6px 8px;
-              border:1px dashed rgba(0,0,0,0.15);
-              border-radius:8px;
-            "></div>
-
-            <div id="lp_matter" contenteditable="true" style="
-              margin-top:10px;
-              font-size:13px;
-              line-height:1.55;
-              min-height:160mm;
-              outline:none;
-              padding:10px 8px;
-              border:1px dashed rgba(0,0,0,0.15);
-              border-radius:8px;
-            "></div>
-
-            <div style="position:absolute; left:14mm; right:14mm; bottom:18mm; display:flex; justify-content:flex-end;">
-              <div style="text-align:center; width:220px; font-size:12px;">
-                <div>For ${escapeHtml(companyName)}</div>
-                <div style="border-bottom:1px solid #222; margin:38px 0 6px;"></div>
-                <div>Authorized Signatory</div>
-              </div>
-            </div>
-
           </div>
         </div>
       </div>
 
       <style>
-        #lp_topic:empty:before { content:"Topic (click to type)…"; color:#888; }
-        #lp_matter:empty:before { content:"Matter (click to type)…"; color:#888; }
+        #lp_topic:empty:before { content:"Topic (tap to type)…"; color:#888; }
+        #lp_matter:empty:before { content:"Matter (tap to type)…"; color:#888; }
       </style>
+    </div>
+
+    <!-- ✅ Toolbar moved BELOW preview, single-line, short labels -->
+    <div class="card">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:nowrap; overflow-x:auto; padding-bottom:6px;">
+        <button class="userToggleBtn" data-cmd="bold" title="Bold"><b>B</b></button>
+        <button class="userToggleBtn" data-cmd="italic" title="Italic"><i>I</i></button>
+        <button class="userToggleBtn" data-cmd="underline" title="Underline"><u>U</u></button>
+
+        <span style="width:6px; flex:0 0 auto;"></span>
+
+        <button class="userToggleBtn" data-cmd="justifyLeft" title="Left">L</button>
+        <button class="userToggleBtn" data-cmd="justifyCenter" title="Center">C</button>
+        <button class="userToggleBtn" data-cmd="justifyRight" title="Right">R</button>
+        <button class="userToggleBtn" data-cmd="justifyFull" title="Justify">J</button>
+
+        <select id="lp_fontsize" class="input" style="max-width:120px; flex:0 0 auto;">
+          <option value="">Size</option>
+          <option value="2">S</option>
+          <option value="3">M</option>
+          <option value="4">L</option>
+          <option value="5">XL</option>
+        </select>
+
+        <button class="userToggleBtn" data-cmd="insertUnorderedList" title="List">•</button>
+        <button class="userToggleBtn" data-cmd="removeFormat" title="Clear">X</button>
+
+        <div style="flex:1 0 auto;"></div>
+
+        <input id="lp_date" class="input" style="max-width:150px; flex:0 0 auto;" value="${todayISO_()}" />
+        <button class="primary" id="btn_lp_export" style="flex:0 0 auto;">PDF</button>
+      </div>
+      <p style="color:#777;font-size:12px;margin:6px 0 0;">Export saves into sheet automatically.</p>
+    </div>
+
+    <!-- ✅ Month list -->
+    <div class="card">
+      <h3>Letterpads</h3>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <label style="font-size:12px;color:#555;">Month</label>
+        <input id="lp_month" class="input" style="max-width:150px;" placeholder="YYYY-MM" />
+        <button class="userToggleBtn" id="btn_lp_load_list">Load</button>
+      </div>
+      <div id="lp_list_box" style="margin-top:12px;"></div>
+      <p style="color:#777;font-size:12px;margin-top:10px;">Tip: enter month like <b>2026-02</b>.</p>
     </div>
   `;
 
-  // bind date preview
+  const pageEl = document.getElementById("lp_page");
+  const wrapEl = document.getElementById("lp_scale_wrap");
+
+  function applyScale_(){
+    if (!pageEl || !wrapEl) return;
+    const w = wrapEl.clientWidth || 0;
+    if (!w) return;
+    // keep some padding
+    const scale = Math.min(1, (w - 16) / A4_W);
+    pageEl.style.transform = `scale(${scale})`;
+    // keep layout height correct so scrolling works
+    pageEl.style.marginBottom = (scale < 1 ? `${(A4_H*(1-scale))}px` : "0px");
+  }
+  window.addEventListener("resize", applyScale_);
+  setTimeout(applyScale_, 50);
+
+  // date preview sync
   const dateInput = document.getElementById("lp_date");
   const datePreview = document.getElementById("lp_date_preview");
   function syncDate_(){
-    datePreview.textContent = (dateInput?.value || "").trim();
+    if (datePreview) datePreview.textContent = (dateInput?.value || "").trim();
   }
   if (dateInput) dateInput.addEventListener("input", syncDate_);
   syncDate_();
 
-  // active editor tracking (topic or matter)
+  // editor active tracking
   const topicEl = document.getElementById("lp_topic");
   const matterEl = document.getElementById("lp_matter");
   let activeEditor = null;
 
-  function setActive_(el){
-    activeEditor = el;
-  }
+  function setActive_(el){ activeEditor = el; }
   if (topicEl) topicEl.addEventListener("focus", () => setActive_(topicEl));
   if (matterEl) matterEl.addEventListener("focus", () => setActive_(matterEl));
   setActive_(topicEl);
 
-  // toolbar actions
   function execCmd_(cmd, val=null){
     if (!activeEditor) return;
     activeEditor.focus();
-    try {
-      document.execCommand(cmd, false, val);
-    } catch(e){
-      console.warn("execCommand failed:", cmd, e);
-    }
+    try { document.execCommand(cmd, false, val); }
+    catch(e){ console.warn("execCommand failed:", cmd, e); }
   }
 
-  // buttons
   document.querySelectorAll("button[data-cmd]").forEach(btn => {
     btn.addEventListener("click", () => {
       const cmd = btn.getAttribute("data-cmd");
@@ -3059,7 +3114,6 @@ if (type === "letterpad") {
     });
   });
 
-  // font size
   const fs = document.getElementById("lp_fontsize");
   if (fs) {
     fs.addEventListener("change", () => {
@@ -3070,11 +3124,77 @@ if (type === "letterpad") {
     });
   }
 
-  // export PDF
+  // month default = current month
+  const monthInput = document.getElementById("lp_month");
+  if (monthInput) monthInput.value = monthKeyFromIso_(dateInput?.value || todayISO_());
+
+  // list + load
+  const listBox = document.getElementById("lp_list_box");
+  async function loadList_(){
+    if (!listBox) return;
+    const month = String(monthInput?.value || "").trim();
+    if (!month) {
+      listBox.innerHTML = `<p style="color:#d93025;">Enter month like 2026-02</p>`;
+      return;
+    }
+    listBox.innerHTML = `<p>Loading…</p>`;
+    const rows = await api({ action: "listLetterpads", month });
+    if (rows && rows.error) {
+      listBox.innerHTML = `<p style="color:#d93025;">${escapeHtml(String(rows.error))}</p>`;
+      return;
+    }
+    const list = Array.isArray(rows) ? rows : [];
+    if (!list.length) {
+      listBox.innerHTML = `<p>No letterpads found for ${escapeHtml(month)}.</p>`;
+      return;
+    }
+
+    listBox.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <th align="left">Date</th>
+          <th align="left">Topic</th>
+          <th align="right">Open</th>
+        </tr>
+        ${list.map(r => `
+          <tr style="border-top:1px solid #eee;">
+            <td style="white-space:nowrap;">${escapeHtml(String(r.letter_date||""))}</td>
+            <td>${escapeHtml(String(r.topic_preview||""))}</td>
+            <td align="right">
+              <button class="userToggleBtn" data-lp-open="1" data-id="${escapeAttr(String(r.letter_id||""))}">Open</button>
+            </td>
+          </tr>
+        `).join("")}
+      </table>
+    `;
+
+    listBox.querySelectorAll("button[data-lp-open]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-id") || "";
+        if (!id) return;
+        const res = await api({ action:"getLetterpad", letter_id:id });
+        if (res && res.error) return alert(String(res.error));
+        if (dateInput) dateInput.value = String(res.letter_date || "");
+        syncDate_();
+        if (topicEl) topicEl.innerHTML = String(res.topic_html || "");
+        if (matterEl) matterEl.innerHTML = String(res.matter_html || "");
+        setTimeout(applyScale_, 30);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+  }
+
+  const btnLoadList = document.getElementById("btn_lp_load_list");
+  if (btnLoadList) btnLoadList.addEventListener("click", loadList_);
+  if (monthInput) monthInput.addEventListener("change", loadList_);
+  // Load list only when user selects/changes month (as you requested)
+  // (We won’t auto-load on page open.)
+
+  // export (auto-save in backend)
   const btnExport = document.getElementById("btn_lp_export");
   if (btnExport) {
     btnExport.addEventListener("click", async () => {
-      const unlock = lockButton(btnExport, "Generating…");
+      const unlock = lockButton(btnExport, "…");
       try {
         const payload = {
           action: "exportLetterpadPdf",
@@ -3086,12 +3206,14 @@ if (type === "letterpad") {
         const r = await api(payload);
         if (r && r.error) return alert(String(r.error));
 
-        // open download (direct)
-        if (r && r.download_url) window.open(r.download_url, "_blank");
-        else if (r && r.public_url) window.open(r.public_url, "_blank");
-        else alert("PDF generated but no URL returned.");
+        // iPhone-safe open/download
+        safeOpenOrDownload_(r.download_url || r.public_url || "");
+
+        // refresh list (only if month is set and list already shown)
+        // (optional) you can loadList_() here if you want always refresh after export:
+        // await loadList_();
       } finally {
-        setTimeout(unlock, 300);
+        setTimeout(unlock, 250);
       }
     });
   }
