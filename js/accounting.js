@@ -6087,10 +6087,10 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
   } catch (e) {}
 })();
 
-
-          if (role === "superadmin") {
-            listBox.querySelectorAll("button[data-upad-edit]").forEach(btn => {
-              btn.addEventListener("click", async () => {
+if (canFinanceEdit()) {
+  listBox.querySelectorAll("button[data-upad-edit]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+          
                 const row = Number(btn.getAttribute("data-row") || 0);
                 if (!row) return alert("Invalid row");
 
@@ -8745,7 +8745,7 @@ const canDelete = (role === "superadmin");
         </table>
       `;
 
-      if (role === "superadmin") {
+      if (canFinanceEdit()) {
         listBox.querySelectorAll("button[data-exp-edit]").forEach(btn2 => {
           btn2.addEventListener("click", async () => {
             const row = btn2.getAttribute("data-row");
@@ -9910,7 +9910,7 @@ const canDelete = (role === "superadmin");
       </table>
     `;
 
-    if (role === "superadmin") {
+    if (canFinanceEdit()) {
       box.querySelectorAll("button[data-hol-edit]").forEach(btn2 => {
         btn2.addEventListener("click", async () => {
           const row = String(btn2.getAttribute("data-row") || "").trim();
