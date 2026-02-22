@@ -2934,6 +2934,9 @@ if (type === "letterpad") {
   const logoUrl = (company && !company.error) ? (company.logo_url || "") : "";
   const companyName = (company && !company.error) ? (company.company_name || company.company || "") : "";
   const companyAddr = (company && !company.error) ? (company.address || "") : "";
+    const companyPhone = (company && !company.error) ? (company.phone || "") : "";
+  const companyGSTIN = (company && !company.error) ? (company.gstin || "") : "";
+  const companySub = (company && !company.error) ? (company.short_desc || "") : "";
 
   // A4 in px (96dpi-ish) for consistent scaling on mobile
   // const A4_W = 794;
@@ -2962,21 +2965,25 @@ if (type === "letterpad") {
             ${printBg ? `<img src="${escapeAttr(printBg)}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;" />` : ``}
 
             <div style="position:relative; z-index:1;">
-              <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start;">
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                  ${logoUrl ? `<img src="${escapeAttr(logoUrl)}" style="width:54px;height:54px;object-fit:contain;border-radius:8px;" />` : ``}
-                  <div>
-                    <div style="font-weight:800; font-size:16px;">${escapeHtml(companyName)}</div>
-                    <div style="font-size:11px; color:#333; white-space:pre-wrap; margin-top:2px;">${escapeHtml(companyAddr)}</div>
-                  </div>
-                </div>
+             <div class="hdr">
+  <div class="hdrLeft">
+    <div class="brand">${escapeHtml(companyName)}</div>
+    <div class="sub">${escapeHtml(companySub)}</div>
+    <div class="small">${escapeHtml(companyAddr)}</div>
+    <div class="small">
+      ${companyPhone ? `Phone: ${escapeHtml(companyPhone)}` : ``}
+      ${companyGSTIN ? `${companyPhone ? " • " : ""}GSTIN: ${escapeHtml(companyGSTIN)}` : ``}
+    </div>
+  </div>
 
-                <div style="text-align:right; font-size:12px;">
-                  <div><b>Date:</b> <span id="lp_date_preview"></span></div>
-                </div>
-              </div>
+  <div class="hdrRight">
+    <div class="docTitle">LETTERPAD</div>
+    <div class="meta"><b>Date:</b> <span id="lp_date_preview"></span></div>
+    
+  </div>
+</div>
 
-              <div style="border-bottom:2px solid #f57c00; margin:10px 0 12px;"></div>
+<div class="hr"></div>
 
               <div id="lp_topic" contenteditable="true" style="
                 font-size:14px;
@@ -3012,11 +3019,24 @@ if (type === "letterpad") {
         </div>
       </div>
 
-      <style>
-        #lp_topic:empty:before { content:"Topic (tap to type)…"; color:#888; }
-        #lp_matter:empty:before { content:"Matter (tap to type)…"; color:#888; }
-        .userToggleBtn{ padding:8px 12px !important; min-width:44px; }
-      </style>
+     <style>
+  #lp_topic:empty:before { content:"Topic (tap to type)…"; color:#888; }
+  #lp_matter:empty:before { content:"Matter (tap to type)…"; color:#888; }
+
+  /* Letterpad toolbar buttons */
+  .userToggleBtn{ padding:8px 12px !important; min-width:44px; }
+
+  /* ✅ Match Exports/PDF header styles */
+  .hdr { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-top: 8mm; }
+  .hdrLeft { width:65%; }
+  .hdrRight { width:35%; text-align:right; }
+  .brand { font-size:18px; font-weight:700; }
+  .sub { font-size:12px; margin-top:2px; }
+  .small { font-size:11px; color:#333; margin-top:2px; white-space:pre-wrap; }
+  .docTitle { font-size:16px; font-weight:700; }
+  .meta { font-size:11px; margin-top:2px; }
+  .hr { border-top:1px solid #111; margin:10px 0 10px; }
+</style>
     </div>
 
     <!-- ✅ Toolbar moved BELOW preview, single-line, short labels -->
@@ -3084,9 +3104,17 @@ if (type === "letterpad") {
   // date preview sync
   const dateInput = document.getElementById("lp_date");
   const datePreview = document.getElementById("lp_date_preview");
-  function syncDate_(){
-    if (datePreview) datePreview.textContent = (dateInput?.value || "").trim();
-  }
+ function fmtDDMMYYYY_(iso){
+  const s = String(iso || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return s;
+}
+
+function syncDate_(){
+  const v = (dateInput?.value || "").trim();
+  if (datePreview) datePreview.textContent = fmtDDMMYYYY_(v);
+}
   if (dateInput) dateInput.addEventListener("input", syncDate_);
   syncDate_();
 
