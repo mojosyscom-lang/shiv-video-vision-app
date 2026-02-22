@@ -704,10 +704,10 @@ if (type === "incomes") {
           <label style="margin-top:10px;">Received Amount (₹)</label>
           <input id="in_received" type="number" inputmode="decimal" value="0">
 
-          <div style="margin-top:10px;display:flex;text-align:left;">
-            <input id="in_tds_chk" type="checkbox">
-            <label for="in_tds_chk" style="margin:0;">TDS</label>
-          </div>
+                   <div style="margin-top: 10px; display: flex; align-items: center; justify-content: flex-start; gap: 8px;">
+  <input id="in_tds_chk" type="checkbox" style="width: auto; margin: 0; padding: 0; cursor: pointer;">
+  <label for="in_tds_chk" style="margin: 0; cursor: pointer; line-height: 1;">TDS</label>
+</div>
 
           <div id="in_tds_row" style="display:none;margin-top:10px;">
             <label>TDS Amount (₹)</label>
@@ -2912,11 +2912,11 @@ if (type === "exports") {
         <div style="font-weight:800; margin-bottom:8px;">Categories</div>
 
         <label style="display:flex; gap:10px; align-items:center; padding:6px 0;">
-          <input type="checkbox" id="ex_all" checked />
+          <input type="checkbox" id="ex_all" checked style="width:16px; height:16px; margin:0; transform:scale(0.95);" />
           <span style="text-align:left;"><b>All Categories</b> (one PDF)</span>
         </label>
 
-        <div id="ex_list" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); justify-items:start; gap:8px; margin-top:10px;">
+        <div id="ex_list" style="display:grid; grid-template-columns: 1fr; justify-items:start; gap:6px; margin-top:10px;">
           ${[
             ["upad","Advance (Upad)"],
             ["expenses","Expenses"],
@@ -2930,10 +2930,10 @@ if (type === "exports") {
             ["incomes","Incomes (IN Payments)"],
             ["inventory_master","Inventory Master"]
           ].map(([val, label]) => `
-            <label style="display:flex; gap:10px; align-items:center; justify-content:flex-start; padding:6px 0; text-align:left;">
-              <input type="checkbox" class="ex_cat" value="${val}" />
-              <span>${label}</span>
-            </label>
+            <label style="display:flex; gap:8px; align-items:center; justify-content:flex-start; padding:4px 0; text-align:left; width:100%;">
+  <input type="checkbox" class="ex_cat" value="${val}" style="width:16px; height:16px; margin:0; transform:scale(0.95);" />
+  <span style="line-height:1.2;">${label}</span>
+</label>
           `).join("")}
         </div>
       </div>
