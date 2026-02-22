@@ -2984,22 +2984,43 @@ if (type === "exports") {
       const res = await api({ action: "exportAllPdf", month: monthLabel, categories: selected });
       if (res?.error) throw new Error(res.error);
 
-      const url = res?.file_url || "";
+     const url = res?.file_url || "";
+     const dl  = res?.download_url || "";
       if (!url) throw new Error("PDF URL missing in response.");
 
-      out.innerHTML = `
-        <div class="card">
-          <h3 style="margin:0 0 6px;">✅ Export Ready</h3>
-          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-            <a class="btn" href="${url}" target="_blank" rel="noopener" style="text-decoration:none; padding:10px 14px; border-radius:12px;">Open PDF</a>
-            <button id="ex_copy" class="btn" style="padding:10px 14px; border-radius:12px;">Copy Link</button>
-          </div>
-          <div style="margin-top:8px; color:#666; font-size:12px; word-break:break-all;">${url}</div>
-        </div>
-      `;
+     out.innerHTML = `
+  <div class="card">
+    <h3 style="margin:0 0 6px;">✅ Export Ready</h3>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <a class="btn"
+         href="${dl || url}"
+         target="_blank"
+         rel="noopener"
+         style="text-decoration:none; padding:10px 14px; border-radius:12px;">
+        Download PDF
+      </a>
+
+      <a class="btn"
+         href="${url}"
+         target="_blank"
+         rel="noopener"
+         style="text-decoration:none; padding:10px 14px; border-radius:12px;">
+        Open PDF (View)
+      </a>
+
+      <button id="ex_copy" class="btn" style="padding:10px 14px; border-radius:12px;">Copy Link</button>
+    </div>
+
+    <div style="margin-top:8px; color:#666; font-size:12px; word-break:break-all;">
+      <div><b>Download:</b> ${dl || "(not available)"} </div>
+      <div><b>View:</b> ${url}</div>
+    </div>
+  </div>
+`;
 
       document.getElementById("ex_copy")?.addEventListener("click", async () => {
-        try { await navigator.clipboard.writeText(url); alert("Link copied."); } catch(e){ alert(url); }
+        try { await navigator.clipboard.writeText(dl || url); alert("Link copied."); } catch(e){ alert(url); }
       });
 
     } catch (err) {
@@ -5036,11 +5057,15 @@ listBox.querySelectorAll("[data-inv-pdf]").forEach(btn=>{
       const r = await api({ action: "generateInvoicePdf", invoice_id: String(id) });
       if (r && r.error) return alert(String(r.error));
 
-      const url = r.public_url || r.file_url || r.url || "";
-      if (!url) return alert("PDF URL missing");
+      const dl = r.download_url || "";
+const url = r.public_url || r.file_url || r.url || "";
 
-      // ✅ open PDF in new tab (user can download/share manually)
-      window.open(url, "_blank");
+// Prefer direct download (no Drive viewer)
+const openUrl = dl || url;
+if (!openUrl) return alert("PDF URL missing");
+
+// If download_url exists → it will download directly
+window.open(openUrl, "_blank");
     } finally {
       setTimeout(unlock, 350);
     }
