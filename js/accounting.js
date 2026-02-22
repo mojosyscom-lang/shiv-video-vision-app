@@ -2989,34 +2989,41 @@ if (type === "exports") {
       if (!url) throw new Error("PDF URL missing in response.");
 
      out.innerHTML = `
-  <div class="card">
-    <h3 style="margin:0 0 6px;">✅ Export Ready</h3>
+ <div class="card" style="font-family: sans-serif; padding: 16px; border: 1px solid #eee; border-radius: 12px;">
+  <h3 style="margin: 0 0 10px;">✅ Export Ready</h3>
 
-    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-      <a class="btn"
-         href="${dl || url}"
-         target="_blank"
-         rel="noopener"
-         style="text-decoration:none; padding:10px 14px; border-radius:12px;">
-        Download PDF
-      </a>
+  <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;">
+    <a class="btn" href="${dl || url}" target="_blank" rel="noopener" 
+       style="text-decoration: none; padding: 10px 14px; border-radius: 12px; background: #007bff; color: white; display: inline-block;">
+       Download PDF
+    </a>
 
-      <a class="btn"
-         href="${url}"
-         target="_blank"
-         rel="noopener"
-         style="text-decoration:none; padding:10px 14px; border-radius:12px;">
-        Open PDF (View)
-      </a>
+    <a class="btn" href="${url}" target="_blank" rel="noopener" 
+       style="text-decoration: none; padding: 10px 14px; border-radius: 12px; background: #f0f0f0; color: #333; display: inline-block;">
+       Open PDF (View)
+    </a>
 
-      <button id="ex_copy" class="btn" style="padding:10px 14px; border-radius:12px;">Copy Link</button>
-    </div>
-
-    <div style="margin-top:8px; color:#666; font-size:12px; word-break:break-all;">
-      <div><b>Download:</b> ${dl || "(not available)"} </div>
-      <div><b>View:</b> ${url}</div>
-    </div>
+    <button id="ex_copy" class="btn" style="padding: 10px 14px; border-radius: 12px; cursor: pointer;">Copy Link</button>
   </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+      <span style="background: #666; color: white; padding: 2px 8px; border-radius: 6px; font-weight: bold;">Download</span>
+      <code style="word-break: break-all; color: #444; background: #f8f9fa; padding: 4px 8px; border-radius: 6px; flex: 1;">
+        ${dl || "(not available)"}
+      </code>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+      <span style="background: #666; color: white; padding: 2px 8px; border-radius: 6px; font-weight: bold; min-width: 58px; text-align: center;">View</span>
+      <code style="word-break: break-all; color: #444; background: #f8f9fa; padding: 4px 8px; border-radius: 6px; flex: 1;">
+        ${url}
+      </code>
+    </div>
+
+  </div>
+</div>
 `;
 
       document.getElementById("ex_copy")?.addEventListener("click", async () => {
