@@ -187,10 +187,7 @@ document.addEventListener("DOMContentLoaded", async() => {
             </div>
             <div style="margin-top:6px; font-size:12.5px; color:#333; line-height:1.35;">${body}</div>
             <div style="margin-top:10px; display:flex; gap:8px;">
-              <button class="primary" data-notif-open="1" data-notif-id="${id}" data-order-id="${oid}" style="padding:8px 10px; border-radius:10px;">
-                Open Order
-              </button>
-              ${isRead ? "" : `<button class="userToggleBtn" data-notif-read="1" data-notif-id="${id}" style="padding:8px 10px; border-radius:10px;">Mark Read</button>`}
+                      ${isRead ? "" : `<button class="userToggleBtn" data-notif-read="1" data-notif-id="${id}" style="padding:8px 10px; border-radius:10px;">Mark Read</button>`}
             </div>
           </div>
         `;
@@ -216,26 +213,8 @@ document.addEventListener("DOMContentLoaded", async() => {
   // click handlers inside panel
   if (panel) {
     panel.addEventListener("click", async (e) => {
-      const openBtn = e.target.closest("[data-notif-open='1']");
-      const readBtn = e.target.closest("[data-notif-read='1']");
-      if (openBtn) {
-        const notif_id = String(openBtn.getAttribute("data-notif-id") || "");
-        const order_id = String(openBtn.getAttribute("data-order-id") || "");
-        if (notif_id) {
-          try { await api({ action: "markNotificationRead", notif_id }); } catch(_){}
-        }
-        panel.style.display = "none";
-
-        // jump after Orders loads
-        sessionStorage.setItem("notif_jump_order_id", order_id);
-        await loadSection("orders");
-
-        const oid = sessionStorage.getItem("notif_jump_order_id") || "";
-        sessionStorage.removeItem("notif_jump_order_id");
-        if (oid) setTimeout(() => window.jumpToOrderFromNotif(oid), 300);
-      }
-
-      if (readBtn) {
+         const readBtn = e.target.closest("[data-notif-read='1']");
+        if (readBtn) {
         const notif_id = String(readBtn.getAttribute("data-notif-id") || "");
         if (!notif_id) return;
         try {
