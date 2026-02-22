@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", async() => {
 
   const role = localStorage.getItem("role") || "";
+  const username = localStorage.getItem("username") || "";
   const content = document.getElementById("content");
   if (!content) {
   console.error("❌ #content not found. Check HTML has <div id='content'></div>");
@@ -71,6 +72,18 @@ document.addEventListener("DOMContentLoaded", async() => {
   /* =========================
      Helpers (UPDATED)
   ========================== */
+
+  /* =========================
+   ✅ FINANCE EDIT PERMISSION (Paresh only)
+   - Paresh stays owner (NOT superadmin)
+   - He can EDIT (not delete) for: Upad, Expenses, Salary Payments, Holidays
+========================== */
+function canFinanceEdit() {
+  if (role === "superadmin") return true;
+  return (role === "owner") && (String(username || "").trim().toLowerCase() === "paresh");
+}
+
+  
   /* =========================
      ✅ GLOBAL DATE FORMATTERS
      (Used by Invoice + Exports + others)
@@ -6000,7 +6013,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
               + (worker ? ` • Worker: ${worker}` : "");
           }
 
-          const showActions = (role === "superadmin");
+          const canEdit = canFinanceEdit();
+          const canDelete = (role === "superadmin");
 
           listBox.innerHTML = `
             <table style="width:100%;border-collapse:collapse;">
@@ -6030,14 +6044,14 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
                     <td align="right">${escapeHtml(desc)}</td>
                     <td>${escapeHtml(mon)}</td>
                     <td>${escapeHtml(by)}</td>
-                    ${
-                      showActions
-                        ? `<td align="right" style="white-space:nowrap;">
-                             <button class="userToggleBtn" data-upad-edit="1" data-row="${escapeAttr(rowId ?? "")}">Edit</button>
-                             <button class="userToggleBtn" data-upad-del="1" data-row="${escapeAttr(rowId ?? "")}">Delete</button>
-                           </td>`
-                        : ``
-                    }
+                  ${
+  (canEdit || canDelete)
+    ? `<td align="right" style="white-space:nowrap;">
+         ${canEdit ? `<button class="userToggleBtn" data-upad-edit="1" data-row="${escapeAttr(rowId ?? "")}">Edit</button>` : ``}
+         ${canDelete ? `<button class="userToggleBtn" data-upad-del="1" data-row="${escapeAttr(rowId ?? "")}">Delete</button>` : ``}
+       </td>`
+    : ``
+}
                   </tr>
                 `;
               }).join("")}
@@ -8681,7 +8695,8 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
           + (category ? ` • Type: ${category}` : "");
       }
 
-      const showActions = (role === "superadmin");
+      const canEdit = canFinanceEdit();
+const canDelete = (role === "superadmin");
 
       listBox.innerHTML = `
         <table style="width:100%;border-collapse:collapse;">
@@ -8717,10 +8732,10 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
                 <td>${escapeHtml(mon)}</td>
                 <td>${escapeHtml(by)}</td>
                 ${
-                  showActions
+                  (canEdit || canDelete)
                     ? `<td align="right" style="white-space:nowrap;">
-                         <button class="userToggleBtn" data-exp-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
-                         <button class="userToggleBtn" data-exp-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
+                         ${canEdit ? `<button class="userToggleBtn" data-exp-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>` : ``}
+                       ${canDelete ? `<button class="userToggleBtn" data-exp-del="1" data-row="${escapeAttr(rowId)}">Delete</button>` : ``}
                        </td>`
                     : ``
                 }
@@ -9053,6 +9068,30 @@ return;
           <p>Select a month and click Load Summary.</p>
         </div>
 
+                ${
+          canFinanceEdit()
+            ? `
+        <div class="card" id="sal_pay_list_card">
+          <h3>Edit Salary Payments</h3>
+
+          <label>Month</label>
+          <select id="sal_pay_list_month">
+            <option value="">All</option>
+            ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+          </select>
+          <br><br>
+
+          <button class="primary" id="btn_sal_pay_list">Load Payments</button>
+
+          <div id="sal_pay_list_box" style="margin-top:12px;"></div>
+          <p style="color:#777;font-size:12px;margin-top:10px;">
+            Only Edit is allowed for Paresh. Delete is superadmin-only (not shown here).
+          </p>
+        </div>
+            `
+            : ``
+        }
+
         <div class="card">
           <h3>Add Salary Payment</h3>
 
@@ -9106,6 +9145,97 @@ return;
 //ends here
       
       document.getElementById("btn_sal_pay").addEventListener("click", addSalaryPayment);
+
+      const btnPayList = document.getElementById("btn_sal_pay_list");
+if (btnPayList) btnPayList.addEventListener("click", loadSalaryPaymentsList);
+
+async function loadSalaryPaymentsList(){
+  const box = document.getElementById("sal_pay_list_box");
+  if (!box) return;
+
+  box.innerHTML = `<p>Loading…</p>`;
+
+  const month = (document.getElementById("sal_pay_list_month")?.value || "").trim();
+
+  const rows = await api({ action: "listSalaryPayments", month });
+
+  if (rows && rows.error) {
+    box.innerHTML = `<p style="color:red;">${escapeHtml(String(rows.error))}</p>`;
+    return;
+  }
+
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    box.innerHTML = `<p>No payments found.</p>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;">
+      <tr>
+        <th align="left">Date</th>
+        <th align="left">Worker</th>
+        <th align="right">Amount</th>
+        <th align="left">Month</th>
+        <th align="left">By</th>
+        <th align="right">Action</th>
+      </tr>
+      ${list.map(r => `
+        <tr style="border-top:1px solid #eee;">
+          <td>${escapeHtml(String(r.date || ""))}</td>
+          <td>${escapeHtml(String(r.worker || ""))}</td>
+          <td align="right">${Number(r.amount || 0).toFixed(0)}</td>
+          <td>${escapeHtml(String(r.month || ""))}</td>
+          <td>${escapeHtml(String(r.added_by || ""))}</td>
+          <td align="right">
+            <button class="userToggleBtn" data-salpay-edit="1" data-row="${escapeAttr(String(r.rowIndex || ""))}">Edit</button>
+          </td>
+        </tr>
+      `).join("")}
+    </table>
+  `;
+
+  box.querySelectorAll("button[data-salpay-edit]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const rowIndex = Number(btn.getAttribute("data-row") || 0);
+      if (!rowIndex) return alert("Invalid row");
+
+      // Ask edits
+      const cur = list.find(x => Number(x.rowIndex) === rowIndex) || {};
+      const newDate = prompt("Date (YYYY-MM-DD):", String(cur.date || ""));
+      if (newDate === null) return;
+
+      const newWorker = prompt("Worker:", String(cur.worker || ""));
+      if (newWorker === null) return;
+
+      const newAmountStr = prompt("Amount:", String(cur.amount || 0));
+      if (newAmountStr === null) return;
+
+      const newMonth = prompt("Month (e.g., Feb-2026):", String(cur.month || ""));
+      if (newMonth === null) return;
+
+      const unlock = lockButton(btn, "Saving...");
+      try {
+        const r = await api({
+          action: "updateSalaryPayment",
+          rowIndex,
+          date: String(newDate).trim(),
+          worker: String(newWorker).trim(),
+          amount: Number(newAmountStr || 0),
+          month: String(newMonth).trim()
+        });
+
+        if (r && r.error) return alert(String(r.error));
+        alert("Salary payment updated");
+        await loadSalaryPaymentsList();
+      } finally {
+        setTimeout(unlock, 300);
+      }
+    });
+  });
+}
+
+      
       // --- new export salary function
 
 document.getElementById("btn_sal_export")?.addEventListener("click", () => {
@@ -9740,7 +9870,8 @@ const el = rowEls.find(r =>
         (workerFilter ? ` • Worker: ${workerFilter}` : "");
     }
 
-    const showActions = (role === "superadmin");
+    const canEdit = canFinanceEdit();
+const canDelete = (role === "superadmin");
 
     // ✅ FIX: use ONE consistent row id resolver everywhere (table + find + api calls)
     function holRowId(r) {
@@ -9766,10 +9897,10 @@ const el = rowEls.find(r =>
               <td>${escapeHtml(prettyMonth(r.month || ""))}</td>
               <td>${escapeHtml(r.reason || "")}</td>
               ${
-                showActions
+                (canEdit || canDelete)
                   ? `<td align="right" style="white-space:nowrap;">
-                       <button class="userToggleBtn" data-hol-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>
-                       <button class="userToggleBtn" data-hol-del="1" data-row="${escapeAttr(rowId)}">Delete</button>
+                      ${canEdit ? `<button class="userToggleBtn" data-hol-edit="1" data-row="${escapeAttr(rowId)}">Edit</button>` : ``}
+                       ${canDelete ? `<button class="userToggleBtn" data-hol-del="1" data-row="${escapeAttr(rowId)}">Delete</button>` : ``}
                      </td>`
                   : ``
               }
