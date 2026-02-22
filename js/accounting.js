@@ -2873,8 +2873,233 @@ document.getElementById("btn_pdf_gstb")?.addEventListener("click", () => {
     return;
   }
 }
+// ------------ letterpad section ends here -----------//
 
 
+  /* ==========================================================
+   ✅ LETTERPAD (Rich topic + matter, A4 preview, PDF export)
+   - Topic is ALSO rich-text (same style as matter)
+   - Uses company print_bg_url background
+   - Footer: Authorized Signatory only
+   ========================================================== */
+if (type === "letterpad") {
+
+  // 🔒 Access: owner/superadmin only (same as backend)
+  const canUse = (role === "owner" || role === "superadmin");
+  if (!canUse) {
+    content.innerHTML = `<div class="card" style="text-align:center; padding:40px;">
+      <h2 style="color:#d93025;">🚫 Access Denied</h2>
+    </div>`;
+    return;
+  }
+
+  // Helpers
+  function todayISO_(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  }
+
+  const company = await api({ action: "getCompanyProfile" });
+  const printBg = (company && !company.error) ? (company.print_bg_url || "") : "";
+  const logoUrl = (company && !company.error) ? (company.logo_url || "") : "";
+  const companyName = (company && !company.error) ? (company.company_name || company.company || "") : "";
+  const companyAddr = (company && !company.error) ? (company.address || "") : "";
+
+  // UI
+  content.innerHTML = `
+    <div class="card">
+      <h2>Letterpad</h2>
+      <p style="color:#666; margin-top:-6px;">Click Topic or Matter to type. Toolbar applies to the active area.</p>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0;">
+        <button class="userToggleBtn" data-cmd="bold"><b>B</b></button>
+        <button class="userToggleBtn" data-cmd="italic"><i>I</i></button>
+        <button class="userToggleBtn" data-cmd="underline"><u>U</u></button>
+
+        <span style="width:8px;"></span>
+
+        <button class="userToggleBtn" data-cmd="justifyLeft">Left</button>
+        <button class="userToggleBtn" data-cmd="justifyCenter">Center</button>
+        <button class="userToggleBtn" data-cmd="justifyRight">Right</button>
+        <button class="userToggleBtn" data-cmd="justifyFull">Justify</button>
+
+        <span style="width:8px;"></span>
+
+        <select id="lp_fontsize" class="input" style="max-width:140px;">
+          <option value="">Size</option>
+          <option value="2">Small</option>
+          <option value="3">Normal</option>
+          <option value="4">Large</option>
+          <option value="5">X-Large</option>
+        </select>
+
+        <button class="userToggleBtn" data-cmd="insertUnorderedList">• List</button>
+        <button class="userToggleBtn" data-cmd="removeFormat">Clear</button>
+
+        <div style="flex:1"></div>
+
+        <label style="font-size:12px;color:#555;">Date</label>
+        <input id="lp_date" class="input" style="max-width:160px;" value="${todayISO_()}" />
+
+        <button class="primary" id="btn_lp_export">Export PDF</button>
+      </div>
+    </div>
+
+    <div class="card" style="overflow:auto;">
+      <div id="lp_page_wrap" style="display:flex; justify-content:center;">
+        <div id="lp_page" style="
+          position:relative;
+          width:210mm;
+          min-height:297mm;
+          box-sizing:border-box;
+          padding:18mm 14mm;
+          background:#fff;
+          box-shadow:0 8px 30px rgba(0,0,0,0.08);
+        ">
+          ${printBg ? `<img src="${escapeAttr(printBg)}" style="position:absolute; inset:0; width:210mm; height:297mm; object-fit:cover; z-index:0;" />` : ``}
+
+          <div style="position:relative; z-index:1;">
+            <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-start;">
+              <div style="display:flex; gap:10px; align-items:flex-start;">
+                ${logoUrl ? `<img src="${escapeAttr(logoUrl)}" style="width:52px;height:52px;object-fit:contain;border-radius:6px;" />` : ``}
+                <div>
+                  <div style="font-weight:800; font-size:16px;">${escapeHtml(companyName)}</div>
+                  <div style="font-size:11px; color:#333; white-space:pre-wrap; margin-top:2px;">${escapeHtml(companyAddr)}</div>
+                </div>
+              </div>
+
+              <div style="text-align:right; font-size:12px;">
+                <div><b>Date:</b> <span id="lp_date_preview"></span></div>
+              </div>
+            </div>
+
+            <div style="border-bottom:2px solid #f57c00; margin:10px 0 12px;"></div>
+
+            <div id="lp_topic" contenteditable="true" style="
+              font-size:14px;
+              font-weight:700;
+              min-height:26px;
+              outline:none;
+              padding:6px 8px;
+              border:1px dashed rgba(0,0,0,0.15);
+              border-radius:8px;
+            "></div>
+
+            <div id="lp_matter" contenteditable="true" style="
+              margin-top:10px;
+              font-size:13px;
+              line-height:1.55;
+              min-height:160mm;
+              outline:none;
+              padding:10px 8px;
+              border:1px dashed rgba(0,0,0,0.15);
+              border-radius:8px;
+            "></div>
+
+            <div style="position:absolute; left:14mm; right:14mm; bottom:18mm; display:flex; justify-content:flex-end;">
+              <div style="text-align:center; width:220px; font-size:12px;">
+                <div>For ${escapeHtml(companyName)}</div>
+                <div style="border-bottom:1px solid #222; margin:38px 0 6px;"></div>
+                <div>Authorized Signatory</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <style>
+        #lp_topic:empty:before { content:"Topic (click to type)…"; color:#888; }
+        #lp_matter:empty:before { content:"Matter (click to type)…"; color:#888; }
+      </style>
+    </div>
+  `;
+
+  // bind date preview
+  const dateInput = document.getElementById("lp_date");
+  const datePreview = document.getElementById("lp_date_preview");
+  function syncDate_(){
+    datePreview.textContent = (dateInput?.value || "").trim();
+  }
+  if (dateInput) dateInput.addEventListener("input", syncDate_);
+  syncDate_();
+
+  // active editor tracking (topic or matter)
+  const topicEl = document.getElementById("lp_topic");
+  const matterEl = document.getElementById("lp_matter");
+  let activeEditor = null;
+
+  function setActive_(el){
+    activeEditor = el;
+  }
+  if (topicEl) topicEl.addEventListener("focus", () => setActive_(topicEl));
+  if (matterEl) matterEl.addEventListener("focus", () => setActive_(matterEl));
+  setActive_(topicEl);
+
+  // toolbar actions
+  function execCmd_(cmd, val=null){
+    if (!activeEditor) return;
+    activeEditor.focus();
+    try {
+      document.execCommand(cmd, false, val);
+    } catch(e){
+      console.warn("execCommand failed:", cmd, e);
+    }
+  }
+
+  // buttons
+  document.querySelectorAll("button[data-cmd]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const cmd = btn.getAttribute("data-cmd");
+      if (!cmd) return;
+      execCmd_(cmd);
+    });
+  });
+
+  // font size
+  const fs = document.getElementById("lp_fontsize");
+  if (fs) {
+    fs.addEventListener("change", () => {
+      const v = fs.value;
+      if (!v) return;
+      execCmd_("fontSize", v);
+      fs.value = "";
+    });
+  }
+
+  // export PDF
+  const btnExport = document.getElementById("btn_lp_export");
+  if (btnExport) {
+    btnExport.addEventListener("click", async () => {
+      const unlock = lockButton(btnExport, "Generating…");
+      try {
+        const payload = {
+          action: "exportLetterpadPdf",
+          letter_date: (dateInput?.value || "").trim(),
+          topic_html: (topicEl?.innerHTML || ""),
+          matter_html: (matterEl?.innerHTML || "")
+        };
+
+        const r = await api(payload);
+        if (r && r.error) return alert(String(r.error));
+
+        // open download (direct)
+        if (r && r.download_url) window.open(r.download_url, "_blank");
+        else if (r && r.public_url) window.open(r.public_url, "_blank");
+        else alert("PDF generated but no URL returned.");
+      } finally {
+        setTimeout(unlock, 300);
+      }
+    });
+  }
+
+  return;
+}
+  
+// ------ letterpads section ends here --------- //
 // -------- Exports section starts here 
 
     /* ==========================================================
