@@ -36,6 +36,227 @@ document.addEventListener("DOMContentLoaded", async() => {
   // --- End Role Logic ---
 
   // try different dashboards ends here
+
+// notification section starts here the floating bell
+
+/* ==========================================================
+   ✅ NOTIFICATIONS (PHASE 1 - IN APP)
+   - For ALL roles (staff/owner/superadmin)
+   - Pulls from backend sheet "notifications"
+   - Tap notification => opens Orders + jumps to order
+   ========================================================== */
+
+(function initNotificationsPhase1(){
+  // ---- small css escape
+  function cssEsc_(s){
+    return String(s || "").replace(/["\\]/g, "\\$&");
+  }
+
+  // ---- build UI once
+  if (!document.getElementById("notif_bell_wrap")) {
+    const wrap = document.createElement("div");
+    wrap.id = "notif_bell_wrap";
+    wrap.style.position = "fixed";
+    wrap.style.right = "16px";
+    wrap.style.bottom = "16px";
+    wrap.style.zIndex = "99999";
+    wrap.innerHTML = `
+      <div style="position:relative;">
+        <button id="notif_bell_btn" class="primary" style="border-radius:999px; padding:12px 14px; min-width:52px;">
+          🔔
+        </button>
+        <div id="notif_bell_badge"
+             style="display:none; position:absolute; top:-6px; right:-6px; background:#d93025; color:#fff;
+                    border-radius:999px; font-size:12px; padding:3px 7px; font-weight:700;">
+          0
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+
+    const panel = document.createElement("div");
+    panel.id = "notif_panel";
+    panel.style.position = "fixed";
+    panel.style.right = "16px";
+    panel.style.bottom = "78px";
+    panel.style.zIndex = "99999";
+    panel.style.width = "340px";
+    panel.style.maxWidth = "92vw";
+    panel.style.maxHeight = "60vh";
+    panel.style.overflow = "auto";
+    panel.style.display = "none";
+    panel.style.background = "#fff";
+    panel.style.border = "1px solid #ddd";
+    panel.style.borderRadius = "14px";
+    panel.style.boxShadow = "0 10px 30px rgba(0,0,0,0.15)";
+    panel.innerHTML = `
+      <div style="padding:12px 12px 6px 12px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between;">
+        <div style="font-weight:800;">Notifications</div>
+        <button id="notif_close_btn" class="userToggleBtn">Close</button>
+      </div>
+      <div id="notif_list" style="padding:10px;"></div>
+      <div style="padding:10px 12px; border-top:1px solid #eee; font-size:12px; color:#666;">
+        Tip: Tap a notification to open the Order.
+      </div>
+    `;
+    document.body.appendChild(panel);
+
+    // close on outside click
+    document.addEventListener("click", (e) => {
+      const p = document.getElementById("notif_panel");
+      const b = document.getElementById("notif_bell_wrap");
+      if (!p || !b) return;
+      if (p.style.display === "none") return;
+      if (p.contains(e.target) || b.contains(e.target)) return;
+      p.style.display = "none";
+    });
+  }
+
+  const bellBtn = document.getElementById("notif_bell_btn");
+  const badge = document.getElementById("notif_bell_badge");
+  const panel = document.getElementById("notif_panel");
+  const listEl = document.getElementById("notif_list");
+  const closeBtn = document.getElementById("notif_close_btn");
+
+  if (closeBtn) closeBtn.onclick = () => { panel.style.display = "none"; };
+
+  // ---- global jump helper (works after Orders loads)
+  window.jumpToOrderFromNotif = function(order_id){
+    const oid = String(order_id || "").trim();
+    if (!oid) return;
+
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries++;
+      const btn = document.querySelector(`button[data-ord-items="1"][data-id="${cssEsc_(oid)}"]`);
+      const row = document.getElementById(`ord_expand_${oid}`);
+
+      // If button exists, click to expand items (your Orders module already handles it)
+      if (btn) {
+        try {
+          btn.scrollIntoView({ behavior: "smooth", block: "center" });
+          btn.click();
+        } catch(e){}
+        clearInterval(timer);
+        return;
+      }
+
+      // Fallback: if row exists, just scroll to it
+      if (row) {
+        try { row.scrollIntoView({ behavior: "smooth", block: "center" }); } catch(e){}
+        clearInterval(timer);
+        return;
+      }
+
+      if (tries >= 20) clearInterval(timer); // ~6 seconds
+    }, 300);
+  };
+
+  // ---- fetch + render
+  async function fetchNotifs_(){
+    try {
+      const res = await api({ action: "listNotifications", only_unread: "0", limit: 25 });
+      const arr = Array.isArray(res) ? res : [];
+
+      const unreadCount = arr.filter(x => String(x.status || "").toUpperCase() !== "READ").length;
+      if (unreadCount > 0) {
+        badge.style.display = "block";
+        badge.textContent = String(unreadCount);
+      } else {
+        badge.style.display = "none";
+      }
+
+      // render list
+      if (!listEl) return;
+      if (!arr.length) {
+        listEl.innerHTML = `<div style="color:#666; font-size:13px;">No notifications yet.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = arr.map(n => {
+        const isRead = String(n.status || "").toUpperCase() === "READ";
+        const title = escapeHtml(n.title || "");
+        const body = escapeHtml(n.body || "");
+        const oid = escapeAttr(n.order_id || "");
+        const id = escapeAttr(n.notif_id || "");
+        return `
+          <div style="padding:10px; border:1px solid #eee; border-radius:12px; margin-bottom:10px; background:${isRead ? "#fafafa" : "#fff"};">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div style="font-weight:800; font-size:13px;">${title}</div>
+              ${isRead ? `<span style="font-size:11px; color:#777;">Read</span>` : `<span style="font-size:11px; color:#d93025; font-weight:800;">New</span>`}
+            </div>
+            <div style="margin-top:6px; font-size:12.5px; color:#333; line-height:1.35;">${body}</div>
+            <div style="margin-top:10px; display:flex; gap:8px;">
+              <button class="primary" data-notif-open="1" data-notif-id="${id}" data-order-id="${oid}" style="padding:8px 10px; border-radius:10px;">
+                Open Order
+              </button>
+              ${isRead ? "" : `<button class="userToggleBtn" data-notif-read="1" data-notif-id="${id}" style="padding:8px 10px; border-radius:10px;">Mark Read</button>`}
+            </div>
+          </div>
+        `;
+      }).join("");
+    } catch (e) {
+      // Silent fail (don’t annoy users)
+      console.warn("Notifications fetch failed:", e);
+    }
+  }
+
+  // open/close panel
+  if (bellBtn) {
+    bellBtn.onclick = async () => {
+      if (panel.style.display === "none") {
+        panel.style.display = "block";
+        await fetchNotifs_();
+      } else {
+        panel.style.display = "none";
+      }
+    };
+  }
+
+  // click handlers inside panel
+  if (panel) {
+    panel.addEventListener("click", async (e) => {
+      const openBtn = e.target.closest("[data-notif-open='1']");
+      const readBtn = e.target.closest("[data-notif-read='1']");
+      if (openBtn) {
+        const notif_id = String(openBtn.getAttribute("data-notif-id") || "");
+        const order_id = String(openBtn.getAttribute("data-order-id") || "");
+        if (notif_id) {
+          try { await api({ action: "markNotificationRead", notif_id }); } catch(_){}
+        }
+        panel.style.display = "none";
+
+        // jump after Orders loads
+        sessionStorage.setItem("notif_jump_order_id", order_id);
+        await loadSection("orders");
+
+        const oid = sessionStorage.getItem("notif_jump_order_id") || "";
+        sessionStorage.removeItem("notif_jump_order_id");
+        if (oid) setTimeout(() => window.jumpToOrderFromNotif(oid), 300);
+      }
+
+      if (readBtn) {
+        const notif_id = String(readBtn.getAttribute("data-notif-id") || "");
+        if (!notif_id) return;
+        try {
+          await api({ action: "markNotificationRead", notif_id });
+          await fetchNotifs_();
+        } catch(_){}
+      }
+    });
+  }
+
+  // initial + polling
+  fetchNotifs_();
+  setInterval(fetchNotifs_, 60000); // every 60 seconds
+})();
+
+
+  // notification section ends here the floating bell
+
+
+
+
   
   /* =========================
      SPEED CACHE (NEW)
