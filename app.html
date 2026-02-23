@@ -170,6 +170,34 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/sync.js"></script>
+  <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging.js";
+
+  window.__initFCMPush = async function(firebaseConfig, vapidKey, apiFn){
+    const app = initializeApp(firebaseConfig);
+    const messaging = getMessaging(app);
+
+    // Ask notification permission
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return { ok:false, error:"permission_denied" };
+
+    // Get token
+    const token = await getToken(messaging, { vapidKey });
+    if (!token) return { ok:false, error:"no_token" };
+
+    // Save token to backend
+    await apiFn({ action:"upsertPushToken", token, platform: navigator.userAgent });
+
+    // Foreground messages (app open)
+    onMessage(messaging, (payload) => {
+      // Optional: your existing in-app buzz/sound can run here
+      console.log("FCM foreground payload", payload);
+    });
+
+    return { ok:true };
+  };
+</script>
 <script src="js/accounting.js"></script>
 <script src="js/nozoom.js?v=1"></script>
 
