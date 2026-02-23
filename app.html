@@ -174,28 +174,34 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
   import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging.js";
 
-  window.__initFCMPush = async function(firebaseConfig, vapidKey, apiFn){
+  window.__initFCMPush = async function(apiFn){
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCCZaY4sCNz1bEp3RXs5d8y_fl5hPXzehc",
+      authDomain: "shiv-video-vision-app.firebaseapp.com",
+      projectId: "shiv-video-vision-app",
+      storageBucket: "shiv-video-vision-app.firebasestorage.app",
+      messagingSenderId: "504336545235",
+      appId: "1:504336545235:web:09ae89753a170fd3f1eb26",
+      measurementId: "G-CG2T5ZWNLS"
+    };
+
+    const vapidKey = "BC2HD4ZROwEdtICiq_TAwoEoCwSs4deb8PGEavhGfQSoIfY0jYIxLu2fV7lCeYpLoJbdRGlNX2A7DfxXPGnAHuA";
+
     const app = initializeApp(firebaseConfig);
     const messaging = getMessaging(app);
 
-    // Ask notification permission
     const perm = await Notification.requestPermission();
-    if (perm !== "granted") return { ok:false, error:"permission_denied" };
+    if (perm !== "granted") return;
 
-    // Get token
     const token = await getToken(messaging, { vapidKey });
-    if (!token) return { ok:false, error:"no_token" };
+    if (!token) return;
 
-    // Save token to backend
-    await apiFn({ action:"upsertPushToken", token, platform: navigator.userAgent });
+    await apiFn({ action:"upsertPushToken", token, platform:navigator.userAgent });
 
-    // Foreground messages (app open)
     onMessage(messaging, (payload) => {
-      // Optional: your existing in-app buzz/sound can run here
-      console.log("FCM foreground payload", payload);
+      console.log("Foreground push:", payload);
     });
-
-    return { ok:true };
   };
 </script>
 <script src="js/accounting.js"></script>
