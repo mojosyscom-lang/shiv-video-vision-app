@@ -7861,8 +7861,9 @@ if (type === "orders") {
           <label style="margin-top:10px;">Venue <span style="color:#e33;">*</span></label>
           <input id="ord_venue" placeholder="Venue">
 
-          <label style="margin-top:10px;">Order Details (optional)</label>
-          <input id="ord_details" placeholder="Details / notes">
+          <label style="margin-top:10px;">Led Size: <span style="color:#e33;">*</span></label>
+          <input id="ord_details" readonly placeholder="Fill Width/Height in calculator below" style="background:#f9f9f9; cursor:not-allowed;">
+        
 
           <label style="margin-top:10px;">Setup Date <span style="color:#e33;">*</span></label>
           <input id="ord_setup" type="date" value="${todayISO()}">
@@ -7933,6 +7934,51 @@ if (type === "orders") {
       </div>
     </div>
   `;
+
+
+// --- ADD THE SCRIPT HERE ---
+// 1. Select all the relevant elements
+const detailsInput = document.getElementById('ord_details');
+const widthInput = document.getElementById('led_w_ft');
+const heightInput = document.getElementById('led_h_ft');
+
+// Function to update the details field based on the calc inputs
+function updateLedDetails() {
+  const w = widthInput.value.trim();
+  const h = heightInput.value.trim();
+  
+  if (w && h) {
+    // Automatically formats as "Led Size: 16 x 12"
+    detailsInput.value = `Led Size: ${w} x ${h}`;
+  }
+}
+
+// 2. Only attach listeners if the elements exist (canAddEdit is true)
+if (detailsInput && widthInput && heightInput) {
+  
+  // Update details automatically when user types in Width or Height
+  widthInput.addEventListener('input', updateLedDetails);
+  heightInput.addEventListener('input', updateLedDetails);
+
+  // Keep your original "manual entry" logic for the details field itself
+  detailsInput.addEventListener('blur', function() {
+    let val = this.value.trim();
+    if (val && !val.toLowerCase().startsWith('led size:')) {
+      this.value = `Led Size: ${val}`;
+    }
+  });
+
+  detailsInput.addEventListener('focus', function() {
+    if (this.value.toLowerCase().startsWith('led size:')) {
+      this.value = this.value.replace(/^led size:\s*/i, '');
+    }
+  });
+}
+
+
+
+
+  
 
   const listBox = document.getElementById("ord_list");
   const totalBox = document.getElementById("ord_total");
