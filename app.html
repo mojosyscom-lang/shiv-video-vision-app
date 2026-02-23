@@ -155,7 +155,7 @@
   document.getElementById("btn_enable_push")?.addEventListener("click", async () => {
     try {
       if (typeof window.__initFCMPush === "function") {
-        await window.__initFCMPush(window.api); // if api is global
+        await window.__initFCMPush(api); // if api is global
         alert("If prompted, allow notifications ✅");
       } else {
         alert("Push init not ready yet. Reload once and try again.");
@@ -199,40 +199,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/sync.js"></script>
-  <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-  import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging.js";
-
-  window.__initFCMPush = async function(apiFn){
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyCCZaY4sCNz1bEp3RXs5d8y_fl5hPXzehc",
-      authDomain: "shiv-video-vision-app.firebaseapp.com",
-      projectId: "shiv-video-vision-app",
-      storageBucket: "shiv-video-vision-app.firebasestorage.app",
-      messagingSenderId: "504336545235",
-      appId: "1:504336545235:web:09ae89753a170fd3f1eb26",
-      measurementId: "G-CG2T5ZWNLS"
-    };
-
-    const vapidKey = "BC2HD4ZROwEdtICiq_TAwoEoCwSs4deb8PGEavhGfQSoIfY0jYIxLu2fV7lCeYpLoJbdRGlNX2A7DfxXPGnAHuA";
-
-    const app = initializeApp(firebaseConfig);
-    const messaging = getMessaging(app);
-
-    const perm = await Notification.requestPermission();
-    if (perm !== "granted") return;
-
-    const token = await getToken(messaging, { vapidKey });
-    if (!token) return;
-
-    await apiFn({ action:"upsertPushToken", token, platform:navigator.userAgent });
-
-    onMessage(messaging, (payload) => {
-      console.log("Foreground push:", payload);
-    });
-  };
-</script>
+  
 <script src="js/accounting.js"></script>
 <script src="js/nozoom.js?v=1"></script>
 
