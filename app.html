@@ -315,13 +315,7 @@ function toggleTheme() {
   })();
 </script>
 
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(console.error);
-    });
-  }
-</script>
+
 
   <script>
   // 1. Retrieve the role from storage
