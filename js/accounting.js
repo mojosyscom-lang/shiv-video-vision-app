@@ -123,8 +123,11 @@ if (!document.getElementById("notif_bell_css")) {
       100% { transform: rotate(0deg); }
     }
     .notif-buzz {
-      animation: notifBellShake 650ms ease-in-out;
-    }
+  animation: notifBellShake 650ms ease-in-out;
+}
+.notif-buzz-infinite {
+  animation: notifBellShake 650ms ease-in-out infinite;
+}
   `;
   document.head.appendChild(st);
 }
@@ -191,7 +194,18 @@ function playNotifBeep_(){
     setTimeout(() => { try { o.stop(); } catch(e){} }, 140);
   } catch(e){}
 }
+function startBuzzUntilClick_(){
+  const btn = document.getElementById("notif_bell_btn");
+  if (!btn) return;
+  btn.classList.add("notif-buzz-infinite");
+}
 
+function stopBuzz_(){
+  const btn = document.getElementById("notif_bell_btn");
+  if (!btn) return;
+  btn.classList.remove("notif-buzz-infinite");
+  btn.classList.remove("notif-buzz");
+}
 function buzzBell_(){
   const btn = document.getElementById("notif_bell_btn");
   if (!btn) return;
@@ -321,8 +335,12 @@ try {
     badge.style.display = "none";
     badge.textContent = "0";
   }
-} catch (e) {}
 
+  
+} catch (e) {}
+const panelOpen = panel && panel.style.display !== "none";
+if (unreadCount > 0 && !panelOpen) startBuzzUntilClick_();
+if (unreadCount === 0) stopBuzz_();
       
       const res = await api({ action: "listNotifications", only_unread: "0", limit: 25 });
       const arr = Array.isArray(res) ? res : [];
@@ -334,7 +352,7 @@ const visible = arr.filter(n => {
 });
 
       
-const panelOpen = panel && panel.style.display !== "none";
+
 
 // ✅ Buzz + vibrate + beep when new unread arrives (app open)
 if (!panelOpen && !firstNotifPoll && unreadCount > lastUnreadCount) {
@@ -385,6 +403,7 @@ lastUnreadCount = unreadCount;
   if (bellBtn) {
     bellBtn.onclick = async () => {
      if (panel.style.display === "none") {
+       stopBuzz_();
   panel.style.display = "block";
   await fetchNotifs_();
 
