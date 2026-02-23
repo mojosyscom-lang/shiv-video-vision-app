@@ -27,9 +27,7 @@ self.addEventListener("notificationclick", (event) => {
   const data = event.notification.data || {};
   const orderId = data.order_id || "";
 
-  const url = orderId
-    ? "/shiv-video-vision-app/?section=orders&order_id=" + encodeURIComponent(orderId) + "&mode=open"
-    : "/shiv-video-vision-app/";
+  const url = "/shiv-video-vision-app/?open_notif=1";
 
   event.waitUntil(clients.openWindow(url));
 });
