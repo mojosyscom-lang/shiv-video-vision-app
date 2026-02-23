@@ -21,20 +21,30 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload) {
   console.log("🔔 Background message:", payload);
 
-  const notificationTitle =
-  payload?.notification?.title ||
-  payload?.data?.title ||
-  "Notification";
+  const title =
+    payload?.notification?.title ||
+    payload?.data?.title ||
+    "Notification";
 
-const notificationOptions = {
-  body:
+  const body =
     payload?.notification?.body ||
     payload?.data?.body ||
-    "",
-  data: payload?.data || {}
-};
+    "";
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  const notificationOptions = {
+    body,
+    // IMPORTANT: add icon/badge so Windows shows a proper toast
+    icon: "./assets/logo.png",     // <-- put your real path
+    badge: "./assets/logo.png",    // <-- put your real path
+    data: payload?.data || {},
+    requireInteraction: true,      // keeps it visible until user clicks (useful for testing)
+    renotify: true,
+    tag: "svv-push"
+  };
+
+  self.registration.showNotification(title, notificationOptions)
+    .then(() => console.log("✅ showNotification fired"))
+    .catch(err => console.error("❌ showNotification failed:", err));
 });
 
 // When user clicks push notification
