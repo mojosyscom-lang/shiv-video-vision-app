@@ -34,7 +34,7 @@ const notificationOptions = {
 self.addEventListener("notificationclick", function(event) {
   event.notification.close();
 
-  const url = "/shiv-video-vision-app/?open_notif=1";
+  const url = "https://mojosyscom-lang.github.io/shiv-video-vision-app/app.html?open_notif=1";
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true })
