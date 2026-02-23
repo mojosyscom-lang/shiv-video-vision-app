@@ -45,7 +45,9 @@ document.addEventListener("DOMContentLoaded", async() => {
    - Pulls from backend sheet "notifications"
    - Tap notification => opens Orders + jumps to order
    ========================================================== */
+  
 
+  
 (function initNotificationsPhase1(){
   function notifStampIST_(iso){
   const s = String(iso || "").trim();
@@ -281,6 +283,37 @@ function vibrateNotif_(){
   const panel = document.getElementById("notif_panel");
   const listEl = document.getElementById("notif_list");
   const closeBtn = document.getElementById("notif_close_btn");
+
+
+  // ✅ OPEN NOTIF CENTER from Service Worker click (push toast click)
+  // Added INSIDE IIFE so it can access bellBtn/panel/fetchNotifs_/stopBuzz_/api
+  if (!window.__notif_sw_listener_added__) {
+    window.__notif_sw_listener_added__ = true;
+
+    try {
+      navigator.serviceWorker?.addEventListener("message", async (ev) => {
+        const msg = ev?.data || {};
+        if (msg.action !== "OPEN_NOTIF_CENTER") return;
+
+        // 1) Open panel (ONLY notification center)
+        try {
+          if (panel && panel.style.display === "none") {
+            panel.style.display = "block";
+          }
+        } catch (e) {}
+
+        // 2) Stop buzzing + refresh
+        try { stopBuzz_(); } catch (e) {}
+        try { await fetchNotifs_(); } catch (e) {}
+
+        // 3) Mark all as read for THIS user (same as bell click)
+        try { await api({ action: "markAllNotificationsRead" }); } catch (e) {}
+        try { await fetchNotifs_(); } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  
 
   // ✅ Open notification panel if URL has ?open_notif=1 (from push click)
 (function openNotifFromUrl_(){
