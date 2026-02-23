@@ -671,6 +671,85 @@ const body =
      Helpers (UPDATED)
   ========================== */
 
+
+if ("Notification" in window) {
+  if (Notification.permission === "granted") {
+    const b = document.getElementById("enable_push_btn");
+    if (b) b.remove();
+  }
+}
+
+// ==========================================================
+// 🔔 ENABLE PUSH BUTTON (iPhone + User Gesture Required)
+// ==========================================================
+
+function addEnablePushButton_() {
+  try {
+    if (!("Notification" in window)) return;
+
+    // If already granted → do nothing
+    if (Notification.permission === "granted") return;
+
+    // Avoid duplicate button
+    if (document.getElementById("enable_push_btn")) return;
+
+    const btn = document.createElement("button");
+    btn.id = "enable_push_btn";
+    btn.textContent = "🔔 Enable Notifications";
+    btn.className = "primary";
+    btn.style.marginLeft = "10px";
+
+    btn.onclick = async () => {
+      try {
+        if (typeof window.__initFCMPush === "function") {
+          await window.__initFCMPush(api);
+        }
+
+        // Small delay to check permission
+        setTimeout(() => {
+          if (Notification.permission === "granted") {
+            btn.remove();
+            alert("Notifications enabled ✅");
+          } else {
+            alert("Please allow notifications in the popup.");
+          }
+        }, 800);
+
+      } catch (e) {
+        console.warn("Enable push failed:", e);
+      }
+    };
+
+    // Add button to header (adjust selector if needed)
+    const header = document.querySelector("header") || document.body;
+    header.appendChild(btn);
+
+  } catch (e) {}
+}
+
+// Call it once
+addEnablePushButton_();
+
+
+// For iphone only starts here
+
+
+  function isIOS_() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+function isStandalone_() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+if (isIOS_() && !isStandalone_()) {
+  console.log("iOS Safari detected. Push works only after Add to Home Screen.");
+}
+
+
+
+
+  
   /* =========================
    ✅ FINANCE EDIT PERMISSION (Paresh only)
    - Paresh stays owner (NOT superadmin)
