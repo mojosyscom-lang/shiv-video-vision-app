@@ -142,6 +142,35 @@
       <button data-nav="gst" onclick="navTo('gst'); closeDrawer()">🔣 GST</button>
       <button data-nav="reports" onclick="navTo('reports'); closeDrawer()">📊 Reports</button>
       <button data-nav="exports" onclick="navTo('exports'); closeDrawer()">📤 Exports</button>
+
+
+
+
+
+<button id="btn_enable_push" class="primary" style="margin:10px 0;">
+  🔔 Enable Notifications
+</button>
+
+<script>
+  document.getElementById("btn_enable_push")?.addEventListener("click", async () => {
+    try {
+      if (typeof window.__initFCMPush === "function") {
+        await window.__initFCMPush(window.api); // if api is global
+        alert("If prompted, allow notifications ✅");
+      } else {
+        alert("Push init not ready yet. Reload once and try again.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Enable failed: " + (e?.message || e));
+    }
+  });
+</script>
+
+
+
+
+      
     </div>
 
     <button data-nav="logout" onclick="logout()" style="margin-top:18px;">➜] Logout</button>
