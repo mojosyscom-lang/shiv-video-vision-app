@@ -282,6 +282,29 @@ function vibrateNotif_(){
   const listEl = document.getElementById("notif_list");
   const closeBtn = document.getElementById("notif_close_btn");
 
+  // ✅ Open notification panel if URL has ?open_notif=1 (from push click)
+(function openNotifFromUrl_(){
+  try {
+    const qs = new URLSearchParams(window.location.search || "");
+    if (qs.get("open_notif") !== "1") return;
+
+    // remove param so it won't reopen on refresh
+    const url = new URL(window.location.href);
+    url.searchParams.delete("open_notif");
+    history.replaceState({}, "", url.toString());
+
+    // open panel
+    if (panel) panel.style.display = "block";
+
+    // stop buzzing and refresh list
+    try { stopBuzz_(); } catch(e){}
+    fetchNotifs_();
+
+    // auto mark read for this user
+    api({ action: "markAllNotificationsRead" }).then(fetchNotifs_).catch(()=>{});
+  } catch(e){}
+})();
+
   if (closeBtn) closeBtn.onclick = () => { panel.style.display = "none"; };
 
   // ---- global jump helper (works after Orders loads)
