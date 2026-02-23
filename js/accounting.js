@@ -489,7 +489,7 @@ const firebaseConfig = {
 const FCM_VAPID_PUBLIC_KEY = "BC2HD4ZROwEdtICiq_TAwoEoCwSs4deb8PGEavhGfQSoIfY0jYIxLu2fV7lCeYpLoJbdRGlNX2A7DfxXPGnAHuA";
 
 // ✅ GitHub Pages SW path (repo = shiv-video-vision-app)
-const FCM_SW_PATH = "/shiv-video-vision-app/firebase-messaging-sw.js";
+const FCM_SW_PATH = "https://mojosyscom-lang.github.io/shiv-video-vision-app/firebase-messaging-sw.js";
 
 // ✅ REQUIRED by your existing caller: window.__initFCMPush(api)
 window.__initFCMPush = async function(api){
@@ -582,7 +582,7 @@ window.__initFCMPush = async function(api){
   try {
     if (!("serviceWorker" in navigator)) return;
 
-    await navigator.serviceWorker.register("/shiv-video-vision-app/firebase-messaging-sw.js");
+    await navigator.serviceWorker.register("https://mojosyscom-lang.github.io/shiv-video-vision-app/firebase-messaging-sw.js");
 
     if (typeof window.__initFCMPush === "function") {
       await window.__initFCMPush(api);
