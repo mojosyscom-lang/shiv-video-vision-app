@@ -157,12 +157,7 @@
     } catch(e){}
 
     // Register Service Worker (if your repo has sw.js at root)
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js").catch(console.warn);
-      });
-    }
-
+   
     // Redirect after the longer burst animation
     setTimeout(() => {
       const u = localStorage.getItem("username");
