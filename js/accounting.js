@@ -452,6 +452,122 @@ lastUnreadCount = unreadCount;
 
 
   // firebase starts here
+
+  // ===========================
+// 🔔 PHASE 2 - FCM PUSH INIT (DEFINE __initFCMPush)
+// ===========================
+
+// Loads firebase compat libs if not already loaded
+function _loadScriptOnce_(src){
+  return new Promise((resolve, reject) => {
+    try {
+      // already loaded?
+      if ([...document.scripts].some(s => String(s.src||"") === src)) return resolve(true);
+
+      const s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve(true);
+      s.onerror = (e) => reject(e);
+      document.head.appendChild(s);
+    } catch (e) { reject(e); }
+  });
+}
+
+// Your Firebase config (you said you already have it)
+const firebaseConfig = {
+  apiKey: "AIzaSyCCZaY4sCNz1bEp3RXs5d8y_fl5hPXzehc",
+  authDomain: "shiv-video-vision-app.firebaseapp.com",
+  projectId: "shiv-video-vision-app",
+  storageBucket: "shiv-video-vision-app.firebasestorage.app",
+  messagingSenderId: "504336545235",
+  appId: "1:504336545235:web:09ae89753a170fd3f1eb26",
+  measurementId: "G-CG2T5ZWNLS"
+};
+
+// Your VAPID key
+const FCM_VAPID_PUBLIC_KEY = "BC2HD4ZROwEdtICiq_TAwoEoCwSs4deb8PGEavhGfQSoIfY0jYIxLu2fV7lCeYpLoJbdRGlNX2A7DfxXPGnAHuA";
+
+// ✅ GitHub Pages SW path (repo = shiv-video-vision-app)
+const FCM_SW_PATH = "/shiv-video-vision-app/firebase-messaging-sw.js";
+
+// ✅ REQUIRED by your existing caller: window.__initFCMPush(api)
+window.__initFCMPush = async function(api){
+  try {
+    if (!("serviceWorker" in navigator)) return;
+
+    // 1) Load Firebase libraries (Compat keeps it simple)
+    // NOTE: Keep versions same for both scripts
+    await _loadScriptOnce_("https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js");
+    await _loadScriptOnce_("https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js");
+
+    if (!window.firebase || !firebase.apps) {
+      console.warn("Firebase SDK not loaded correctly.");
+      return;
+    }
+
+    // 2) Init firebase app (once)
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+    // 3) Ensure SW is registered and ready (use SAME path you already registered)
+    let reg = await navigator.serviceWorker.getRegistration(FCM_SW_PATH);
+    if (!reg) reg = await navigator.serviceWorker.register(FCM_SW_PATH);
+    await navigator.serviceWorker.ready;
+
+    // 4) Request permission (will only fully work after user gesture in many browsers)
+    // If blocked, we just exit quietly.
+    if (Notification && Notification.permission === "default") {
+      try { await Notification.requestPermission(); } catch(e){}
+    }
+    if (!Notification || Notification.permission !== "granted") {
+      // Don’t spam user with alerts; permission may require user click
+      console.warn("Push permission not granted yet:", Notification?.permission);
+      return;
+    }
+
+    // 5) Get token
+    const messaging = firebase.messaging();
+
+    let token = "";
+    try {
+      token = await messaging.getToken({
+        vapidKey: FCM_VAPID_PUBLIC_KEY,
+        serviceWorkerRegistration: reg
+      });
+    } catch (e) {
+      console.warn("FCM getToken failed:", e);
+      return;
+    }
+
+    if (!token) return;
+
+    // 6) Save token to backend
+    try {
+      const platform =
+        /android/i.test(navigator.userAgent) ? "android" :
+        /iphone|ipad|ipod/i.test(navigator.userAgent) ? "ios" :
+        "web";
+
+      const r = await api({ action: "upsertPushToken", token, platform });
+      if (r && r.error) console.warn("upsertPushToken error:", r.error);
+    } catch(e){
+      console.warn("upsertPushToken call failed:", e);
+    }
+
+    // 7) Foreground messages (when app open)
+    // We dispatch an event so your Notifications module can react if you want later.
+    try {
+      messaging.onMessage((payload) => {
+        try {
+          document.dispatchEvent(new CustomEvent("svv_fcm_foreground", { detail: payload }));
+        } catch(e){}
+      });
+    } catch(e){}
+
+  } catch(e){
+    console.warn("__initFCMPush failed:", e);
+  }
+};
   
 // ===========================
 // 🔔 PHASE 2 - FCM INIT
