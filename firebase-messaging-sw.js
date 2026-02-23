@@ -21,10 +21,17 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload) {
   console.log("🔔 Background message:", payload);
 
-  const notificationTitle = payload.data?.title || "Notification";
+  const notificationTitle =
+  payload?.notification?.title ||
+  payload?.data?.title ||
+  "Notification";
+
 const notificationOptions = {
-  body: payload.data?.body || "",
-  data: payload.data || {}
+  body:
+    payload?.notification?.body ||
+    payload?.data?.body ||
+    "",
+  data: payload?.data || {}
 };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
