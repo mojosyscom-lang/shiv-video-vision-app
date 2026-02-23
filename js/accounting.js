@@ -498,8 +498,8 @@ window.__initFCMPush = async function(api){
 
     // 1) Load Firebase libraries (Compat keeps it simple)
     // NOTE: Keep versions same for both scripts
-    await _loadScriptOnce_("https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js");
-    await _loadScriptOnce_("https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js");
+  await _loadScriptOnce_("https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js");
+  await _loadScriptOnce_("https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging-compat.js");
 
     if (!window.firebase || !firebase.apps) {
       console.warn("Firebase SDK not loaded correctly.");
@@ -557,11 +557,17 @@ window.__initFCMPush = async function(api){
     // 7) Foreground messages (when app open)
     // We dispatch an event so your Notifications module can react if you want later.
     try {
-      messaging.onMessage((payload) => {
-        try {
-          document.dispatchEvent(new CustomEvent("svv_fcm_foreground", { detail: payload }));
-        } catch(e){}
-      });
+     messaging.onMessage((payload) => {
+  try {
+    const title = payload.notification?.title || "Notification";
+    const body = payload.notification?.body || "";
+
+    if (Notification && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+
+  } catch(e){}
+});
     } catch(e){}
 
   } catch(e){
