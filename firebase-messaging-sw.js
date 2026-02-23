@@ -1,8 +1,8 @@
 // 🔔 Firebase Service Worker (Compat version)
 
 // IMPORTANT: Use compat versions to avoid ES module errors
-importScripts("https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging-compat.js");
 
 // Your Firebase config
 firebase.initializeApp({
