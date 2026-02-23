@@ -103,6 +103,112 @@ function isTodayIST_(iso){
     return String(s || "").replace(/["\\]/g, "\\$&");
   }
 
+  
+// ✅ Bell buzz animation CSS (insert once)
+if (!document.getElementById("notif_bell_css")) {
+  const st = document.createElement("style");
+  st.id = "notif_bell_css";
+  st.textContent = `
+    @keyframes notifBellShake {
+      0% { transform: rotate(0deg); }
+      10% { transform: rotate(-12deg); }
+      20% { transform: rotate(12deg); }
+      30% { transform: rotate(-10deg); }
+      40% { transform: rotate(10deg); }
+      50% { transform: rotate(-7deg); }
+      60% { transform: rotate(7deg); }
+      70% { transform: rotate(-4deg); }
+      80% { transform: rotate(4deg); }
+      90% { transform: rotate(-2deg); }
+      100% { transform: rotate(0deg); }
+    }
+    .notif-buzz {
+      animation: notifBellShake 650ms ease-in-out;
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+// ✅ Simple beep using Web Audio (no mp3 needed)
+let notifAudioReady = false;
+let notifAudioCtx = null;
+
+function ensureNotifAudio_(){
+  if (notifAudioReady) return true;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return false;
+    notifAudioCtx = notifAudioCtx || new Ctx();
+    // Some browsers start in "suspended" until user gesture
+    if (notifAudioCtx.state === "suspended") {
+      // we'll resume on user gesture
+      return false;
+    }
+    notifAudioReady = true;
+    return true;
+  } catch(e){
+    return false;
+  }
+}
+
+function armNotifAudioOnGesture_(){
+  const arm = async () => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      notifAudioCtx = notifAudioCtx || new Ctx();
+      if (notifAudioCtx.state === "suspended") {
+        await notifAudioCtx.resume();
+      }
+      notifAudioReady = true;
+      document.removeEventListener("touchstart", arm, true);
+      document.removeEventListener("mousedown", arm, true);
+      document.removeEventListener("keydown", arm, true);
+    } catch(e){}
+  };
+  document.addEventListener("touchstart", arm, true);
+  document.addEventListener("mousedown", arm, true);
+  document.addEventListener("keydown", arm, true);
+}
+armNotifAudioOnGesture_();
+
+function playNotifBeep_(){
+  try {
+    if (!notifAudioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      notifAudioCtx = new Ctx();
+    }
+    if (notifAudioCtx.state === "suspended") return; // will work after a tap
+    const o = notifAudioCtx.createOscillator();
+    const g = notifAudioCtx.createGain();
+    o.type = "sine";
+    o.frequency.value = 880; // beep
+    g.gain.value = 0.05;     // low volume
+    o.connect(g);
+    g.connect(notifAudioCtx.destination);
+    o.start();
+    setTimeout(() => { try { o.stop(); } catch(e){} }, 140);
+  } catch(e){}
+}
+
+function buzzBell_(){
+  const btn = document.getElementById("notif_bell_btn");
+  if (!btn) return;
+  btn.classList.remove("notif-buzz");
+  // restart animation
+  void btn.offsetWidth;
+  btn.classList.add("notif-buzz");
+  setTimeout(() => btn.classList.remove("notif-buzz"), 700);
+}
+
+function vibrateNotif_(){
+  try {
+    if (navigator && typeof navigator.vibrate === "function") {
+      navigator.vibrate([80, 40, 80]); // buzz pattern
+    }
+  } catch(e){}
+}
   // ---- build UI once
   if (!document.getElementById("notif_bell_wrap")) {
     const wrap = document.createElement("div");
@@ -141,14 +247,7 @@ function isTodayIST_(iso){
     panel.style.borderRadius = "14px";
     panel.style.boxShadow = "0 10px 30px rgba(0,0,0,0.15)";
     panel.innerHTML = `
-      <div style="padding:12px 12px 6px 12px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between;">
-        <div style="font-weight:800;">Notifications</div>
-        <button id="notif_close_btn" class="userToggleBtn">Close</button>
-      </div>
-      <div id="notif_list" style="padding:10px;"></div>
-      <div style="padding:10px 12px; border-top:1px solid #eee; font-size:12px; color:#666;">
-        Tip: Tap a notification to open the Order.
-      </div>
+          <div id="notif_list" style="padding:10px;"></div>
     `;
     document.body.appendChild(panel);
 
@@ -202,10 +301,29 @@ function isTodayIST_(iso){
       if (tries >= 20) clearInterval(timer); // ~6 seconds
     }, 300);
   };
-
+let lastUnreadCount = 0;
+let firstNotifPoll = true; // prevent buzz on initial load
   // ---- fetch + render
   async function fetchNotifs_(){
     try {
+
+      // ✅ badge: unread only
+let unreadCount = 0;
+try {
+  const unreadRes = await api({ action: "listNotifications", only_unread: "1", limit: 200 });
+  const unreadArr = Array.isArray(unreadRes) ? unreadRes : [];
+  unreadCount = unreadArr.length;
+
+  if (unreadCount > 0) {
+    badge.style.display = "block";
+    badge.textContent = String(unreadCount);
+  } else {
+    badge.style.display = "none";
+    badge.textContent = "0";
+  }
+} catch (e) {}
+
+      
       const res = await api({ action: "listNotifications", only_unread: "0", limit: 25 });
       const arr = Array.isArray(res) ? res : [];
       // ✅ Keep panel clean: show all UNREAD, plus today's READ
@@ -216,14 +334,18 @@ const visible = arr.filter(n => {
 });
 
       
-      const unreadCount = visible.filter(x => String(x.status || "").toUpperCase() !== "READ").length;
-      if (unreadCount > 0) {
-        badge.style.display = "block";
-        badge.textContent = String(unreadCount);
-      } else {
-        badge.style.display = "none";
-      }
+const panelOpen = panel && panel.style.display !== "none";
 
+// ✅ Buzz + vibrate + beep when new unread arrives (app open)
+if (!panelOpen && !firstNotifPoll && unreadCount > lastUnreadCount) {
+  buzzBell_();
+  vibrateNotif_();
+  if (ensureNotifAudio_()) playNotifBeep_();
+}
+firstNotifPoll = false;
+lastUnreadCount = unreadCount;
+
+      
       // render list
       if (!listEl) return;
       if (!visible.length) {
@@ -237,17 +359,17 @@ const visible = arr.filter(n => {
         const by = escapeHtml(n.created_by || "SYSTEM");
         const stamp = escapeHtml(notifStampIST_(n.created_at || n.sent_at || ""));
         const body = escapeHtml(n.body || "");
-        const oid = escapeAttr(n.order_id || "");
-        const id = escapeAttr(n.notif_id || "");
-        return `
+               return `
           <div style="padding:10px; border:1px solid #eee; border-radius:12px; margin-bottom:10px; background:${isRead ? "#fafafa" : "#fff"};">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <div style="font-weight:900; font-size:13px;">
-  ${title} <span style="font-weight:700; color:#666;">| Created by: ${by}</span>
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+  <div style="min-width:0;">
+    <div style="font-weight:900; font-size:13px;">
+      ${title} <span style="font-weight:700; color:#666;">| Created by: ${by}</span>
+    </div>
+    <div style="margin-top:3px; font-size:11px; color:#777;">${stamp}</div>
+  </div>
+  ${isRead ? `<span style="font-size:11px; color:#777;">Read</span>` : `<span style="font-size:11px; color:#d93025; font-weight:800;">New</span>`}
 </div>
-<div style="margin-top:3px; font-size:11px; color:#777;">${stamp}</div>
-              ${isRead ? `<span style="font-size:11px; color:#777;">Read</span>` : `<span style="font-size:11px; color:#d93025; font-weight:800;">New</span>`}
-            </div>
             <div style="margin-top:6px; font-size:12.5px; color:#333; line-height:1.35;">${body}</div>
         
           </div>
@@ -275,12 +397,7 @@ const visible = arr.filter(n => {
     };
   }
 
-  // click handlers inside panel
-  if (panel) {
-    panel.addEventListener("click", async (e) => {
-        
-    });
-  }
+ 
 
   // initial + polling
   fetchNotifs_();
