@@ -489,7 +489,7 @@ const firebaseConfig = {
 const FCM_VAPID_PUBLIC_KEY = "BC2HD4ZROwEdtICiq_TAwoEoCwSs4deb8PGEavhGfQSoIfY0jYIxLu2fV7lCeYpLoJbdRGlNX2A7DfxXPGnAHuA";
 
 // ✅ GitHub Pages SW path (repo = shiv-video-vision-app)
-const FCM_SW_PATH = "https://mojosyscom-lang.github.io/shiv-video-vision-app/firebase-messaging-sw.js";
+const FCM_SW_PATH = "./firebase-messaging-sw.js";
 
 // ✅ REQUIRED by your existing caller: window.__initFCMPush(api)
 window.__initFCMPush = async function(api){
@@ -510,9 +510,9 @@ window.__initFCMPush = async function(api){
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
     // 3) Ensure SW is registered and ready (use SAME path you already registered)
-    let reg = await navigator.serviceWorker.getRegistration(FCM_SW_PATH);
-    if (!reg) reg = await navigator.serviceWorker.register(FCM_SW_PATH);
-    await navigator.serviceWorker.ready;
+  let reg = await navigator.serviceWorker.getRegistration();
+if (!reg) reg = await navigator.serviceWorker.register(FCM_SW_PATH, { scope: "./" });
+await navigator.serviceWorker.ready;
 
     // 4) Request permission (will only fully work after user gesture in many browsers)
     // If blocked, we just exit quietly.
@@ -559,8 +559,15 @@ window.__initFCMPush = async function(api){
     try {
      messaging.onMessage((payload) => {
   try {
-    const title = payload.notification?.title || "Notification";
-    const body = payload.notification?.body || "";
+   const title =
+  payload?.notification?.title ||
+  payload?.data?.title ||
+  "Notification";
+
+const body =
+  payload?.notification?.body ||
+  payload?.data?.body ||
+  "";
 
     if (Notification && Notification.permission === "granted") {
       new Notification(title, { body });
@@ -582,7 +589,7 @@ window.__initFCMPush = async function(api){
   try {
     if (!("serviceWorker" in navigator)) return;
 
-    await navigator.serviceWorker.register("https://mojosyscom-lang.github.io/shiv-video-vision-app/firebase-messaging-sw.js");
+  //  await navigator.serviceWorker.register("https://mojosyscom-lang.github.io/shiv-video-vision-app/firebase-messaging-sw.js");
 
     if (typeof window.__initFCMPush === "function") {
       await window.__initFCMPush(api);
