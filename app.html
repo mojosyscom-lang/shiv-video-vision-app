@@ -152,61 +152,67 @@
 </button>
 
 <script>
- const pushBtn = document.getElementById("btn_enable_push");
+document.addEventListener("DOMContentLoaded", () => {
 
-function updatePushBtnVisibility() {
+  const pushBtn = document.getElementById("btn_enable_push");
   if (!pushBtn) return;
 
-  if (!("Notification" in window)) {
-    pushBtn.style.display = "none";
-    return;
-  }
+  function updatePushBtnVisibility() {
+    if (!("Notification" in window)) {
+      pushBtn.style.display = "none";
+      return;
+    }
 
-  if (Notification.permission === "granted") {
-    pushBtn.style.display = "none";
-  } else {
-    pushBtn.style.display = "block";
-  }
+   if (Notification.permission === "denied") {
+  pushBtn.textContent = "🔔 Notifications Blocked";
+} else {
+  pushBtn.textContent = "🔔 Enable Notifications";
 }
 
-// Initial visibility check
-updatePushBtnVisibility();
-
-// Handle click
-pushBtn?.addEventListener("click", async () => {
-  try {
-
-    // iPhone requires PWA mode
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      window.navigator.standalone === true;
-
-    if (isIOS && !isStandalone) {
-      alert("On iPhone:\n1) Tap Share\n2) Add to Home Screen\n3) Open from Home Screen\n4) Then tap Enable Notifications.");
-      return;
-    }
-
-    if (typeof window.__initFCMPush === "function") {
-      await window.__initFCMPush(api);
+    if (Notification.permission === "granted") {
+      pushBtn.style.display = "none";
     } else {
-      alert("Push system not ready. Reload once and try again.");
-      return;
+      pushBtn.style.display = "block";
     }
-
-    setTimeout(() => {
-      if (Notification.permission === "granted") {
-        alert("Notifications enabled ✅");
-      } else if (Notification.permission === "denied") {
-        alert("Notifications are blocked. Enable them from browser settings.");
-      }
-      updatePushBtnVisibility();
-    }, 700);
-
-  } catch (e) {
-    console.error(e);
-    alert("Enable failed: " + (e?.message || e));
   }
+
+  updatePushBtnVisibility();
+
+  pushBtn.addEventListener("click", async () => {
+    try {
+
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        window.navigator.standalone === true;
+
+      if (isIOS && !isStandalone) {
+        alert("On iPhone:\n1) Tap Share\n2) Add to Home Screen\n3) Open from icon\n4) Tap Enable Notifications.");
+        return;
+      }
+
+      if (typeof window.__initFCMPush === "function") {
+        await window.__initFCMPush(api);
+      } else {
+        alert("Push system not ready. Reload once and try again.");
+        return;
+      }
+
+      setTimeout(() => {
+        if (Notification.permission === "granted") {
+          alert("Notifications enabled ✅");
+        } else if (Notification.permission === "denied") {
+          alert("Notifications blocked. Enable in browser settings.");
+        }
+        updatePushBtnVisibility();
+      }, 600);
+
+    } catch (e) {
+      console.error(e);
+      alert("Enable failed: " + (e?.message || e));
+    }
+  });
+
 });
 </script>
 
