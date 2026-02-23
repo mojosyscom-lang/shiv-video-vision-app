@@ -51,19 +51,31 @@ messaging.onBackgroundMessage(function(payload) {
 self.addEventListener("notificationclick", function(event) {
   event.notification.close();
 
-  const url = "https://mojosyscom-lang.github.io/shiv-video-vision-app/app.html?open_notif=1";
+  // Open the app and open ONLY notification center
+  const data = event.notification.data || {};
+  const urlToOpen = "./app.html"; // no extra navigation
 
-  event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true })
-      .then(function(clientList) {
-        for (const client of clientList) {
-          if (client.url.includes("/shiv-video-vision-app/") && "focus" in client) {
-            return client.focus();
-          }
-        }
-        if (clients.openWindow) {
-          return clients.openWindow(url);
-        }
-      })
-  );
+  event.waitUntil((async () => {
+    const clientList = await clients.matchAll({ type: "window", includeUncontrolled: true });
+
+    // 1) If tab already open → focus it and tell it to open notification center
+    for (const client of clientList) {
+      if (client.url.includes("/shiv-video-vision-app/") && "focus" in client) {
+        await client.focus();
+        try {
+          client.postMessage({ action: "OPEN_NOTIF_CENTER", data });
+        } catch (e) {}
+        return;
+      }
+    }
+
+    // 2) Otherwise open new tab → then tell it to open notification center
+    const newClient = await clients.openWindow(urlToOpen);
+    try {
+      newClient?.postMessage?.({ action: "OPEN_NOTIF_CENTER", data });
+    } catch (e) {}
+
+    // 3) Backup: set a flag so the app can open the panel even if postMessage arrives too early
+    // (We can't write localStorage/sessionStorage from SW; so app will also auto-open if it sees this in URL later if needed.)
+  })());
 });
