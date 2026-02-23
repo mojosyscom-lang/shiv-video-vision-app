@@ -428,7 +428,27 @@ lastUnreadCount = unreadCount;
 
 
 
+  // firebase starts here
+  
+// ===========================
+// 🔔 PHASE 2 - FCM INIT
+// ===========================
+(async function(){
+  try {
+    if (!("serviceWorker" in navigator)) return;
 
+    await navigator.serviceWorker.register("/shiv-video-vision-app/firebase-messaging-sw.js");
+
+    if (typeof window.__initFCMPush === "function") {
+      await window.__initFCMPush(api);
+    }
+
+  } catch(e){
+    console.warn("FCM init failed:", e);
+  }
+})();
+
+// firebase ends here -----------
   
   /* =========================
      SPEED CACHE (NEW)
@@ -11025,30 +11045,5 @@ async function apiUploadBase64(action, file, extraPayload = {}) {
 }
 
 
-// ✅ Phase 2 Push init (FCM)
-(async function(){
-  try {
-    if (!("serviceWorker" in navigator)) return;
-
-    // Register SW
-    await navigator.serviceWorker.register("./firebase-messaging-sw.js");
-
-    // ✅ Paste your config + VAPID key
-    const firebaseConfig = {
-      apiKey: "AIzaSyCCZaY4sCNz1bEp3RXs5d8y_fl5hPXzehc",
-      authDomain: "shiv-video-vision-app.firebaseapp.com",
-      projectId: "shiv-video-vision-app",
-      messagingSenderId: "504336545235",
-      appId: "1:504336545235:web:09ae89753a170fd3f1eb26"
-    };
-    const vapidKey = "BC2HD4ZROwEdtICiq_TAwoEoCwSs4deb8PGEavhGfQSoIfY0jYIxLu2fV7lCeYpLoJbdRGlNX2A7DfxXPGnAHuA";
-
-    if (typeof window.__initFCMPush === "function") {
-      await window.__initFCMPush(firebaseConfig, vapidKey, api);
-    }
-  } catch(e) {
-    console.warn("FCM init failed:", e);
-  }
-})();
 
 
