@@ -5394,6 +5394,33 @@ document.getElementById("inv_end")?.addEventListener("change", refreshDefaultDay
 if (bad) return alert("Item Name required (and no negative qty/rate/days).");
 
 
+
+
+// ✅ Ensure LED Size is SAVED in item_name before sending payload (so Print from saved invoice keeps it)
+try {
+  const raw = getSelectedOrderLedSizeRaw_();     // "12x10" from selected order details
+  const label = formatLedSizeLabel_(raw);        // "Size: 12' x 10'"
+  if (label) {
+    currentItems = currentItems.map(it => {
+      const id = String(it.item_id || "").trim();
+      const nm = String(it.item_name || "");
+
+      const isLed =
+        (id === "IT-260213181906-687") ||
+        (nm.trim().toLowerCase().startsWith("led wall on rent"));
+
+      if (!isLed) return it;
+      if (/\bSize\s*:/i.test(nm)) return it; // already has Size line
+
+      return { ...it, item_name: nm + "\n" + label };
+    });
+  }
+} catch (e) {
+  console.warn("INV: finalize size failed", e);
+}
+
+      
+
       const payload = {
         invoice_id: editingInvoiceId,
         doc_type,
