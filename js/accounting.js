@@ -11341,5 +11341,6 @@ async function apiUploadBase64(action, file, extraPayload = {}) {
 }
 
 
-
+console.log("iOS standalone (legacy):", window.navigator.standalone);
+console.log("display-mode standalone:", window.matchMedia("(display-mode: standalone)").matches);
 
