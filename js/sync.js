@@ -2,7 +2,7 @@
 function updateNet() {
   const el = document.getElementById("netStatus");
   if (!el) return;
-  el.innerText = navigator.onLine ? "🟢 Online" : "🔴 Offline";
+  el.innerText = navigator.onLine ? "" : "🔴 Offline";
 }
 
 /* ------------------ Sync Queue ------------------ */
