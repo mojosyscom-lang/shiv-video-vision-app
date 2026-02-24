@@ -4136,7 +4136,16 @@ function roundQtyNoDecimals(n){
 const INVOICE_BG_URL = String(company.print_bg_url || "").trim();
   // ✅ LED Wall conversion: cabinets -> sq ft
 const LED_WALL_SQFT_PER_CABINET = 2.691;
+// ✅ Your LED Wall inventory item id (single source)
+const LED_WALL_ITEM_ID = "IT-260213181906-687";
 
+function isLedWallItem_(item_id, name){
+  const idOk = String(item_id||"").trim() === LED_WALL_ITEM_ID;
+  const nameOk = String(name||"").trim().toLowerCase() === "led wall on rent";
+  return idOk || nameOk;
+}
+
+  
 // ✅ Detect which planned item needs conversion
 // Option A: by name (recommended for you right now)
 function isLedWallLine(name){
@@ -4262,12 +4271,17 @@ function extractLedSizeRawFromText_(txt){
 // tries to fetch order.details from whatever list you already have in memory
 function getSelectedOrderLedSizeRaw_(){
   try{
-    // ✅ you likely have an order dropdown in invoice
     const sel = document.getElementById("inv_order_pick");
+    const opt = sel?.selectedOptions?.[0];
     const order_id = String(sel?.value || "").trim();
     if (!order_id) return "";
 
-    // ✅ common global caches used in your codebase
+    // ✅ BEST: directly read details from selected option (no cache dependency)
+    const optDetails = String(opt?.getAttribute("data-details") || "").trim();
+    const raw1 = extractLedSizeRawFromText_(optDetails);
+    if (raw1) return raw1;
+
+    // fallback: old cache scanning (keep as backup)
     const listsToTry = [
       window.__ordersCache,
       window.allOrders,
@@ -4281,11 +4295,10 @@ function getSelectedOrderLedSizeRaw_(){
       if (!Array.isArray(L)) continue;
       const o = L.find(x => String(x.order_id||x.id||"").trim() === order_id);
       if (o){
-        const raw = extractLedSizeRawFromText_(o.details || "");
+        const raw = extractLedSizeRawFromText_(o.details || o.order_details || o.note || o.notes || "");
         if (raw) return raw;
       }
     }
-
     return "";
   }catch(e){
     return "";
@@ -4677,11 +4690,11 @@ currentItems = planned
 // ✅ Append LED Size below LED Wall on Rent line (from selected order details)
 // Will not duplicate if already added
 try{
-  if (isLedWallLine(item_name) && !/\bSize\s*:/i.test(item_name)) {
-    const raw = getSelectedOrderLedSizeRaw_(); // "12x10"
-    const label = formatLedSizeLabel_(raw);    // "Size: 12' x 10'"
-    if (label) item_name = item_name + "\n" + label;
-  }
+  if (isLedWallItem_(item_id, item_name) && !/\bSize\s*:/i.test(item_name)) {
+  const raw = getSelectedOrderLedSizeRaw_(); // "12x10"
+  const label = formatLedSizeLabel_(raw);    // "Size: 12' x 10'"
+  if (label) item_name = item_name + "\n" + label;
+}
 }catch(e){}
     
     let qty = Number(p.planned_qty||0);
@@ -4689,10 +4702,10 @@ try{
     let hsn_sac = hsnMap[item_id] || "";
 
     // ✅ Convert LED Wall cabinets -> sq ft
-    if (isLedWallLine(item_name)) {
-      qty = Math.round((qty * LED_WALL_SQFT_PER_CABINET) * 100) / 100; // 2 decimals
-      unit = unit || "sq ft"; // force unit for clarity
-    }
+   if (isLedWallItem_(item_id, item_name)) {
+  qty = Math.round((qty * LED_WALL_SQFT_PER_CABINET) * 100) / 100;
+  unit = unit || "sq ft";
+}
 
     return {
       item_id,
@@ -4781,6 +4794,7 @@ try{
               data-setup="${escapeAttr(String(prettyISODate(o.setup_date||"")))}"
               data-start="${escapeAttr(String(prettyISODate(o.start_date||"")))}"
               data-end="${escapeAttr(String(prettyISODate(o.end_date||"")))}"
+              data-details="${escapeAttr(String(o.details || o.order_details || o.note || o.notes || ""))}"
             >${escapeHtml(label)}</option>`;
           }).join("")}
         </select>
