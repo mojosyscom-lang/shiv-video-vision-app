@@ -4113,7 +4113,7 @@ lastSavedInvoiceId = sessionStorage.getItem("lastSavedInvoiceId") || "";
 lastSavedInvoiceNo = sessionStorage.getItem("lastSavedInvoiceNo") || "";
 
   let currentItems = [];         // [{item_id,item_name,qty,unit,rate,amount}]
-  let currentDocType = "INVOICE"; // "INVOICE" or "QUOTATION"
+  let currentDocType = "QUOTATION"; // "INVOICE" or "QUOTATION"
   let currentHeaderCache = null; // last loaded/saved header for print/wa
 
   function norm(s){ return String(s||"").trim().toLowerCase(); }
@@ -4386,13 +4386,28 @@ function calcEventDays(setupISO, startISO, endISO){
     document.getElementById("inv_client_gstin").textContent = cf?.gstin || "";
   }
 
-  function setOrderFields(o){
-    document.getElementById("inv_order_id").textContent = o?.order_id || "";
-    document.getElementById("inv_venue").value = o?.venue || "";
-    document.getElementById("inv_setup").value = prettyISODate(o?.setup_date || "");
-    document.getElementById("inv_start").value = prettyISODate(o?.start_date || "");
-    document.getElementById("inv_end").value = prettyISODate(o?.end_date || "");
+function setOrderFields(o){
+  document.getElementById("inv_order_id").textContent = o?.order_id || "";
+  document.getElementById("inv_venue").value = o?.venue || "";
+  document.getElementById("inv_setup").value = prettyISODate(o?.setup_date || "");
+  document.getElementById("inv_start").value = prettyISODate(o?.start_date || "");
+
+  const endEl = document.getElementById("inv_end");
+  const endISO = String(o?.end_date || "").trim();
+  if (endEl){
+    if (!endISO){
+      endEl.value = "";
+      endEl.disabled = true; // fixed installation
+    } else {
+      endEl.disabled = false;
+      endEl.value = prettyISODate(endISO);
+    }
   }
+}
+
+
+
+  
 
   // Indian number words (simple)
   function amountInWordsIN(num){
@@ -4958,6 +4973,23 @@ currentItems = planned
           <input id="inv_words" placeholder="Auto" readonly>
         </div>
 
+        <label style="margin-top:12px;">Terms:</label>
+<textarea id="inv_terms" rows="4" placeholder="Type terms.">${escapeHtml(company.terms || "")}</textarea>
+
+<div id="inv_install_terms_block" style="display:none;">
+  <label style="margin-top:12px;">Terms & Conditions (Fixed Installation):</label>
+  <textarea id="inv_install_terms" rows="4" placeholder="Type terms & conditions for fixed installation..."></textarea>
+</div>
+
+        <div class="card" id="inv_install_terms_block" style="margin-top:12px; display:none;">
+          <b>Installation Terms & Conditions</b>
+          <div class="dashSmall" style="margin-top:6px;color:#777;">
+            Visible only for <b>Fixed Installation</b>. Saved inside this document.
+          </div>
+          <textarea id="inv_install_terms" rows="4" placeholder="1. ...&#10;2. ..."></textarea>
+        </div>
+
+
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
           ${canEdit ? `<button class="primary" id="btn_inv_save">💾 Save</button>` : ``}
           <button class="primary" id="btn_quote_convert" style="background:#0b57d0; display:none;">
@@ -4993,6 +5025,37 @@ currentItems = planned
     </div>
   `;
 
+
+// Fixed installation starts here
+// ✅ Terms & Conditions auto-numbering (1., 2., 3. ... on Enter)
+function initTermsNumbering_(ta){
+  if (!ta) return;
+  const renumber = () => {
+    const lines = String(ta.value || "").split("\n");
+    let n = 1;
+    const out = lines.map(line => {
+      const raw = String(line || "").trim();
+      if (!raw) return "";
+      // remove existing leading "1." "2." etc
+      const cleaned = raw.replace(/^\d+\.\s*/,"");
+      return `${n++}. ${cleaned}`;
+    });
+    ta.value = out.join("\n");
+  };
+
+  ta.addEventListener("keydown", (e)=>{
+    if (e.key === "Enter") {
+      // allow enter, but renumber after new line created
+      setTimeout(renumber, 0);
+    }
+  });
+  ta.addEventListener("blur", renumber);
+}
+
+  // Fixed installation ends here
+
+
+  
 
   // ===============================
 // ✅ LED Size UI live behavior (Invoice)
@@ -5075,7 +5138,12 @@ currentItems = planned
 })();
 
   // init doc type + gst defaults
+
+  /* this is mistake culprit for invoice set doc type
   setDocTypeUI("INVOICE");
+  */
+
+  setDocTypeUI("QUOTATION");
   const gstTypeSel = document.getElementById("inv_gst_type");
   if (gstTypeSel) gstTypeSel.value = defaultGSTType;
   applyGSTDefaultsToUI();
@@ -5155,7 +5223,7 @@ currentItems = currentItems.map(it => ({
   manual_days: it.manual_days || false
 }));
 renderItemsTable();
-
+applyFixedInstallInvoiceUI_();
 
     
   });
@@ -5437,8 +5505,11 @@ try {
         setup_date,
         start_date,
         end_date,
+        install_terms: String(document.getElementById("inv_install_terms")?.value || "").trim(),
         gst_type,
         gst_rate,
+        terms,
+fixed_install: !!document.getElementById("inv_end")?.disabled || !String(end_date||"").trim(),
        items: currentItems.map(it => ({
   item_id: it.item_id,
   item_name: it.item_name,
@@ -5497,7 +5568,7 @@ return; // ✅ IMPORTANT: stop here, don't touch old DOM after reload
   document.getElementById("btn_inv_save")?.addEventListener("click", saveDoc);
 // ✅ safe place (function exists below)
 setTimeout(updateConvertBtnVisibility_, 0);
-
+setTimeout(applyFixedInstallInvoiceUI_, 0);
 function updateConvertBtnVisibility_(){
   const btn = document.getElementById("btn_quote_convert");
   if (!btn) return;
@@ -5610,7 +5681,7 @@ function isBlankOrZero(v){
             <div><b>Venue:</b> ${escapeHtml(header.venue||"")}</div>
             <div><b>Setup:</b> ${escapeHtml(fmtDDMMYYYY(header.setup_date||""))}</div>
 <div><b>Start:</b> ${escapeHtml(fmtDDMMYYYY(header.start_date||""))}</div>
-<div><b>End:</b> ${escapeHtml(fmtDDMMYYYY(header.end_date||""))}</div>
+${header.end_date ? `<div><b>End:</b> ${escapeHtml(fmtDDMMYYYY(header.end_date||""))}</div>` : ``}
           </div>
         </div>
 
@@ -5694,7 +5765,7 @@ function isBlankOrZero(v){
             <div class="footLeft">
   <div><b>Amount in Words:</b> ${escapeHtml(header.words||"")}</div>
   <div style="margin-top:8px;"><b>Terms:</b> ${escapeHtml(terms)}</div>
-
+${header.install_terms ? `<div style="margin-top:8px;"><b>Installation Terms:</b><br>${escapeHtml(header.install_terms).replace(/\n/g,"<br>")}</div>` : ``}
   ${
     String(header.doc_type || "").toUpperCase() === "QUOTATIONsSHOW"
       ? ``
@@ -6255,6 +6326,38 @@ applyDocTypeRules();
       });
     });
 
+
+
+  function applyFixedInstallInvoiceUI_(){
+  const end = document.getElementById("inv_end");
+  const pick = document.getElementById("inv_order_pick");
+  const termsBox = document.getElementById("inv_install_terms_block");
+  const termsInp = document.getElementById("inv_install_terms");
+  if (!end || !pick) return;
+
+  const opt = pick.selectedOptions?.[0];
+  const endVal = String(opt?.getAttribute("data-end") || "").trim(); // "" means fixed install
+
+  const isFixed = !endVal; // ✅ trigger
+
+  if (isFixed) {
+    end.value = "";
+    end.disabled = true;
+
+    if (termsBox) termsBox.style.display = "";
+    // Prefill from company profile default ONLY if empty
+    if (termsInp && !termsInp.value.trim()) {
+      termsInp.value = String(company.install_terms || "").trim();
+      if (typeof initTermsNumbering_ === "function") initTermsNumbering_(termsInp);
+    }
+  } else {
+    end.disabled = false;
+    if (termsBox) termsBox.style.display = "none";
+  }
+}
+
+
+    
     // cancel
     listBox.querySelectorAll("button[data-cancel]").forEach(b=>{
       b.addEventListener("click", async ()=>{
@@ -8168,6 +8271,13 @@ if (type === "orders") {
           <label style="margin-top:10px;">Start Date <span style="color:#e33;">*</span></label>
           <input id="ord_start" type="date" value="${todayISO()}">
 
+
+          <!-- ✅ Fixed Installation -->
+          <label style="margin-top:10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;width:fit-content;">
+          <input id="ord_fixed_install" type="checkbox" style="width:auto; height:auto; margin:0; padding:0;">
+          Fixed Installation
+          </label>
+
           <label style="margin-top:10px;">End Date <span style="color:#e33;">*</span></label>
           <input id="ord_end" type="date" value="${todayISO()}">
 
@@ -8272,7 +8382,38 @@ if (detailsInput && widthInput && heightInput) {
   });
 }
 
+// fixed installation listeners
 
+// fixed installation listeners
+
+function applyFixedInstallOrderUI_(){
+  const chk = document.getElementById("ord_fixed_install");
+  const end = document.getElementById("ord_end");
+  if (!chk || !end) return;
+
+  if (chk.checked) {
+    // ✅ Fixed install => end date blank + locked
+    end.value = "";
+    end.disabled = true;
+  } else {
+    end.disabled = false;
+    // optional: if blank, set today so user doesn't accidentally save blank
+    if (!end.value) end.value = todayISO();
+  }
+}
+
+// checkbox change
+document.getElementById("ord_fixed_install")?.addEventListener("change", applyFixedInstallOrderUI_);
+
+// if user changes start while fixed, keep end synced
+document.getElementById("ord_start")?.addEventListener("change", ()=>{
+  applyFixedInstallOrderUI_();
+});
+
+// initial
+setTimeout(applyFixedInstallOrderUI_, 0);
+  
+  // fixed installation listeners ends here
 
 
   
@@ -8447,7 +8588,8 @@ if (detailsInput && widthInput && heightInput) {
               details: String(newDetails || "").trim(),
               setup_date: String(newSetup).trim(),
               start_date: String(newStart).trim(),
-              end_date: String(newEnd).trim()
+              end_date: (chkFixed ? "" : String(newEnd).trim()),
+              fixed_install: (chkFixed ? "1" : "0")
             });
             if (r && r.error) return alert(String(r.error));
             alert("Order updated");
@@ -8732,13 +8874,24 @@ if (detailsInput && widthInput && heightInput) {
 
       const setup_date = (document.getElementById("ord_setup")?.value || "").trim();
       const start_date = (document.getElementById("ord_start")?.value || "").trim();
-      const end_date = (document.getElementById("ord_end")?.value || "").trim();
 
+
+      
+      
+     
       if (!client_id) return alert("Client is required");
       if (!client_name || !client_phone) return alert("Selected client data missing (check clients sheet)");
       if (!venue) return alert("Venue is required");
-      if (!setup_date || !start_date || !end_date) return alert("Setup, start and end dates are required");
-      if (end_date < start_date) return alert("End date cannot be before start date");
+     
+      const chkFixed = !!document.getElementById("ord_fixed_install")?.checked;
+      const end_date = (document.getElementById("ord_end")?.value || "").trim();
+
+      if (!setup_date || !start_date) return alert("Setup and start dates are required");
+
+      if (!chkFixed) {
+        if (!end_date) return alert("End date is required (unless Fixed Installation)");
+        if (end_date < start_date) return alert("End date cannot be before start date");
+      }
       if (setup_date > start_date) return alert("Setup date cannot be after start date");
 
       const r = await api({
@@ -8750,7 +8903,8 @@ if (detailsInput && widthInput && heightInput) {
         details,
         setup_date,
         start_date,
-        end_date
+        end_date: (chkFixed ? "" : end_date),
+        fixed_install: (chkFixed ? "1" : "0")
       });
    if (r && r.error) return alert(String(r.error));
 
