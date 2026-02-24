@@ -6478,6 +6478,9 @@ if (type === "companyProfile") {
         <label style="margin-top:10px;">Terms</label>
         <textarea id="cp_terms" rows="4">${escapeHtml(prof?.terms || "")}</textarea>
 
+        <label style="margin-top:12px;">Installation Terms & Conditions (Fixed Installation)</label>
+<textarea id="cp_install_terms" rows="5" placeholder="1. ...&#10;2. ..."></textarea>
+
         <label style="margin-top:10px;">Logo URL</label>
 <div style="display:flex; gap:10px; align-items:flex-start;">
   <textarea id="cp_logo_url" rows="4" style="flex:1;">${escapeHtml(prof?.logo_url || "")}</textarea>
@@ -6611,6 +6614,9 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
         gstin: String(document.getElementById("cp_gstin")?.value || "").trim(),
         place_of_supply: String(document.getElementById("cp_place")?.value || "").trim(),
         terms: String(document.getElementById("cp_terms")?.value || "").trim(),
+        install_terms: (document.getElementById("cp_install_terms")?.value || "").trim(),
+
+        
         logo_url: String(document.getElementById("cp_logo_url")?.value || "").trim(),
         bank_qr_url: String(document.getElementById("cp_bank_qr_url")?.value || "").trim(),
         print_bg_url: String(document.getElementById("cp_print_bg_url")?.value || "").trim()
