@@ -5877,7 +5877,8 @@ const header = {
   sgst: source.sgst || document.getElementById("inv_sgst")?.textContent || "0.00",
   igst: source.igst || document.getElementById("inv_igst")?.textContent || "0.00",
   grand: source.grand || document.getElementById("inv_grand")?.textContent || "0.00",
-  words: source.words || document.getElementById("inv_words")?.value || ""
+  words: source.words || document.getElementById("inv_words")?.value || "",
+    install_terms: source.install_terms || document.getElementById("inv_install_terms")?.value || ""
 };
 
 
