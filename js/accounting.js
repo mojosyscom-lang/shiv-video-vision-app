@@ -5058,16 +5058,26 @@ function applyFixedInstallInvoiceUI_(){
   const termsInp = document.getElementById("inv_install_terms");
   if (!end || !pick) return;
 
+  const orderId = String(pick.value || "").trim();
+
+  // ✅ If no order selected → NEVER treat as fixed install
+  if (!orderId) {
+    end.disabled = false;
+    if (termsBox) termsBox.style.display = "none";
+    return;
+  }
+
   const opt = pick.selectedOptions?.[0];
   const endVal = String(opt?.getAttribute("data-end") || "").trim(); // "" means fixed install
 
-  const isFixed = !endVal; // ✅ trigger
+  const isFixed = !endVal;
 
   if (isFixed) {
     end.value = "";
     end.disabled = true;
 
     if (termsBox) termsBox.style.display = "";
+
     // Prefill from company profile default ONLY if empty
     if (termsInp && !termsInp.value.trim()) {
       termsInp.value = String(company.install_terms || "").trim();
@@ -5478,6 +5488,7 @@ if (!setup_date || !start_date || (!isFixedInstall && !end_date)) {
 
       const gst_type = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST").toUpperCase();
       const gst_rate = Number(document.getElementById("inv_gst_rate")?.value || 0);
+      const terms = String(document.getElementById("inv_terms")?.value || "").trim();
 
       if (!currentItems.length) return alert("No items");
       const bad = currentItems.find(it => {
