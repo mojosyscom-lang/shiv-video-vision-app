@@ -382,6 +382,9 @@ let lastUnreadCount = 0;
 let firstNotifPoll = true; // prevent buzz on initial load
   // ---- fetch + render
   async function fetchNotifs_(){
+    // ✅ Skip polling when app/tab is not active or offline (prevents IO_SUSPENDED)
+if (document.hidden) return;
+if (navigator && navigator.onLine === false) return;
     try {
 
       // ✅ badge: unread only
@@ -483,7 +486,30 @@ lastUnreadCount = unreadCount;
 
   // initial + polling
   fetchNotifs_();
-  setInterval(fetchNotifs_, 60000); // every 60 seconds
+  let notifsTimer = null;
+
+function startNotifs_(){
+  if (notifsTimer) return;
+  notifsTimer = setInterval(fetchNotifs_, 30000); // keep your same interval if different
+}
+
+function stopNotifs_(){
+  if (!notifsTimer) return;
+  clearInterval(notifsTimer);
+  notifsTimer = null;
+}
+
+startNotifs_();
+
+// ✅ Pause when hidden, resume when visible
+document.addEventListener("visibilitychange", ()=>{
+  if (document.hidden) stopNotifs_();
+  else startNotifs_();
+});
+
+// ✅ Pause/resume on offline/online
+window.addEventListener("offline", stopNotifs_);
+window.addEventListener("online", startNotifs_);
 })();
 
 
@@ -5622,10 +5648,16 @@ function updateConvertBtnVisibility_(){
   const doc = String(h.doc_type || currentDocType || "").toUpperCase();
   const st  = String(h.status || "ACTIVE").toUpperCase();
   const end = String(h.end_date || "").trim();
-  const today = todayISO();
+const start = String(h.start_date || "").trim();
+const fixed = String(h.fixed_install || "").toUpperCase() === "TRUE" || (!end && !!start);
 
-  const dateOK = !!end && (end <= today); // end_date same day OR past
-  const show = (doc === "QUOTATION" && st !== "CONVERTED" && !!editingInvoiceId && dateOK);
+const today = todayISO();
+
+// ✅ Normal event: use end_date. Fixed install: use start_date.
+const gateDate = fixed ? start : end;
+const dateOK = !!gateDate && (gateDate <= today);
+
+const show = (doc === "QUOTATION" && st !== "CONVERTED" && !!editingInvoiceId && dateOK);
 
   btn.style.display = show ? "" : "none";
 }
