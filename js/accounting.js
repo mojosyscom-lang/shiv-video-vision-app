@@ -8671,10 +8671,29 @@ if (detailsInput && widthInput && heightInput) {
         start_date,
         end_date
       });
-      if (r && r.error) return alert(String(r.error));
+   if (r && r.error) return alert(String(r.error));
 
-      alert("Order created");
-      loadSection("orders");
+// ✅ Auto-save LED planned item from calculator
+try {
+  const ledBlock = document.getElementById("led_calc_block");
+  const carryCabs = Number(ledBlock?.dataset?.carryCabinets || 0);
+
+  if (r?.order_id && carryCabs > 0) {
+    await api({
+      action: "upsertOrderItem",
+      order_id: r.order_id,
+      item_id: "IT-260213181906-687",
+      item_name: "LED Wall on Rent",
+      planned_qty: carryCabs,
+      status: "PLANNED"
+    });
+  }
+} catch (e) {
+  console.warn("Auto planned LED item failed:", e);
+}
+
+alert("Order created");
+loadSection("orders");
     } finally {
       setTimeout(unlock, 450);
     }
