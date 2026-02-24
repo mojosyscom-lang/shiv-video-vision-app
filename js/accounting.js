@@ -5130,7 +5130,7 @@ try{
       end_date: opt.getAttribute("data-end") || ""
     });
 
-   if (order_id) await loadPlannedItemsFromOrder(orderId);
+   if (order_id) await loadPlannedItemsFromOrder(orderid);
 
 
 // apply default days (not manual)
