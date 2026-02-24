@@ -4975,8 +4975,7 @@ currentItems = planned
           <input id="inv_words" placeholder="Auto" readonly>
         </div>
 
-        <label style="margin-top:12px;">Terms:</label>
-<textarea id="inv_terms" rows="4" placeholder="Type terms.">${escapeHtml(company.terms || "")}</textarea>
+       
 
         <div class="card" id="inv_install_terms_block" style="margin-top:12px; display:none;">
           <b>Installation Terms & Conditions</b>
