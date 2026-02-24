@@ -5130,8 +5130,7 @@ try{
       end_date: opt.getAttribute("data-end") || ""
     });
 
-    const ledSizeRaw = extractLedSizeRawFromOrder_(o);
-    if (order_id) await loadPlannedItemsFromOrder(orderId, { ledSizeRaw });
+   if (order_id) await loadPlannedItemsFromOrder(orderId);
 
 
 // apply default days (not manual)
