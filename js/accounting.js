@@ -4403,6 +4403,8 @@ function setOrderFields(o){
       endEl.value = prettyISODate(endISO);
     }
   }
+applyFixedInstallInvoiceUI_();
+
 }
 
 
@@ -5054,6 +5056,33 @@ function initTermsNumbering_(ta){
 
   // Fixed installation ends here
 
+function applyFixedInstallInvoiceUI_(){
+  const end = document.getElementById("inv_end");
+  const pick = document.getElementById("inv_order_pick");
+  const termsBox = document.getElementById("inv_install_terms_block");
+  const termsInp = document.getElementById("inv_install_terms");
+  if (!end || !pick) return;
+
+  const opt = pick.selectedOptions?.[0];
+  const endVal = String(opt?.getAttribute("data-end") || "").trim(); // "" means fixed install
+
+  const isFixed = !endVal; // ✅ trigger
+
+  if (isFixed) {
+    end.value = "";
+    end.disabled = true;
+
+    if (termsBox) termsBox.style.display = "";
+    // Prefill from company profile default ONLY if empty
+    if (termsInp && !termsInp.value.trim()) {
+      termsInp.value = String(company.install_terms || "").trim();
+      if (typeof initTermsNumbering_ === "function") initTermsNumbering_(termsInp);
+    }
+  } else {
+    end.disabled = false;
+    if (termsBox) termsBox.style.display = "none";
+  }
+}
 
   
 
@@ -5509,7 +5538,7 @@ try {
         gst_type,
         gst_rate,
         terms,
-fixed_install: !!document.getElementById("inv_end")?.disabled || !String(end_date||"").trim(),
+        fixed_install: !!document.getElementById("inv_end")?.disabled || !String(end_date||"").trim(),
        items: currentItems.map(it => ({
   item_id: it.item_id,
   item_name: it.item_name,
@@ -6328,34 +6357,7 @@ applyDocTypeRules();
 
 
 
-  function applyFixedInstallInvoiceUI_(){
-  const end = document.getElementById("inv_end");
-  const pick = document.getElementById("inv_order_pick");
-  const termsBox = document.getElementById("inv_install_terms_block");
-  const termsInp = document.getElementById("inv_install_terms");
-  if (!end || !pick) return;
-
-  const opt = pick.selectedOptions?.[0];
-  const endVal = String(opt?.getAttribute("data-end") || "").trim(); // "" means fixed install
-
-  const isFixed = !endVal; // ✅ trigger
-
-  if (isFixed) {
-    end.value = "";
-    end.disabled = true;
-
-    if (termsBox) termsBox.style.display = "";
-    // Prefill from company profile default ONLY if empty
-    if (termsInp && !termsInp.value.trim()) {
-      termsInp.value = String(company.install_terms || "").trim();
-      if (typeof initTermsNumbering_ === "function") initTermsNumbering_(termsInp);
-    }
-  } else {
-    end.disabled = false;
-    if (termsBox) termsBox.style.display = "none";
-  }
-}
-
+  
 
     
     // cancel
@@ -6614,8 +6616,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
         gstin: String(document.getElementById("cp_gstin")?.value || "").trim(),
         place_of_supply: String(document.getElementById("cp_place")?.value || "").trim(),
         terms: String(document.getElementById("cp_terms")?.value || "").trim(),
-        install_terms: (document.getElementById("cp_install_terms")?.value || "").trim(),
-
+        install_terms: String(document.getElementById("cp_install_terms")?.value || "").trim(),
+        
         
         logo_url: String(document.getElementById("cp_logo_url")?.value || "").trim(),
         bank_qr_url: String(document.getElementById("cp_bank_qr_url")?.value || "").trim(),
