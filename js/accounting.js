@@ -4056,7 +4056,7 @@ if (type === "exports") {
    - GST: loads defaults from GST sheet
    ========================================================== */
 if (type === "invoice") {
-  content.innerHTML = `<div class="card"><h2>Invoice</h2><p>Loading…</p></div>`;
+  content.innerHTML = `<div class="card"><h2>Quotation/Invoice</h2><p>Loading…</p></div>`;
 
   const isSuper = (role === "superadmin");
   const canEdit = (role === "owner" || role === "superadmin");
@@ -4978,11 +4978,6 @@ currentItems = planned
         <label style="margin-top:12px;">Terms:</label>
 <textarea id="inv_terms" rows="4" placeholder="Type terms.">${escapeHtml(company.terms || "")}</textarea>
 
-<div id="inv_install_terms_block" style="display:none;">
-  <label style="margin-top:12px;">Terms & Conditions (Fixed Installation):</label>
-  <textarea id="inv_install_terms" rows="4" placeholder="Type terms & conditions for fixed installation..."></textarea>
-</div>
-
         <div class="card" id="inv_install_terms_block" style="margin-top:12px; display:none;">
           <b>Installation Terms & Conditions</b>
           <div class="dashSmall" style="margin-top:6px;color:#777;">
@@ -5173,10 +5168,11 @@ function applyFixedInstallInvoiceUI_(){
   */
 
   setDocTypeUI("QUOTATION");
+  applyDocTypeRules();
   const gstTypeSel = document.getElementById("inv_gst_type");
   if (gstTypeSel) gstTypeSel.value = defaultGSTType;
   applyGSTDefaultsToUI();
-
+  recalc();
   document.getElementById("btn_doc_invoice")?.addEventListener("click", ()=>{
     setDocTypeUI("INVOICE");
     applyDocTypeRules();
@@ -5468,7 +5464,17 @@ document.getElementById("inv_end")?.addEventListener("change", refreshDefaultDay
       const end_date = String(document.getElementById("inv_end")?.value || "").trim();
 
       if (!venue) return alert("Venue required");
-      if (!setup_date || !start_date || !end_date) return alert("Setup/Start/End dates required");
+
+const isFixedInstall =
+  !!document.getElementById("inv_end")?.disabled || !String(end_date || "").trim();
+
+// ✅ For fixed install: End Date can be empty
+if (!setup_date || !start_date || (!isFixedInstall && !end_date)) {
+  return alert(isFixedInstall
+    ? "Setup/Start dates required"
+    : "Setup/Start/End dates required"
+  );
+}
 
       const gst_type = String(document.getElementById("inv_gst_type")?.value || "CGST_SGST").toUpperCase();
       const gst_rate = Number(document.getElementById("inv_gst_rate")?.value || 0);
@@ -6344,6 +6350,7 @@ applyDocTypeRules();
         document.getElementById("inv_setup").value = prettyISODate(h.setup_date||"");
         document.getElementById("inv_start").value = prettyISODate(h.start_date||"");
         document.getElementById("inv_end").value = prettyISODate(h.end_date||"");
+        applyFixedInstallInvoiceUI_(); // ✅ disable end date + show install terms if fixed
 
         document.getElementById("inv_gst_type").value = String(h.gst_type||"CGST_SGST").toUpperCase();
         document.getElementById("inv_gst_rate").value = Number(h.gst_rate||0);
