@@ -4242,6 +4242,56 @@ function formatLedSizeLabel(raw){
 }
 
 
+ function formatLedSizeLabel_(raw){
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const m = s.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+  if (!m) return "";
+  return `Size: ${m[1]}' x ${m[2]}'`;
+}
+
+function extractLedSizeRawFromText_(txt){
+  const d = String(txt || "").trim();
+  if (!d) return "";
+  // matches: 12x10, 12 x 10, 12' x 10', 12ft x 10ft, 12×10
+  const m = d.match(/(\d+(?:\.\d+)?)\s*(?:'|ft|feet)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:'|ft|feet)?/i);
+  if (!m) return "";
+  return `${m[1]}x${m[2]}`;
+}
+
+// tries to fetch order.details from whatever list you already have in memory
+function getSelectedOrderLedSizeRaw_(){
+  try{
+    // ✅ you likely have an order dropdown in invoice
+    const sel = document.getElementById("inv_order_pick");
+    const order_id = String(sel?.value || "").trim();
+    if (!order_id) return "";
+
+    // ✅ common global caches used in your codebase
+    const listsToTry = [
+      window.__ordersCache,
+      window.allOrders,
+      window.ordersAll,
+      window.orders,
+      (typeof allOrders !== "undefined" ? allOrders : null),
+      (typeof activeOrders !== "undefined" ? activeOrders : null),
+    ].filter(Boolean);
+
+    for (const L of listsToTry){
+      if (!Array.isArray(L)) continue;
+      const o = L.find(x => String(x.order_id||x.id||"").trim() === order_id);
+      if (o){
+        const raw = extractLedSizeRawFromText_(o.details || "");
+        if (raw) return raw;
+      }
+    }
+
+    return "";
+  }catch(e){
+    return "";
+  }
+}
+
 function ledQtySqftFromSize(raw){
   const p = parseLedSizeToFeet(raw);
   if (!p) return null;
@@ -4623,8 +4673,17 @@ currentItems = planned
   .filter(p => String(p.status||"ACTIVE").toUpperCase() === "ACTIVE")
   .map(p => {
     const item_id = String(p.item_id||"");
-    const item_name = String(p.item_name||p.item_id||"");
-
+    let item_name = String(p.item_name||p.item_id||"");
+// ✅ Append LED Size below LED Wall on Rent line (from selected order details)
+// Will not duplicate if already added
+try{
+  if (isLedWallLine(item_name) && !/\bSize\s*:/i.test(item_name)) {
+    const raw = getSelectedOrderLedSizeRaw_(); // "12x10"
+    const label = formatLedSizeLabel_(raw);    // "Size: 12' x 10'"
+    if (label) item_name = item_name + "\n" + label;
+  }
+}catch(e){}
+    
     let qty = Number(p.planned_qty||0);
     let unit = unitMap[item_id] || "";
     let hsn_sac = hsnMap[item_id] || "";
@@ -5071,7 +5130,8 @@ currentItems = planned
       end_date: opt.getAttribute("data-end") || ""
     });
 
-    if (order_id) await loadPlannedItemsFromOrder(order_id);
+    const ledSizeRaw = extractLedSizeRawFromOrder_(o);
+    if (order_id) await loadPlannedItemsFromOrder(orderId, { ledSizeRaw });
 
 
 // apply default days (not manual)
