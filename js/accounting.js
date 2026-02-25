@@ -6300,10 +6300,10 @@ setTimeout(() => {
             <td>${escapeHtml(prettyISODate(inv.invoice_date||""))}</td>
             <td align="right"><b>₹ ${money(inv.grand_total||0)}</b></td>
             <td align="right" style="white-space:nowrap;">
-<button class="userToggleBtn" data-inv-print="${escapeAttr(inv.invoice_id||"")}">Print</button>
+
 <button class="userToggleBtn" data-inv-pdf="${escapeAttr(inv.invoice_id||"")}">Save PDF</button>
      
-              <button class="userToggleBtn" data-view="${escapeAttr(inv.invoice_id||"")}">View</button>
+              
               ${canEdit ? `<button class="userToggleBtn" data-edit="${escapeAttr(inv.invoice_id||"")}">Edit</button>` : ``}
            ${(isSuper && inv.status !== "CANCELLED") ? `<button class="userToggleBtn" data-cancel="${escapeAttr(inv.invoice_id||"")}">Cancel</button>` : ``}
  </td>
@@ -6316,13 +6316,7 @@ setTimeout(() => {
         }).join("")}
       </table>
     `;
-    // ✅ bind Print + WhatsApp buttons (Invoice List)
-listBox.querySelectorAll("[data-inv-print]").forEach(btn=>{
-  btn.addEventListener("click", async ()=>{
-    const id = btn.getAttribute("data-inv-print");
-    await printFromInvoiceId(id);
-  });
-});
+ 
 
 listBox.querySelectorAll("[data-inv-pdf]").forEach(btn=>{
   btn.addEventListener("click", async ()=>{
@@ -6355,25 +6349,7 @@ try {
 });
 
 
-    // view
-    listBox.querySelectorAll("button[data-view]").forEach(b=>{
-      b.addEventListener("click", async ()=>{
-        const id = b.getAttribute("data-view");
-        const unlock = lockButton(b, "Loading...");
-        try {
-          const full = await api({ action: "getInvoiceFull", invoice_id: id });
-          if (full && full.error) return alert(String(full.error));
-          const h = full.header;
-          alert(
-            `${h.invoice_no} (${prettyISODate(h.invoice_date)})\n` +
-            `${(h.doc_type||"INVOICE")==="QUOTATION" ? "Quotation" : "Invoice"}\n` +
-            `Client: ${h.client_name} ${h.client_phone}\n` +
-            `Venue: ${h.venue}\n` +
-            `Total: ₹ ${money(h.grand_total)}`
-          );
-        } finally { setTimeout(unlock, 350); }
-      });
-    });
+    
 
     // edit
     listBox.querySelectorAll("button[data-edit]").forEach(b=>{
