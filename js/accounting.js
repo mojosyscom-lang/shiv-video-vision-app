@@ -4088,16 +4088,19 @@ if (type === "invoice") {
   const canEdit = (role === "owner" || role === "superadmin");
 
   // Prefetch
-const [companyRes, clientsRes, ordersRes, invRes, invMasterRes, gstListRes, gstDefRes, bankAccRes] = await Promise.all([
+const [companyRes, clientsRes, ordersRes, invMasterRes, gstListRes, gstDefRes, bankAccRes] = await Promise.all([
   api({ action: "getCompanyProfile" }),
   api({ action: "listClients" }),
   api({ action: "listOrders", month: "" }),
-  api({ action: "listInvoices", month: "", q: "" }),
   api({ action: "listInventoryMaster" }),
   api({ action: "listGST" }).catch(() => []),
   api({ action: "getDefaultGST" }).catch(() => null),
   api({ action: "listBankAccountsForCompany" }).catch(() => [])
 ]);
+
+
+
+  
 
   const company = (companyRes && !companyRes.error) ? companyRes : {
     company_name: (localStorage.getItem("company") || ""),
@@ -4120,16 +4123,28 @@ const activeBank =
   const allOrders = Array.isArray(ordersRes) ? ordersRes : [];
   const activeOrders = allOrders.filter(o => String(o.status || "ACTIVE").toUpperCase() === "ACTIVE");
 
-  const invListAll = Array.isArray(invRes) ? invRes : [];
+ /* const invListAll = Array.isArray(invRes) ? invRes : []; */
   const invMasterAll = Array.isArray(invMasterRes) ? invMasterRes : [];
 
   const gstList = Array.isArray(gstListRes) ? gstListRes : [];
   const gstDef = (gstDefRes && !gstDefRes.error) ? gstDefRes : null;
 
   // months for invoice list
-  const monthSet = new Set(invListAll.map(x => normMonthLabel(prettyMonth(x.invoice_date || ""))).filter(Boolean));
-  const monthList = Array.from(monthSet).sort((a,b)=>(monthKey(b)||0)-(monthKey(a)||0));
+ /* const monthSet = new Set(invListAll.map(x => normMonthLabel(prettyMonth(x.invoice_date || ""))).filter(Boolean)); */
+/*  const monthList = Array.from(monthSet).sort((a,b)=>(monthKey(b)||0)-(monthKey(a)||0)); */
+  // ✅ months UI (fast, no invoice prefetch)
+  function buildLastNMonthsListUI_(n){
+    const out = [];
+    const d = new Date();
+    for (let i=0; i<Number(n||24); i++){
+      const dt = new Date(d.getFullYear(), d.getMonth()-i, 1);
+      const mon = dt.toLocaleString("en-US", { month:"short" });
+      out.push(`${mon}-${dt.getFullYear()}`);
+    }
+    return out;
+  }
 
+  
   // UI state
   let editingInvoiceId = "";     // if set -> updateInvoice else addInvoice
   let lastSavedInvoiceId = "";   // for WhatsApp/PDF generation after save
@@ -5057,11 +5072,20 @@ if (termsBox && !editingInvoiceId) {
       <div class="card" style="margin-top:12px;">
         <h3 style="margin-top:0;">Invoices List</h3>
 
-        <label>Month</label>
-        <select id="inv_month">
-          <option value="">All</option>
-          ${monthList.map(m=>`<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
-        </select>
+        <label>Month(s)</label>
+
+<div id="inv_months" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
+  ${buildLastNMonthsListUI_(24).map(m=>`
+    <label class="userToggleBtn" style="display:flex;align-items:center;gap:8px;padding:8px 10px;">
+      <input type="checkbox" class="inv_m_chk" value="${escapeAttr(m)}">
+      <span>${escapeHtml(m)}</span>
+    </label>
+  `).join("")}
+</div>
+
+<div class="dashSmall" style="margin-top:6px;color:#777;">
+  Select month(s) then press <b>Refresh List</b>.
+</div>
 
         <label style="margin-top:10px;">Search (invoice no / client / phone / venue / order)</label>
         <input id="inv_search" placeholder="Type to search...">
@@ -6259,13 +6283,27 @@ setTimeout(() => {
     const totalBox = document.getElementById("inv_total");
     if (!listBox) return;
 
-    const month = String(document.getElementById("inv_month")?.value || "").trim();
+        const months = Array.from(document.querySelectorAll(".inv_m_chk:checked"))
+      .map(x => String(x.value||"").trim())
+      .filter(Boolean);
+
     const q = String(document.getElementById("inv_search")?.value || "").trim();
 
-    const rows = await api({ action: "listInvoices", month, q });
-    const list = Array.isArray(rows) ? rows : [];
+    // ✅ No selection = don't load anything (fast)
+    if (!months.length){
+      if (totalBox) totalBox.textContent = `Select month(s) and press Refresh List.`;
+      listBox.innerHTML = `<p class="dashSmall">No month selected.</p>`;
+      return;
+    }
 
-    if (totalBox) totalBox.textContent = `Showing ${list.length} invoice(s)` + (month ? ` • ${month}` : "") + (q ? ` • "${q}"` : "");
+    // ✅ Backend currently supports single month param -> fetch each month and merge
+    const results = await Promise.all(months.map(m => api({ action: "listInvoices", month: m, q })));
+    const list = results.flatMap(r => Array.isArray(r) ? r : []);
+
+       if (totalBox) totalBox.textContent =
+      `Showing ${list.length} invoice(s)` +
+      (months.length ? ` • ${months.join(", ")}` : "") +
+      (q ? ` • "${q}"` : "");
 
     if (!list.length){
       listBox.innerHTML = `<p>No invoices found.</p>`;
@@ -6450,8 +6488,7 @@ applyDocTypeRules();
     });
   }
 
-  document.getElementById("btn_inv_refresh")?.addEventListener("click", renderInvoiceList);
-  document.getElementById("inv_month")?.addEventListener("change", renderInvoiceList);
+    document.getElementById("btn_inv_refresh")?.addEventListener("click", renderInvoiceList);
   // document.getElementById("inv_search")?.addEventListener("input", ()=>renderInvoiceList());
   // Optional: keep search but only when user presses Enter
 document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
@@ -6494,9 +6531,15 @@ document.getElementById("inv_search")?.addEventListener("keydown", (e)=>{
   });
 
   // initial renders
+    // initial renders
   renderItemsTable();
   recalc();
-  renderInvoiceList();
+
+  // ✅ DO NOT auto-render list (faster load)
+  const listBox = document.getElementById("inv_list");
+  const totalBox = document.getElementById("inv_total");
+  if (totalBox) totalBox.textContent = "Select month(s) and press Refresh List.";
+  if (listBox) listBox.innerHTML = `<p class="dashSmall">List not loaded yet.</p>`;
 
   return;
 }
