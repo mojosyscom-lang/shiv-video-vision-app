@@ -5072,20 +5072,19 @@ if (termsBox && !editingInvoiceId) {
       <div class="card" style="margin-top:12px;">
         <h3 style="margin-top:0;">Invoices List</h3>
 
-        <label>Month(s)</label>
+    <label>Month(s)</label>
 
-<div id="inv_months" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;">
-  ${buildLastNMonthsListUI_(24).map(m=>`
-    <label class="userToggleBtn" style="display:flex;align-items:center;gap:8px;padding:8px 10px;">
-      <input type="checkbox" class="inv_m_chk" value="${escapeAttr(m)}">
-      <span>${escapeHtml(m)}</span>
-    </label>
-  `).join("")}
+<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+  <input id="inv_month_pick" type="month" style="max-width:220px;">
+  <button class="userToggleBtn" id="btn_inv_add_month">Add</button>
+  <button class="userToggleBtn" id="btn_inv_clear_months">Clear</button>
 </div>
 
-<div class="dashSmall" style="margin-top:6px;color:#777;">
-  Select month(s) then press <b>Refresh List</b>.
-</div>
+<div id="inv_months_box" style="margin-top:10px;"></div>
+
+<p class="dashSmall" style="margin-top:6px;color:#777;">
+  Select month(s) then press Refresh List.
+</p>
 
         <label style="margin-top:10px;">Search (invoice no / client / phone / venue / order)</label>
         <input id="inv_search" placeholder="Type to search...">
@@ -6276,7 +6275,87 @@ setTimeout(() => {
   });
 
  
+// month selecton ui
 
+  // ===============================
+// ✅ Month Picker (GST-style) + Multi Month Selection (Invoice List)
+// ===============================
+const selectedInvMonths = new Set();
+
+function monthLabelFromYYYYMM_(ym){
+  // ym = "2026-02"
+  const s = String(ym || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mm = Number(m[2]);
+  const dt = new Date(y, mm - 1, 1);
+  const mon = dt.toLocaleString("en-US", { month:"short" });
+  return `${mon}-${y}`; // "Feb-2026"
+}
+
+function renderInvMonthsBox_(){
+  const box = document.getElementById("inv_months_box");
+  if (!box) return;
+
+  const arr = Array.from(selectedInvMonths);
+  if (!arr.length){
+    box.innerHTML = `<div class="dashSmall" style="color:#777;">No month selected.</div>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      ${arr.map(m=>`
+        <label style="display:flex;gap:6px;align-items:center;border:1px solid #eee;border-radius:10px;padding:6px 10px;background:#fff;">
+          <input type="checkbox" class="inv_m_chk" value="${escapeAttr(m)}" checked>
+          <span>${escapeHtml(m)}</span>
+        </label>
+      `).join("")}
+    </div>
+  `;
+}
+
+// default: preselect current month (but DO NOT auto-load list)
+(function initInvMonthPicker_(){
+  const mp = document.getElementById("inv_month_pick");
+  if (!mp) return;
+
+  const today = todayISO();
+  mp.value = String(today).slice(0,7); // "YYYY-MM"
+
+  // Do not preselect any month (forces interaction before any list load)
+renderInvMonthsBox_();
+
+  document.getElementById("btn_inv_add_month")?.addEventListener("click", ()=>{
+    const m = monthLabelFromYYYYMM_(mp.value);
+    if (!m) return alert("Select a month");
+    selectedInvMonths.add(m);
+    renderInvMonthsBox_();
+  });
+
+  document.getElementById("btn_inv_clear_months")?.addEventListener("click", ()=>{
+    selectedInvMonths.clear();
+    renderInvMonthsBox_();
+  });
+
+  // If user unchecks a month pill, remove it from Set
+if (window.__invMonthChkBound) return;
+window.__invMonthChkBound = true;
+  
+  document.addEventListener("change", (e)=>{
+    const t = e.target;
+    if (!t || !t.classList || !t.classList.contains("inv_m_chk")) return;
+    const v = String(t.value||"").trim();
+    if (!v) return;
+    if (t.checked) selectedInvMonths.add(v);
+    else selectedInvMonths.delete(v);
+  });
+})();
+
+
+
+  
   // List render
   async function renderInvoiceList(){
     const listBox = document.getElementById("inv_list");
