@@ -6551,7 +6551,7 @@ if (type === "companyProfile") {
         <textarea id="cp_terms" rows="4">${escapeHtml(prof?.terms || "")}</textarea>
 
         <label style="margin-top:12px;">Installation Terms & Conditions (Fixed Installation)</label>
-<textarea id="cp_install_terms" rows="5" placeholder="1. ...&#10;2. ..."></textarea>
+<textarea id="cp_install_terms" rows="5" placeholder="1. ...&#10;2. ...">${escapeHtml(prof?.install_terms || "")}</textarea>
 
         <label style="margin-top:10px;">Logo URL</label>
 <div style="display:flex; gap:10px; align-items:flex-start;">
@@ -6592,7 +6592,8 @@ if (type === "companyProfile") {
       </div>
     </div>
   `;
-
+// ✅ Ensure install terms prefill even if HTML templating changes
+document.getElementById("cp_install_terms").value = String(prof?.install_terms || "");
   document.getElementById("cp_reload")?.addEventListener("click", ()=> loadSection("companyProfile"));
 
   function _readFileAsBase64_(file){
