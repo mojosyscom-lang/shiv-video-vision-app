@@ -6341,7 +6341,12 @@ const openUrl = dl || url;
 if (!openUrl) return alert("PDF URL missing");
 
 // If download_url exists → it will download directly
-window.open(openUrl, "_blank");
+// iPhone/Safari: popups may be blocked -> use same tab
+try {
+  window.location.href = openUrl;
+} catch(e) {
+  window.open(openUrl, "_blank");
+}
     } finally {
       setTimeout(unlock, 350);
     }
