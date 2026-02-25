@@ -5830,7 +5830,7 @@ ${header.end_date ? `<div><b>End:</b> ${escapeHtml(fmtDDMMYYYY(header.end_date||
   const qtyTxt  = onlyName ? "" : (isFinite(qty) ? String(qty) : "");
  const daysTxt =
   onlyName ? "" :
-  (!isFinite(days) || days === 0 || days === 1) ? "" :
+  (!isFinite(days) || days <= 0) ? "" :
   String(days);
 
   const rateTxt = onlyName ? "" : (isFinite(rate) && rate !== 0 ? `₹${money(rate)}` : "");
