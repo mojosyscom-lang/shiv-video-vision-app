@@ -6671,6 +6671,12 @@ if (type === "companyProfile") {
         <label style="margin-top:10px;">Place of Supply</label>
         <input id="cp_place" value="${escapeAttr(prof?.place_of_supply || "")}" placeholder="Gujarat">
 
+        <label style="margin-top:10px;">Invoice Number Format (middle prefix)</label>
+<b>SVV-</b><input id="cp_inv_format" value="${escapeAttr(prof?.inv_format || "")}" placeholder="e.g. 2026/ or leave empty"><b>01</b>
+<p class="dashSmall" style="margin-top:6px;color:#777;">
+  Result: <b>SVV-{format}01</b> (example: format <b>2026/</b> → <b>SVV-2026/01</b>, empty → <b>SVV-01</b>)
+</p>
+
         <label style="margin-top:10px;">Terms (For Quotation)</label>
 <textarea id="cp_terms" rows="4">${escapeHtml(prof?.terms || "")}</textarea>
 
@@ -6813,6 +6819,7 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
         phone: String(document.getElementById("cp_phone")?.value || "").trim(),
         gstin: String(document.getElementById("cp_gstin")?.value || "").trim(),
         place_of_supply: String(document.getElementById("cp_place")?.value || "").trim(),
+        inv_format: String(document.getElementById("cp_inv_format")?.value || "").trim(),
         terms: String(document.getElementById("cp_terms")?.value || "").trim(),
         terms_invoice: String(document.getElementById("cp_terms_invoice")?.value || "").trim(),
         install_terms: String(document.getElementById("cp_install_terms")?.value || "").trim(),
