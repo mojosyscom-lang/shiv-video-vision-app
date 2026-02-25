@@ -7656,7 +7656,7 @@ const r = await api({
 
     // -------- upad section ends here
 
-    // ------ clients module loadsection starts here 
+    // ------ clients section module loadsection starts here 
 if (type === "clients") {
   content.innerHTML = `<div class="card"><h2>Clients</h2><p>Loading…</p></div>`;
 
@@ -7687,10 +7687,17 @@ if (type === "clients") {
           <input id="cl_company" placeholder="Company name">
 
           <label style="margin-top:10px;">Phone 1</label>
-          <input id="cl_phone1" inputmode="numeric" placeholder="Mobile number">
+<div style="display:flex;gap:8px;align-items:center;">
+  <span style="padding:10px 12px;border:1px solid #ddd;border-radius:10px;background:#f6f6f6;font-weight:700;">+91</span>
+  <input id="cl_phone1" inputmode="numeric" maxlength="10" placeholder="10 digit mobile number" style="flex:1;">
+</div>
 
-          <label style="margin-top:10px;">Phone 2 (optional)</label>
-          <input id="cl_phone2" inputmode="numeric" placeholder="Alternate number">
+<label style="margin-top:10px;">Phone 2 (optional)</label>
+<div style="display:flex;gap:8px;align-items:center;">
+  <span style="padding:10px 12px;border:1px solid #ddd;border-radius:10px;background:#f6f6f6;font-weight:700;">+91</span>
+  <input id="cl_phone2" inputmode="numeric" maxlength="10" placeholder="10 digit alternate number" style="flex:1;">
+</div>
+<p class="dashSmall" style="margin-top:6px;color:#777;">+91 is fixed. Enter only 10 digits.</p>
 
           <label style="margin-top:10px;">Address (optional)</label>
           <input id="cl_address" placeholder="Address">
@@ -7739,6 +7746,30 @@ if (type === "clients") {
   const hint = document.getElementById("cl_hint");
 
   function norm(s){ return String(s || "").trim().toLowerCase(); }
+  function normINPhonePlus91_(raw){
+  // user will type 10 digits, but still accept pasted formats
+  let s = String(raw || "").trim();
+  s = s.replace(/[^\d]/g, ""); // digits only
+
+  // take last 10 digits as mobile (India)
+  if (s.length >= 10) s = s.slice(-10);
+
+  // if empty, return ""
+  if (!s) return "";
+
+  // force +91
+  return "+91" + s;
+}
+
+function phoneDigitsOnly10_(raw){
+  let s = String(raw || "").trim().replace(/[^\d]/g, "");
+  if (s.length >= 10) s = s.slice(-10);
+  return s;
+}
+
+
+
+  
 
   function applySearchAndRender() {
     if (!listBox) return;
@@ -7842,10 +7873,10 @@ if (type === "clients") {
           const newCompany = prompt("Company:", String(cur.client_company || ""));
           if (newCompany === null) return;
 
-          const newPhone1 = prompt("Phone 1:", String(cur.phone1 || ""));
+          const newPhone1 = prompt("Phone 1 (10 digits only):", phoneDigitsOnly10_(cur.phone1 || ""));
           if (newPhone1 === null) return;
 
-          const newPhone2 = prompt("Phone 2:", String(cur.phone2 || ""));
+          const newPhone2 = prompt("Phone 2 (10 digits only):", phoneDigitsOnly10_(cur.phone2 || ""));
           if (newPhone2 === null) return;
 
           const newAddress = prompt("Address:", String(cur.address || ""));
@@ -7865,8 +7896,8 @@ if (type === "clients") {
               rowIndex: Number(row),
               client_name: String(newName).trim(),
               client_company: String(newCompany || "").trim(),
-              phone1: String(newPhone1).trim(),
-              phone2: String(newPhone2 || "").trim(),
+              phone1: normINPhonePlus91_(newPhone1),
+              phone2: normINPhonePlus91_(newPhone2 || ""),
               address: String(newAddress || "").trim(),
               gst: String(newGst || "").trim()
             });
@@ -7974,8 +8005,8 @@ if (type === "clients") {
       try {
         const client_name = (document.getElementById("cl_name")?.value || "").trim();
         const client_company = (document.getElementById("cl_company")?.value || "").trim();
-        const phone1 = (document.getElementById("cl_phone1")?.value || "").trim();
-        const phone2 = (document.getElementById("cl_phone2")?.value || "").trim();
+        const phone1 = normINPhonePlus91_(document.getElementById("cl_phone1")?.value || "");
+const phone2 = normINPhonePlus91_(document.getElementById("cl_phone2")?.value || "");
         const address = (document.getElementById("cl_address")?.value || "").trim();
         const gst = (document.getElementById("cl_gst")?.value || "").trim();
 
