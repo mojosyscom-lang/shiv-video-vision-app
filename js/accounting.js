@@ -4788,6 +4788,19 @@ currentItems = planned
     applyGSTDefaultsToUI();
   }
   recalc();
+
+    // ✅ Auto-switch terms based on doc_type
+// ✅ Auto-fill terms ONLY if empty (never overwrite)
+const termsBox = document.getElementById("inv_terms");
+if (termsBox && !editingInvoiceId) {
+  if (!String(termsBox.value || "").trim()) {
+    if (currentDocType === "INVOICE") {
+      termsBox.value = String(company.terms_invoice || "");
+    } else {
+      termsBox.value = String(company.terms || "");
+    }
+  }
+}
 }
 
 
@@ -5597,7 +5610,6 @@ try {
         install_terms: String(document.getElementById("inv_install_terms")?.value || "").trim(),
         gst_type,
         gst_rate,
-        terms,
         fixed_install: !!document.getElementById("inv_end")?.disabled || !String(end_date||"").trim(),
        items: currentItems.map(it => ({
   item_id: it.item_id,
@@ -5738,7 +5750,10 @@ function fmtDDMMYYYYTime_(dt){
   function buildPrintHtml(header, items){
     const showHSN = String(header.gst_type || "").toUpperCase() !== "NONE";
     const title = (header.doc_type === "QUOTATION") ? "QUOTATION" : "INVOICE";
-    const terms = company.terms || "Terms: 1. Please pay within 3 days. 2. Goods once rented are the responsibility of the client.";
+    const terms =
+  String(header.doc_type || "").toUpperCase() === "INVOICE"
+    ? String(company.terms_invoice || "")
+    : String(company.terms || "");
 function isBlankOrZero(v){
   const n = Number(v);
   return !isFinite(n) || n === 0;
@@ -5929,7 +5944,12 @@ const header = {
   sgst: source.sgst || document.getElementById("inv_sgst")?.textContent || "0.00",
   igst: source.igst || document.getElementById("inv_igst")?.textContent || "0.00",
   grand: source.grand || document.getElementById("inv_grand")?.textContent || "0.00",
+  terms:
+  String(currentDocType || "").toUpperCase() === "INVOICE"
+    ? String(company.terms_invoice || "")
+    : String(company.terms || ""),
   words: source.words || document.getElementById("inv_words")?.value || "",
+  
     install_terms: source.install_terms || document.getElementById("inv_install_terms")?.value || ""
 };
 
