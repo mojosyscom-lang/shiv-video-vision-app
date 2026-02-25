@@ -6296,9 +6296,9 @@ setTimeout(() => {
       return;
     }
 
-    // ✅ Backend currently supports single month param -> fetch each month and merge
-    const results = await Promise.all(months.map(m => api({ action: "listInvoices", month: m, q })));
-    const list = results.flatMap(r => Array.isArray(r) ? r : []);
+    // ✅ Backend supports months[] -> single call (faster)
+const rows = await api({ action: "listInvoices", months: months, q });
+const list = Array.isArray(rows) ? rows : [];
 
        if (totalBox) totalBox.textContent =
       `Showing ${list.length} invoice(s)` +
