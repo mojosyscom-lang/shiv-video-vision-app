@@ -6547,8 +6547,11 @@ if (type === "companyProfile") {
         <label style="margin-top:10px;">Place of Supply</label>
         <input id="cp_place" value="${escapeAttr(prof?.place_of_supply || "")}" placeholder="Gujarat">
 
-        <label style="margin-top:10px;">Terms</label>
-        <textarea id="cp_terms" rows="4">${escapeHtml(prof?.terms || "")}</textarea>
+        <label style="margin-top:10px;">Terms (For Quotation)</label>
+<textarea id="cp_terms" rows="4">${escapeHtml(prof?.terms || "")}</textarea>
+
+<label style="margin-top:10px;">Terms (For Invoice)</label>
+<textarea id="cp_terms_invoice" rows="4">${escapeHtml(prof?.terms_invoice || "")}</textarea>
 
         <label style="margin-top:12px;">Installation Terms & Conditions (Fixed Installation)</label>
 <textarea id="cp_install_terms" rows="5" placeholder="1. ...&#10;2. ...">${escapeHtml(prof?.install_terms || "")}</textarea>
@@ -6687,6 +6690,7 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
         gstin: String(document.getElementById("cp_gstin")?.value || "").trim(),
         place_of_supply: String(document.getElementById("cp_place")?.value || "").trim(),
         terms: String(document.getElementById("cp_terms")?.value || "").trim(),
+        terms_invoice: String(document.getElementById("cp_terms_invoice")?.value || "").trim(),
         install_terms: String(document.getElementById("cp_install_terms")?.value || "").trim(),
         
         
