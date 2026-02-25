@@ -6336,8 +6336,9 @@ listBox.querySelectorAll("[data-inv-pdf]").forEach(btn=>{
       const dl = r.download_url || "";
 const url = r.public_url || r.file_url || r.url || "";
 
-// Prefer direct download (no Drive viewer)
-const openUrl = dl || url;
+// iPhone Safari often blocks direct downloads -> use viewer on iOS
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+const openUrl = isIOS ? (url || dl) : (dl || url);
 if (!openUrl) return alert("PDF URL missing");
 
 // If download_url exists → it will download directly
