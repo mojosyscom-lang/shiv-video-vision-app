@@ -1002,6 +1002,42 @@ function canFinanceEdit() {
   }
 
   // Gst card functions ends here
+
+// Tds function starts here
+
+  async function loadTdsYearCard(){
+    const el = document.getElementById("dashTdsYearCard");
+    if (!el) return;
+
+    const yr = (new Date()).getFullYear();
+
+    try{
+      const t = await api({ action: "getTdsTotalsYear", year: yr });
+
+      const credit = Number(t?.credit || 0);
+      const debit = Number(t?.debit || 0);
+      const net = Number(t?.net || 0);
+
+      el.innerHTML = `
+        <div class="dashStatLabel">TDS Totals (${yr})</div>
+        <div class="dashStatValue">₹${(credit + debit).toFixed(0)}</div>
+        <div class="dashSmall" style="margin-top:8px; line-height:1.8;">
+          <div><b>Credit (IN Payments):</b> ₹${credit.toFixed(0)}</div>
+          <div><b>Debit (Expenses TDS):</b> ₹${debit.toFixed(0)}</div>
+          <div><b>Net (Credit - Debit):</b> ₹${net.toFixed(0)}</div>
+        </div>
+      `;
+    }catch(e){
+      el.innerHTML = `
+        <div class="dashStatLabel">TDS Totals (${yr})</div>
+        <div class="dashSmall">Could not load TDS totals.</div>
+      `;
+    }
+  }
+  
+  //TDS function ends here
+
+  
   
   async function showDashboard() {
 
@@ -1086,6 +1122,13 @@ function canFinanceEdit() {
           <div class="dashStatLabel">GST Totals (${(new Date()).getFullYear()})</div>
           <div class="dashSmall">Loading…</div>
         </div>
+
+                <div class="dashStat dashBlue" id="dashTdsYearCard">
+          <div class="dashStatLabel">TDS Totals (${(new Date()).getFullYear()})</div>
+          <div class="dashSmall">Loading…</div>
+        </div>
+
+        
       </div>
 
       <div class="dashCard" style="margin-top:12px;">
@@ -1097,7 +1140,10 @@ function canFinanceEdit() {
         // ✅ Non-blocking: load all-time balance AFTER dashboard renders
     setTimeout(() => { loadAccountBalanceCard(); }, 0);
         // ✅ Non-blocking: load GST totals after dashboard renders (no slowdown)
-    setTimeout(() => { loadGstYearCard(); }, 0);
+       setTimeout(() => {
+      loadGstYearCard();
+      loadTdsYearCard();
+    }, 0);
 
     const box = document.getElementById("dashActivity");
     if (box) {
@@ -10218,8 +10264,19 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
         <label style="margin-top:10px;">Description</label>
         <input id="exp_desc" placeholder="Description">
 
-        <label style="margin-top:10px;">Amount</label>
+                <label style="margin-top:10px;">Amount</label>
         <input id="exp_amount" type="number" inputmode="decimal" pattern="[0-9]*"  placeholder="Amount">
+
+        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+          <input type="checkbox" id="exp_tds_check">
+          <label for="exp_tds_check" style="margin:0;">With TDS</label>
+        </div>
+
+        <div id="exp_tds_box" style="display:none;margin-top:8px;">
+          <label style="margin-top:0;">TDS Amount</label>
+          <input id="exp_tds_amount" type="number" inputmode="decimal" pattern="[0-9]*" placeholder="TDS Amount">
+        </div>
+
         <label>Date</label>
         <input id="exp_date" type="date" value="${todayISO()}" max="${todayISO()}">
         <button class="primary" id="btn_exp" style="margin-top:14px;">Add Expense</button>
@@ -10291,6 +10348,17 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
   if (mSel && hasCurrent) mSel.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
 
   document.getElementById("btn_exp").addEventListener("click", addExpense);
+
+     // ✅ TDS toggle (no page slow)
+  document.getElementById("exp_tds_check")?.addEventListener("change", (e) => {
+    const on = !!e.target.checked;
+    const box = document.getElementById("exp_tds_box");
+    if (box) box.style.display = on ? "block" : "none";
+    if (!on) {
+      const inp = document.getElementById("exp_tds_amount");
+      if (inp) inp.value = "";
+    }
+  });
 
   const listBox = document.getElementById("exp_list");
   const totalBox = document.getElementById("exp_total");
@@ -10400,6 +10468,11 @@ const canDelete = (role === "superadmin");
             if (newAmountStr === null) return;
             const newAmount = Number(newAmountStr || 0);
 
+                        const newTdsStr = prompt("TDS Amount (0 if none):", String(Number(cur.tds_amount || 0)));
+            if (newTdsStr === null) return;
+            const newTds = Number(newTdsStr || 0);
+            if (newTds < 0) return alert("Invalid TDS amount");
+
             const newMonth = prompt("Month (e.g. Feb-2026):", String(prettyMonth(cur.month || "")));
             if (newMonth === null) return;
 
@@ -10409,14 +10482,15 @@ const canDelete = (role === "superadmin");
 
             const unlock2 = lockButton(btn2, "Saving...");
             try {
-              const r = await api({
+                           const r = await api({
                 action: "updateExpense",
                 rowIndex: Number(row),
                 date: newDate,
                 category: String(newCat).trim(),
-                description: String(newDesc || "").trim(), // ✅ match your sheet header
-                desc: String(newDesc || "").trim(),        // ✅ keep compatibility
+                description: String(newDesc || "").trim(),
+                desc: String(newDesc || "").trim(),
                 amount: newAmount,
+                tds_amount: newTds,
                 month: String(newMonth).trim()
               });
               if (r && r.error) return alert(String(r.error));
@@ -11178,6 +11252,15 @@ async function isDuplicateExpense({ company, date, category, description, amount
     const desc = document.getElementById("exp_desc").value.trim();
     const amount = Number(document.getElementById("exp_amount").value || 0);
 
+        const tdsChecked = !!document.getElementById("exp_tds_check")?.checked;
+    const tdsAmount = tdsChecked ? Number(document.getElementById("exp_tds_amount")?.value || 0) : 0;
+    if (tdsChecked && !(tdsAmount > 0)) {
+      alert("Enter TDS amount");
+      return;
+    }
+
+    
+
     if (!desc || !amount) {
       alert("Enter description and amount");
       return;
@@ -11205,15 +11288,16 @@ async function isDuplicateExpense({ company, date, category, description, amount
       if (!proceed) return;
     }
 
-    const r = await apiSafe({
+        const r = await apiSafe({
       action: "addExpense",
-      company,              // keep if your backend stores company
+      company,
       date: selectedDate,
-      month,                // include if your sheet expects it
+      month,
       category,
-      description: desc,    // new key
-      desc,                 // old key (compat)
-      amount
+      description: desc,
+      desc,
+      amount,
+      tds_amount: tdsAmount
     });
 
     if (r && r.queued) alert("Saved offline. Will sync when online.");
@@ -11221,6 +11305,13 @@ async function isDuplicateExpense({ company, date, category, description, amount
 
     document.getElementById("exp_desc").value = "";
     document.getElementById("exp_amount").value = "";
+        const tChk = document.getElementById("exp_tds_check");
+    const tAmt = document.getElementById("exp_tds_amount");
+    const tBox = document.getElementById("exp_tds_box");
+    if (tChk) tChk.checked = false;
+    if (tAmt) tAmt.value = "";
+    if (tBox) tBox.style.display = "none";
+    
   } finally {
     setTimeout(unlock, 600);
   }
