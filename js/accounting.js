@@ -1037,6 +1037,105 @@ function canFinanceEdit() {
   
   //TDS function ends here
 
+
+  async function loadDashMonthCards(month){
+    try{
+      const dash = await api({ action: "getDashboard", month });
+      const upadTotal = getUpadTotalFromDash(dash);
+
+      // Income
+      const elIncomeVal = document.getElementById("dashIncomeVal");
+      const elIncomeRecent = document.getElementById("dashIncomeRecent");
+      if (elIncomeVal) elIncomeVal.textContent = `₹${Number(dash?.total_income || 0).toFixed(0)}`;
+
+      if (elIncomeRecent){
+        const tx = (dash?.last_income_transactions || []);
+        elIncomeRecent.innerHTML = tx.length
+          ? tx.map(t => `<div>₹${Number(t.amount || 0).toFixed(0)}</div>`).join("")
+          : `<div>No recent income transactions</div>`;
+      }
+
+      // Expenses
+      const elExpVal = document.getElementById("dashExpenseVal");
+      if (elExpVal) elExpVal.textContent = `₹${Number(dash?.monthly_expense_total || 0).toFixed(0)}`;
+
+      // Advance
+      const elAdvVal = document.getElementById("dashAdvanceVal");
+      if (elAdvVal) elAdvVal.textContent = `₹${Number(upadTotal || 0).toFixed(0)}`;
+
+      // Month label
+      const elMonth = document.getElementById("dashMonthLabel");
+      if (elMonth) elMonth.textContent = String(dash?.month || month);
+
+    }catch(e){
+      // Keep placeholders (no crash)
+    }
+  }
+
+  async function loadDashRecentActivity(){
+    const box = document.getElementById("dashActivity");
+    if (!box) return;
+
+    try{
+      const activity = await api({ action: "getRecentActivity", limit: 10 });
+      const rows = Array.isArray(activity) ? activity : [];
+
+      if (!rows.length){
+        box.innerHTML = `<div class="dashSmall">No activity found.</div>`;
+        return;
+      }
+
+      box.innerHTML = rows.map((r, i) => `
+        <div class="dashActRow" data-act-index="${i}" style="cursor:pointer;">
+          <div class="dashActMain">
+            <div><b>${escapeHtml(r.action || "")}</b></div>
+            <div class="dashSmall">${escapeHtml(r.details || "")}</div>
+          </div>
+          <div class="dashActTime">${escapeHtml(r.when || "")}</div>
+        </div>
+      `).join("");
+
+            // ✅ Click to open modal (fast, no extra API)
+      box.querySelectorAll(".dashActRow").forEach((el, idx) => {
+        el.addEventListener("click", () => {
+          const row = rows[idx];
+          showActivityModal(row);
+        });
+      });
+
+    }catch(e){
+      box.innerHTML = `<div class="dashSmall">Could not load activity.</div>`;
+    }
+  }
+
+  async function loadDashSalaryCard(month){
+    const el = document.getElementById("dashSalaryCard");
+    if (!el) return;
+
+    try{
+      const s = await api({ action: "getSalaryDashboardSummary", month });
+
+      const left = Number(s?.salary_left || 0);
+      const pror = Number(s?.total_prorated_salary || 0);
+
+      el.innerHTML = `
+        <div class="dashStatLabel">Salary (${escapeHtml(s?.month || month)})</div>
+        <div class="dashStatValue">₹${left.toFixed(0)}</div>
+        <div class="dashSmall" style="margin-top:8px; line-height:1.8;">
+          <div><b>Left to Pay:</b> ₹${left.toFixed(0)}</div>
+          <div><b>Total Prorated:</b> ₹${pror.toFixed(0)}</div>
+        </div>
+      `;
+    }catch(e){
+      el.innerHTML = `
+        <div class="dashStatLabel">Salary (${escapeHtml(month)})</div>
+        <div class="dashSmall">Could not load salary.</div>
+      `;
+    }
+  }
+
+
+
   
   
   async function showDashboard() {
@@ -1050,24 +1149,9 @@ function canFinanceEdit() {
     return;
   }
     
-    content.innerHTML = `
-      <div class="card">
-        <h2>Dashboard</h2>
-        <p>Loading dashboard…</p>
-      </div>
-    `;
+        const month = monthLabelNow();
 
-    const month = monthLabelNow();
-
-    const [dash, activity] = await Promise.all([
-      api({ action: "getDashboard", month }),
-      api({ action: "getRecentActivity", limit: 10 })
-    ]);
-
-    console.log("DASH RESPONSE:", dash);
-
-    const upadTotal = getUpadTotalFromDash(dash);
-
+    // ✅ Instant render (no await) — dashboard appears immediately
     content.innerHTML = `
       <div class="dashHeader">
         <div>
@@ -1075,106 +1159,77 @@ function canFinanceEdit() {
           <div class="dashSub">
             Logged in as: <b>${escapeHtml(localStorage.getItem("username") || "")}</b> (${escapeHtml(role)}) • 
             Company: <b>${escapeHtml(localStorage.getItem("company") || "")}</b> • 
-            Month: <b>${escapeHtml((dash && dash.month) || month)}</b>
+            Month: <b id="dashMonthLabel">${escapeHtml(month)}</b>
           </div>
         </div>
       </div>
 
       <div class="dashGrid">
 
+        <!-- ✅ Big Account Balance Card (already loads async) -->
         <div class="dashStat dashBlue" id="dashBalanceCard" style="grid-column:1 / -1;">
           <div class="dashStatLabel">Account Balance (All Time)</div>
           <div class="dashSmall">Loading…</div>
         </div>
 
-      
-        <div class="dashStat dashBlue">
-          <div class="dashStatLabel">Total Income  (${escapeHtml((dash && dash.month) || month)})</div>
-          <div class="dashStatValue">₹${Number(dash?.total_income || 0).toFixed(0)}</div>
-           <div class="dashSmall" style="margin-top:8px; line-height:1.7;">
-    ${
-      (dash?.last_income_transactions || []).length
-        ? (dash.last_income_transactions || []).map(t =>
-            `<div>₹${Number(t.amount || 0).toFixed(0)}</div>`
-          ).join("")
-        : `<div>No recent income transactions</div>`
-    }
-  </div>
+        <div class="dashStat dashBlue" id="dashIncomeCard">
+          <div class="dashStatLabel">Total Income (${escapeHtml(month)})</div>
+          <div class="dashStatValue" id="dashIncomeVal">—</div>
+          <div class="dashSmall" id="dashIncomeRecent" style="margin-top:8px; line-height:1.7;">
+            <div>Loading…</div>
+          </div>
         </div>
 
-        <div class="dashStat dashGreen">
-          <div class="dashStatLabel">Total Salary (${escapeHtml((dash && dash.month) || month)})</div>
-          <div class="dashStatValue">₹${Number(dash?.monthly_salary_total || 0).toFixed(0)}</div>
+        <div class="dashStat dashGreen" id="dashSalaryCard">
+          <div class="dashStatLabel">Salary (${escapeHtml(month)})</div>
+          <div class="dashSmall">Loading…</div>
         </div>
 
-        <div class="dashStat dashOrange">
-          <div class="dashStatLabel">Expenses (${escapeHtml((dash && dash.month) || month)})</div>
-          <div class="dashStatValue">₹${Number(dash?.monthly_expense_total || 0).toFixed(0)}</div>
+        <div class="dashStat dashOrange" id="dashExpenseCard">
+          <div class="dashStatLabel">Expenses (${escapeHtml(month)})</div>
+          <div class="dashStatValue" id="dashExpenseVal">—</div>
         </div>
 
-        <div class="dashStat dashPurple">
-          <div class="dashStatLabel">Total Advance Paid (${escapeHtml((dash && dash.month) || month)})</div>
-          <div class="dashStatValue">₹${Number(upadTotal || 0).toFixed(0)}</div>
+        <div class="dashStat dashPurple" id="dashAdvanceCard">
+          <div class="dashStatLabel">Total Advance Paid (${escapeHtml(month)})</div>
+          <div class="dashStatValue" id="dashAdvanceVal">—</div>
         </div>
 
- <div class="dashStat dashGreen" id="dashGstYearCard">
+        <!-- ✅ GST + TDS cards (you already added; keep them) -->
+        <div class="dashStat dashGreen" id="dashGstYearCard">
           <div class="dashStatLabel">GST Net (${(new Date()).getFullYear()})</div>
           <div class="dashSmall">Loading…</div>
         </div>
 
-                <div class="dashStat dashBlue" id="dashTdsYearCard">
+        <div class="dashStat dashBlue" id="dashTdsYearCard">
           <div class="dashStatLabel">TDS Net (${(new Date()).getFullYear()})</div>
           <div class="dashSmall">Loading…</div>
         </div>
 
-        
-      </div>
-
-             
-
-        
       </div>
 
       <div class="dashCard" style="margin-top:12px;">
         <div class="dashCardTitle">Recent Activity</div>
-        <div class="dashActivity" id="dashActivity"></div>
+        <div class="dashActivity" id="dashActivity">
+          <div class="dashSmall">Loading…</div>
+        </div>
       </div>
     `;
 
-        // ✅ Non-blocking: load all-time balance AFTER dashboard renders
-    setTimeout(() => { loadAccountBalanceCard(); }, 0);
-        // ✅ Non-blocking: load GST totals after dashboard renders (no slowdown)
-       setTimeout(() => {
+    // ✅ Non-blocking loaders (dashboard stays super fast)
+    setTimeout(() => {
+      // existing async cards you already added earlier
+      loadAccountBalanceCard();
       loadGstYearCard();
       loadTdsYearCard();
+
+      // ✅ monthly cards + salary + activity
+      loadDashMonthCards(month);
+      loadDashSalaryCard(month);
+      loadDashRecentActivity();
     }, 0);
 
-    const box = document.getElementById("dashActivity");
-    if (box) {
-      const rows = Array.isArray(activity) ? activity : [];
-      if (!rows.length) {
-        box.innerHTML = `<div class="dashSmall">No activity found.</div>`;
-      } else {
-        box.innerHTML = rows.map((r, i) => `
-  <div class="dashActRow" data-act-index="${i}" style="cursor:pointer;">
-            <div class="dashActMain">
-              <div><b>${escapeHtml(r.action || "")}</b> — ${escapeHtml(r.ref || "")}</div>
-              <div class="dashSmall">By ${escapeHtml(r.user || "")}</div>
-            </div>
-            <div class="dashActTime">${escapeHtml(prettyISODate(r.time || ""))}</div>
-          </div>
-        `).join("");
-      
-     // starts here check here for syntax error   
-        box.querySelectorAll(".dashActRow").forEach((el, idx) => {
-  el.addEventListener("click", () => {
-    const row = rows[idx];
-    showActivityModal(row);
-  });
-});
- // ends here       
-}
-    }
+    return;
   }
 
   // ✅ NEW: Upad row-id resolver (fixes "Invalid row")
