@@ -1022,8 +1022,8 @@ function canFinanceEdit() {
         <div class="dashStatLabel">TDS Net (${yr})</div>
         <div class="dashStatValue">₹${net.toFixed(0)}</div>
         <div class="dashSmall" style="margin-top:8px; line-height:1.8;">
-          <div><b>Credit (IN Payments):</b> ₹${credit.toFixed(0)}</div>
-          <div><b>Debit (Expenses TDS):</b> ₹${debit.toFixed(0)}</div>
+          <div><b>Debit (IN Payments):</b> ₹${credit.toFixed(0)}</div>
+          <div><b>Credit (Expenses TDS):</b> ₹${debit.toFixed(0)}</div>
           
         </div>
       `;
@@ -10271,11 +10271,12 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
                 <label style="margin-top:10px;">Amount</label>
         <input id="exp_amount" type="number" inputmode="decimal" pattern="[0-9]*"  placeholder="Amount">
 
-        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
-          <input type="checkbox" id="exp_tds_check">
-          <label for="exp_tds_check" style="margin:0;">With TDS</label>
+        <div style="margin-top: 10px; display: flex; align-items: center; justify-content: flex-start; gap: 8px;">
+          <input type="checkbox" id="exp_tds_check" style="width: auto; margin: 0; padding: 0; cursor: pointer;">
+          <label for="exp_tds_check" style="margin: 0; cursor: pointer; line-height: 1;">With TDS</label>
         </div>
 
+        
         <div id="exp_tds_box" style="display:none;margin-top:8px;">
           <label style="margin-top:0;">TDS Amount</label>
           <input id="exp_tds_amount" type="number" inputmode="decimal" pattern="[0-9]*" placeholder="TDS Amount">
