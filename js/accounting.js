@@ -1116,9 +1116,8 @@ function canFinanceEdit() {
           <div class="dashStatLabel">Total Advance Paid (${escapeHtml((dash && dash.month) || month)})</div>
           <div class="dashStatValue">₹${Number(upadTotal || 0).toFixed(0)}</div>
         </div>
-      </div>
 
-              <div class="dashStat dashGreen" id="dashGstYearCard">
+ <div class="dashStat dashGreen" id="dashGstYearCard">
           <div class="dashStatLabel">GST Net (${(new Date()).getFullYear()})</div>
           <div class="dashSmall">Loading…</div>
         </div>
@@ -1127,6 +1126,11 @@ function canFinanceEdit() {
           <div class="dashStatLabel">TDS Net (${(new Date()).getFullYear()})</div>
           <div class="dashSmall">Loading…</div>
         </div>
+
+        
+      </div>
+
+             
 
         
       </div>
