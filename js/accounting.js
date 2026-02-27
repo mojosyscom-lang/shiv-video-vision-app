@@ -965,6 +965,43 @@ function canFinanceEdit() {
 
   // account balance functions ends here
 
+
+
+  // Gst card functions starts here
+
+    async function loadGstYearCard(){
+    const el = document.getElementById("dashGstYearCard");
+    if (!el) return;
+
+    const yr = (new Date()).getFullYear();
+
+    try{
+      const gst = await api({ action: "getGstTotalsYear", year: yr });
+
+      const paid = Number(gst?.gst_paid || 0);
+      const collected = Number(gst?.gst_collected || 0);
+      const debit = Number(gst?.debit || 0);
+      const credit = Number(gst?.credit || 0);
+      const net = Number(gst?.net || 0);
+
+      el.innerHTML = `
+        <div class="dashStatLabel">GST Totals (${yr})</div>
+        <div class="dashStatValue">₹${(paid + collected).toFixed(0)}</div>
+        <div class="dashSmall" style="margin-top:8px; line-height:1.8;">
+          <div><b>Debit (GST Paid):</b> ₹${debit.toFixed(0)}</div>
+          <div><b>Credit (GST on Invoices):</b> ₹${credit.toFixed(0)}</div>
+          <div><b>Net (Credit - Debit):</b> ₹${net.toFixed(0)}</div>
+        </div>
+      `;
+    }catch(e){
+      el.innerHTML = `
+        <div class="dashStatLabel">GST Totals (${yr})</div>
+        <div class="dashSmall">Could not load GST totals.</div>
+      `;
+    }
+  }
+
+  // Gst card functions ends here
   
   async function showDashboard() {
 
@@ -1045,6 +1082,12 @@ function canFinanceEdit() {
         </div>
       </div>
 
+              <div class="dashStat dashGreen" id="dashGstYearCard">
+          <div class="dashStatLabel">GST Totals (${(new Date()).getFullYear()})</div>
+          <div class="dashSmall">Loading…</div>
+        </div>
+      </div>
+
       <div class="dashCard" style="margin-top:12px;">
         <div class="dashCardTitle">Recent Activity</div>
         <div class="dashActivity" id="dashActivity"></div>
@@ -1053,6 +1096,8 @@ function canFinanceEdit() {
 
         // ✅ Non-blocking: load all-time balance AFTER dashboard renders
     setTimeout(() => { loadAccountBalanceCard(); }, 0);
+        // ✅ Non-blocking: load GST totals after dashboard renders (no slowdown)
+    setTimeout(() => { loadGstYearCard(); }, 0);
 
     const box = document.getElementById("dashActivity");
     if (box) {
