@@ -985,12 +985,12 @@ function canFinanceEdit() {
       const net = Number(gst?.net || 0);
 
       el.innerHTML = `
-        <div class="dashStatLabel">GST Totals (${yr})</div>
-        <div class="dashStatValue">₹${(paid + collected).toFixed(0)}</div>
+        <div class="dashStatLabel">GST Net (${yr})</div>
+        <div class="dashStatValue">₹${net.toFixed(0)}</div>
         <div class="dashSmall" style="margin-top:8px; line-height:1.8;">
           <div><b>Debit (GST Paid):</b> ₹${debit.toFixed(0)}</div>
           <div><b>Credit (GST on Invoices):</b> ₹${credit.toFixed(0)}</div>
-          <div><b>Net (Credit - Debit):</b> ₹${net.toFixed(0)}</div>
+        
         </div>
       `;
     }catch(e){
