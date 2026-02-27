@@ -5404,12 +5404,22 @@ if (t && t.id === "btn_inv_add_line") {
 
 // Confirm manual line
 if (t && t.id === "btn_inv_line_confirm") {
-  const rawName = String(document.getElementById("inv_line_name")?.value || "").trim();
+
+  // ✅ Scope inputs to the same Manual Line box (prevents duplicate-ID issues)
+  const box = t.closest("#inv_add_line_box") || document.getElementById("inv_add_line_box");
+
+  const rawName = String(
+    (box?.querySelector("#inv_line_name")?.value ?? document.getElementById("inv_line_name")?.value ?? "")
+  ).trim();
+
   if (!rawName) return alert("Item Name is required");
 
-// if LED and size given, append size on next line
-const sizeRaw = String(document.getElementById("inv_line_led_size")?.value || "").trim();
-let name = rawName;
+  // if LED and size given, append size on next line
+  const sizeRaw = String(
+    (box?.querySelector("#inv_line_led_size")?.value ?? document.getElementById("inv_line_led_size")?.value ?? "")
+  ).trim();
+
+  let name = rawName;
 if (isLedAnyName(rawName) && sizeRaw) {
   const lbl = formatLedSizeLabel(sizeRaw);
   if (lbl) name = `${rawName}\n${lbl}`;
