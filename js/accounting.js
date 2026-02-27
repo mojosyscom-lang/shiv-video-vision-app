@@ -930,7 +930,42 @@ function canFinanceEdit() {
   /* =========================
      UI
   ========================== */
+// account balance functions starts here
 
+    async function loadAccountBalanceCard(){
+    const el = document.getElementById("dashBalanceCard");
+    if (!el) return;
+
+    try{
+      const sum = await api({ action: "getAccountBalanceSummary" });
+
+      const bal = Number(sum?.balance || 0);
+      const income = Number(sum?.total_income_all || 0);
+      const exp = Number(sum?.total_expenses_all || 0);
+      const upad = Number(sum?.total_upad_all || 0);
+      const sal = Number(sum?.total_salary_paid_all || 0);
+
+      el.innerHTML = `
+        <div class="dashStatLabel">Account Balance (All Time)</div>
+        <div class="dashStatValue">₹${bal.toFixed(0)}</div>
+        <div class="dashSmall" style="margin-top:10px; line-height:1.8;">
+          <div><b>Total Income:</b> ₹${income.toFixed(0)}</div>
+          <div><b>Total Expenses:</b> ₹${exp.toFixed(0)}</div>
+          <div><b>Total Advance Paid:</b> ₹${upad.toFixed(0)}</div>
+          <div><b>Total Salary Paid:</b> ₹${sal.toFixed(0)}</div>
+        </div>
+      `;
+    }catch(e){
+      el.innerHTML = `
+        <div class="dashStatLabel">Account Balance (All Time)</div>
+        <div class="dashSmall">Could not load balance.</div>
+      `;
+    }
+  }
+
+  // account balance functions ends here
+
+  
   async function showDashboard() {
 
       // 🔒 Security Gate
@@ -973,6 +1008,13 @@ function canFinanceEdit() {
       </div>
 
       <div class="dashGrid">
+
+        <div class="dashStat dashBlue" id="dashBalanceCard" style="grid-column:1 / -1;">
+          <div class="dashStatLabel">Account Balance (All Time)</div>
+          <div class="dashSmall">Loading…</div>
+        </div>
+
+      
         <div class="dashStat dashBlue">
           <div class="dashStatLabel">Total Income  (${escapeHtml((dash && dash.month) || month)})</div>
           <div class="dashStatValue">₹${Number(dash?.total_income || 0).toFixed(0)}</div>
@@ -1008,6 +1050,9 @@ function canFinanceEdit() {
         <div class="dashActivity" id="dashActivity"></div>
       </div>
     `;
+
+        // ✅ Non-blocking: load all-time balance AFTER dashboard renders
+    setTimeout(() => { loadAccountBalanceCard(); }, 0);
 
     const box = document.getElementById("dashActivity");
     if (box) {
