@@ -995,7 +995,7 @@ function canFinanceEdit() {
       `;
     }catch(e){
       el.innerHTML = `
-        <div class="dashStatLabel">GST Totals (${yr})</div>
+        <div class="dashStatLabel">GST Net (${yr})</div>
         <div class="dashSmall">Could not load GST totals.</div>
       `;
     }
@@ -1019,17 +1019,17 @@ function canFinanceEdit() {
       const net = Number(t?.net || 0);
 
       el.innerHTML = `
-        <div class="dashStatLabel">TDS Totals (${yr})</div>
-        <div class="dashStatValue">₹${(credit + debit).toFixed(0)}</div>
+        <div class="dashStatLabel">TDS Net (${yr})</div>
+        <div class="dashStatValue">₹${net.toFixed(0)}</div>
         <div class="dashSmall" style="margin-top:8px; line-height:1.8;">
           <div><b>Credit (IN Payments):</b> ₹${credit.toFixed(0)}</div>
           <div><b>Debit (Expenses TDS):</b> ₹${debit.toFixed(0)}</div>
-          <div><b>Net (Credit - Debit):</b> ₹${net.toFixed(0)}</div>
+          
         </div>
       `;
     }catch(e){
       el.innerHTML = `
-        <div class="dashStatLabel">TDS Totals (${yr})</div>
+        <div class="dashStatLabel">TDS Net (${yr})</div>
         <div class="dashSmall">Could not load TDS totals.</div>
       `;
     }
@@ -1119,12 +1119,12 @@ function canFinanceEdit() {
       </div>
 
               <div class="dashStat dashGreen" id="dashGstYearCard">
-          <div class="dashStatLabel">GST Totals (${(new Date()).getFullYear()})</div>
+          <div class="dashStatLabel">GST Net (${(new Date()).getFullYear()})</div>
           <div class="dashSmall">Loading…</div>
         </div>
 
                 <div class="dashStat dashBlue" id="dashTdsYearCard">
-          <div class="dashStatLabel">TDS Totals (${(new Date()).getFullYear()})</div>
+          <div class="dashStatLabel">TDS Net (${(new Date()).getFullYear()})</div>
           <div class="dashSmall">Loading…</div>
         </div>
 
