@@ -878,13 +878,15 @@ function canFinanceEdit() {
     return 0;
   }
 
+// REPLACE WITH:
   async function getActiveWorkers() {
-    const rows = await cachedApi("workersRaw", 60000, () => api({ action: "listWorkers" }));
-    const list = (rows || [])
-      .filter(w => String(w.status || "ACTIVE").toUpperCase() === "ACTIVE")
-      .map(w => String(w.worker || "").trim())
+    // The Silent Scribe: Fetching active workers directly from the unified meta payload
+    const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
+    const list = (meta.workers || [])
+      .map(w => String(w || "").trim())
       .filter(Boolean)
       .sort((a,b) => a.localeCompare(b));
+    
     CACHE.workersActive.data = list;
     CACHE.workersActive.at = Date.now();
     return list;
@@ -903,16 +905,14 @@ function canFinanceEdit() {
     return months.filter(Boolean);
   }
 
+ // REPLACE WITH:
   async function getMonthOptionsMerged() {
     return cachedApi("monthsMerged", 60000, async () => {
-      const [upadMonthsRaw, holMonths] = await Promise.all([
-        getSalaryMonthsFromUpad(),
-        getMonthsFromHolidays()
-      ]);
-
-      const upadMonths = (upadMonthsRaw || []).map(normMonthLabel);
-      const set = new Set([...upadMonths, ...holMonths].filter(Boolean));
-
+      // The Unified Meta: Extracting all months from the single upadMeta payload
+      const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
+      const allMonths = (meta.months || []).map(m => normMonthLabel(monthLabelFromAny(m)));
+      
+      const set = new Set(allMonths.filter(Boolean));
       const nowKey = monthKey(monthLabelNow());
 
       const list = [...set].filter(m => {
