@@ -678,7 +678,10 @@ const body =
     holidaysAll: { data: null, at: 0 },
     monthsMerged: { data: null, at: 0 },
     workersActive: { data: null, at: 0 },
-    upadList: { map: {}, atMap: {} } // Preparing memory for the list itself
+    upadList: { map: {}, atMap: {} }, // Preparing memory for the list itself
+    expensesList: { map: {}, atMap: {} }
+  
+  
   };
 
   /* // THE SILENT SCRIBE: Pre-fetching the future into the present
@@ -730,6 +733,10 @@ const body =
       if (CACHE[k]) {
         CACHE[k].data = null;
         CACHE[k].at = 0;
+
+        // ✅ also clear map-style caches (blink project)
+        if (CACHE[k].map) CACHE[k].map = {};
+        if (CACHE[k].atMap) CACHE[k].atMap = {};
       }
     });
   }
@@ -1271,7 +1278,24 @@ function canFinanceEdit() {
     setTimeout(async () => {
       try {
         // The Unified Payload: Fetching all dashboard data in a single breath
-        const mega = await api({ action: "getDashboardMega", month: month, year: new Date().getFullYear() });
+               const yr = (new Date()).getFullYear();
+
+        // ✅ Get backend dashboard version (fast) to make cache auto-reset on any write
+        let ver = 1;
+        try{
+          const meta = await api({ action: "getDashboardCacheMeta" });
+          ver = Number(meta?.version || 1);
+        }catch(e){ ver = 1; }
+
+        const comp = String(localStorage.getItem("company") || "");
+        const cacheKey = `MEGA|${comp}|v${ver}|${month}|${yr}`;
+
+        // ✅ Use long-lived local cache if available
+        let mega = lsGet_(cacheKey);
+        if (!mega){
+          mega = await api({ action: "getDashboardMega", month: month, year: yr });
+          lsSet_(cacheKey, mega);
+        }
         
         // Render Account Balance
         const elBal = document.getElementById("dashBalanceCard");
@@ -1452,6 +1476,7 @@ function canFinanceEdit() {
 showDashboard();
 
 }
+
 
 
   
@@ -10403,7 +10428,71 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
 
 // ---- expenses section updates starts here 
  if (type === "expenses") {
-  content.innerHTML = `<div class="card"><h2>Expenses</h2><p>Loading…</p></div>`;
+    content.innerHTML = `
+    <div class="card">
+      <h2>Expenses</h2>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Add Expense</h3>
+
+        <label>Type</label>
+        <select id="exp_category" disabled>
+          <option>Loading types...</option>
+        </select>
+
+        <label style="margin-top:10px;">Description</label>
+        <input id="exp_desc" placeholder="Description" disabled>
+
+        <label style="margin-top:10px;">Amount</label>
+        <input id="exp_amount" type="number" inputmode="decimal" pattern="[0-9]*" placeholder="Amount" disabled>
+
+        <div style="margin-top: 10px; display: flex; align-items: center; justify-content: flex-start; gap: 8px;">
+          <input type="checkbox" id="exp_tds_check" style="width: auto; margin: 0; padding: 0; cursor: pointer;" disabled>
+          <label for="exp_tds_check" style="margin: 0; cursor: pointer; line-height: 1;">With TDS</label>
+        </div>
+
+        <div id="exp_tds_box" style="display:none;margin-top:8px;">
+          <label style="margin-top:0;">TDS Amount</label>
+          <input id="exp_tds_amount" type="number" inputmode="decimal" pattern="[0-9]*" placeholder="TDS Amount" disabled>
+        </div>
+
+        <label style="margin-top:10px;">Date</label>
+        <input id="exp_date" type="date" value="${todayISO()}" max="${todayISO()}" disabled>
+
+        <button class="primary" id="btn_exp_add" style="margin-top:14px;" disabled>Loading…</button>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin-top:0;">Expense Summary</h3>
+
+        <label>Month</label>
+        <select id="exp_filter_month" disabled>
+          <option>Loading months...</option>
+        </select>
+
+        <label style="margin-top:10px;">Type</label>
+        <select id="exp_filter_type" disabled>
+          <option value="">Loading types...</option>
+        </select>
+
+        <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+          <button class="primary" id="btn_exp_load" disabled>Show</button>
+          <button class="primary" id="btn_exp_clear" style="background:#111;" disabled>Clear</button>
+          ${ role === "superadmin"
+              ? `<button class="primary" id="btn_exp_export" style="background:#1fa971;" disabled>Export CSV</button>`
+              : ``
+          }
+        </div>
+
+        <p id="exp_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+        <div id="exp_list" style="margin-top:12px;"></div>
+
+        <p class="dashSmall" style="margin-top:10px;">
+          (Nothing will show until you click <b>Show</b>.)
+        </p>
+      </div>
+    </div>
+  `;
 
   const [months, typesRes] = await Promise.all([
     getMonthOptionsMerged(),
@@ -10581,7 +10670,8 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
       const month = (document.getElementById("exp_filter_month")?.value || "").trim();
       const category = (document.getElementById("exp_filter_type")?.value || "").trim();
 
-      const rows = await api({ action: "listExpenses", month, category });
+            const key = `${month || "ALL"}|${category || "ALL"}`;
+      const rows = await cachedMapApi("expensesList", key, 60000, () => api({ action: "listExpenses", month, category }));
       lastExpenseRows = Array.isArray(rows) ? rows : [];
 
       if (!listBox) return;
@@ -10702,6 +10792,7 @@ const canDelete = (role === "superadmin");
               });
               if (r && r.error) return alert(String(r.error));
               alert("Expense updated");
+              invalidateCache(["expensesList"]);
               await loadExpenseSummary();
             } finally {
               setTimeout(unlock2, 500);
@@ -10720,6 +10811,7 @@ const canDelete = (role === "superadmin");
               const r = await api({ action: "deleteExpense", rowIndex: Number(row) });
               if (r && r.error) return alert(String(r.error));
               alert("Expense deleted");
+              invalidateCache(["expensesList"]);
               await loadExpenseSummary();
             } finally {
               setTimeout(unlock2, 500);
@@ -11509,6 +11601,7 @@ async function isDuplicateExpense({ company, date, category, description, amount
 
     if (r && r.queued) alert("Saved offline. Will sync when online.");
     else alert("Expense added");
+        invalidateCache(["expensesList"]);
 
     document.getElementById("exp_desc").value = "";
     document.getElementById("exp_amount").value = "";
@@ -12140,4 +12233,21 @@ async function apiUploadBase64(action, file, extraPayload = {}) {
 
 console.log("iOS standalone (legacy):", window.navigator.standalone);
 console.log("display-mode standalone:", window.matchMedia("(display-mode: standalone)").matches);
+
+
+ // ✅ BLINK persistent cache (localStorage JSON)
+const LS_PREFIX = "svv_cache_v1|";
+
+function lsGet_(key){
+  try{
+    const raw = localStorage.getItem(LS_PREFIX + key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+function lsSet_(key, obj){
+  try{
+    localStorage.setItem(LS_PREFIX + key, JSON.stringify(obj));
+  }catch(e){}
+}
 
