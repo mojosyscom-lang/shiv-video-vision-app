@@ -1215,7 +1215,7 @@ function canFinanceEdit() {
         </div>
       </div>
     `;
-
+/* //if nothing helps for ultra fast make this culprit alive
     // ✅ Non-blocking loaders (dashboard stays super fast)
     setTimeout(() => {
       // existing async cards you already added earlier
@@ -1229,6 +1229,60 @@ function canFinanceEdit() {
       loadDashRecentActivity();
     }, 0);
 
+    */
+
+// new ultrasonic speed dashboard tweak maybe a culprit
+
+    // ✅ Non-blocking loaders (dashboard stays super fast)
+    setTimeout(async () => {
+      try {
+        // The Unified Payload: Fetching all dashboard data in a single breath
+        const mega = await api({ action: "getDashboardMega", month: month, year: new Date().getFullYear() });
+        
+        // Render Account Balance
+        const elBal = document.getElementById("dashBalanceCard");
+        if (elBal) elBal.innerHTML = `<div class="dashStatLabel">Account Balance (All Time)</div><div class="dashStatValue">₹${Number(mega.balance.balance||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:10px; line-height:1.8;"><div><b>Total Income:</b> ₹${Number(mega.balance.total_income_all||0).toFixed(0)}</div><div><b>Total Expenses:</b> ₹${Number(mega.balance.total_expenses_all||0).toFixed(0)}</div><div><b>Total Advance Paid:</b> ₹${Number(mega.balance.total_upad_all||0).toFixed(0)}</div><div><b>Total Salary Paid:</b> ₹${Number(mega.balance.total_salary_paid_all||0).toFixed(0)}</div></div>`;
+        
+        // Render GST
+        const elGst = document.getElementById("dashGstYearCard");
+        if (elGst) elGst.innerHTML = `<div class="dashStatLabel">GST Net (${mega.gst.year})</div><div class="dashStatValue">₹${Number(mega.gst.net||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Debit (GST Paid):</b> ₹${Number(mega.gst.debit||0).toFixed(0)}</div><div><b>Credit (GST on Invoices):</b> ₹${Number(mega.gst.credit||0).toFixed(0)}</div></div>`;
+        
+        // Render TDS
+        const elTds = document.getElementById("dashTdsYearCard");
+        if (elTds) elTds.innerHTML = `<div class="dashStatLabel">TDS Net (${mega.tds.year})</div><div class="dashStatValue">₹${Number(mega.tds.net||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Debit (IN Payments):</b> ₹${Number(mega.tds.credit||0).toFixed(0)}</div><div><b>Credit (Expenses TDS):</b> ₹${Number(mega.tds.debit||0).toFixed(0)}</div></div>`;
+        
+        // Render Income & Expenses
+        const elIncVal = document.getElementById("dashIncomeVal");
+        if (elIncVal) elIncVal.textContent = `₹${Number(mega.dash.total_income || 0).toFixed(0)}`;
+        const elIncRec = document.getElementById("dashIncomeRecent");
+        if (elIncRec) elIncRec.innerHTML = (mega.dash.last_income_transactions || []).length ? mega.dash.last_income_transactions.map(t => `<div>₹${Number(t.amount || 0).toFixed(0)}</div>`).join("") : `<div>No recent income transactions</div>`;
+        
+        const elExpVal = document.getElementById("dashExpenseVal");
+        if (elExpVal) elExpVal.textContent = `₹${Number(mega.dash.monthly_expense_total || 0).toFixed(0)}`;
+        
+        const elAdvVal = document.getElementById("dashAdvanceVal");
+        if (elAdvVal) elAdvVal.textContent = `₹${(getUpadTotalFromDash(mega.dash)).toFixed(0)}`;
+        
+        // Render Salary
+        const elSal = document.getElementById("dashSalaryCard");
+        if (elSal) elSal.innerHTML = `<div class="dashStatLabel">Salary (${mega.salary.month})</div><div class="dashStatValue">₹${Number(mega.salary.salary_left||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Left to Pay:</b> ₹${Number(mega.salary.salary_left||0).toFixed(0)}</div><div><b>Total Prorated:</b> ₹${Number(mega.salary.total_prorated_salary||0).toFixed(0)}</div></div>`;
+        
+        // Render Activity
+        const boxAct = document.getElementById("dashActivity");
+        if (boxAct) {
+            boxAct.innerHTML = (mega.activity || []).length ? mega.activity.map((r,i) => `<div class="dashActRow" data-act-index="${i}" style="cursor:pointer;"><div class="dashActMain"><div><b>${escapeHtml(r.action||"")}</b></div><div class="dashSmall">${escapeHtml(r.details||"")}</div></div><div class="dashActTime">${escapeHtml(r.time||"")}</div></div>`).join("") : `<div class="dashSmall">No activity found.</div>`;
+            // Re-bind activity clicks
+            boxAct.querySelectorAll(".dashActRow").forEach((el, idx) => {
+              el.addEventListener("click", () => showActivityModal(mega.activity[idx]));
+            });
+        }
+      } catch(e) {
+        console.warn("Mega payload failed, retreating to individual streams...", e);
+        loadAccountBalanceCard(); loadGstYearCard(); loadTdsYearCard(); loadDashMonthCards(month); loadDashSalaryCard(month); loadDashRecentActivity();
+      }
+    }, 0);
+
+    
     return;
   }
 
