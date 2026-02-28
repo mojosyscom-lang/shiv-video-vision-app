@@ -7432,6 +7432,15 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
                   Status: <strong>${escapeHtml(w.status || "ACTIVE")}</strong><br>
                   <span style="font-size:12px;color:#777;">Added by: ${escapeHtml(w.added_by || "")}</span><br><br>
 
+                  <div style="margin:10px 0;">
+  <label style="font-size:13px; font-weight:700;">Status Date</label><br/>
+  <input type="date" id="wk_status_date" style="padding:8px; border:1px solid #ccc; border-radius:10px; width:220px;">
+  <div style="font-size:11px; color:#666; margin-top:4px;">
+    Choose the date worker became Active/Inactive (you can backdate to fix salary).
+  </div>
+</div>
+
+
                   <button class="userToggleBtn"
                     data-worker="${escapeAttr(w.worker)}"
                     data-next="${escapeAttr(String(w.status || "ACTIVE").toUpperCase() === "ACTIVE" ? "INACTIVE" : "ACTIVE")}">
@@ -11644,6 +11653,7 @@ window.__lastSalaryMonth = month || "";
             <th align="right">Holidays</th>
             <th align="right">Deduction</th>
             <th align="right">Paid</th>
+            <th align="right">Till Today</th>
             <th align="right">Balance</th>
           </tr>
           ${rows.map(r => {
@@ -11665,6 +11675,7 @@ window.__lastSalaryMonth = month || "";
                 <td align="right">${Number(r.holiday_count || 0).toFixed(0)}</td>
                 <td align="right">₹${Number(r.holiday_deduction || 0).toFixed(0)}</td>
                 <td align="right">₹${Number(r.paid_total || 0).toFixed(0)}</td>
+                <td align="right">₹${Number(r.balance_till_today || 0).toFixed(0)}</td>
                 <td align="right"><strong>₹${Number(r.balance || 0).toFixed(0)}</strong></td>
               </tr>
             `;
@@ -11816,11 +11827,14 @@ const el = rowEls.find(r =>
   }
 
   async function updateWorkerStatus(worker, status) {
-    const r = await api({
-      action: "updateWorkerStatus",
-      worker,
-      status
-    });
+    const status_date = (document.getElementById("wk_status_date")?.value || todayISO()).trim();
+
+const r = await api({
+  action: "updateWorkerStatus",
+  worker,
+  status,
+  status_date
+});
 
     if (r && r.error) return;
     alert(`Updated: ${worker} → ${status}`);
