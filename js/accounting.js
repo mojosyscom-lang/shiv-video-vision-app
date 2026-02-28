@@ -671,14 +671,26 @@ const body =
   /* =========================
      SPEED CACHE (NEW)
   ========================== */
+  // REPLACE WITH:
   const CACHE = {
     workersRaw: { data: null, at: 0 },
     upadMeta: { data: null, at: 0 },
     holidaysAll: { data: null, at: 0 },
     monthsMerged: { data: null, at: 0 },
-    workersActive: { data: null, at: 0 }
+    workersActive: { data: null, at: 0 },
+    upadList: { map: {}, atMap: {} } // Preparing memory for the list itself
   };
 
+  /* // THE SILENT SCRIBE: Pre-fetching the future into the present
+  function silentPrefetchHeavyData() {
+    setTimeout(() => {
+      console.log("Oracle: Silently pre-fetching Advance/Upad data...");
+      // Fetching the meta and workers instantly in the background for 10 minutes of cache
+      cachedApi("upadMeta", 600000, () => api({ action: "getUpadMeta" })).catch(()=>{});
+      getActiveWorkers().catch(()=>{});
+    }, 1500); // Waits 1.5 seconds so the dashboard renders completely unhindered first
+  }
+*/
   function fresh(cacheKey, ttlMs) {
     return CACHE[cacheKey]?.data && (Date.now() - CACHE[cacheKey].at) < ttlMs;
   }
@@ -690,6 +702,28 @@ const body =
     CACHE[cacheKey].at = Date.now();
     return data;
   }
+
+    // ✅ Cache helper: stores results by subKey (example: month|worker)
+  async function cachedMapApi(cacheKey, subKey, ttlMs, fn){
+    const bucket = CACHE[cacheKey];
+    if (!bucket) return await fn();
+
+    bucket.map = bucket.map || {};
+    bucket.atMap = bucket.atMap || {};
+
+    const k = String(subKey || "");
+    const at = Number(bucket.atMap[k] || 0);
+    if (bucket.map.hasOwnProperty(k) && (Date.now() - at) < ttlMs){
+      return bucket.map[k];
+    }
+
+    const data = await fn();
+    bucket.map[k] = data;
+    bucket.atMap[k] = Date.now();
+    return data;
+  }
+
+  
 
   function invalidateCache(keys) {
     (keys || []).forEach(k => {
@@ -1276,10 +1310,14 @@ function canFinanceEdit() {
               el.addEventListener("click", () => showActivityModal(mega.activity[idx]));
             });
         }
+    // REPLACE WITH:
       } catch(e) {
         console.warn("Mega payload failed, retreating to individual streams...", e);
         loadAccountBalanceCard(); loadGstYearCard(); loadTdsYearCard(); loadDashMonthCards(month); loadDashSalaryCard(month); loadDashRecentActivity();
       }
+      
+     /* // Awaken the Scribe
+      silentPrefetchHeavyData(); */
     }, 0);
 
     
@@ -7535,7 +7573,61 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
        ✅ UPDATED: Upad Section
        ========================================================== */
     if (type === "upad") {
-      content.innerHTML = `<div class="card"><h2>Advance</h2><p>Loading…</p></div>`;
+            content.innerHTML = `
+        <div class="card">
+          <h2>Advance</h2>
+
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">Add Advance</h3>
+
+            <label>Worker</label>
+            <select id="upad_worker" disabled>
+              <option>Loading workers...</option>
+            </select>
+
+            <label style="margin-top:10px;">Amount</label>
+            <input id="upad_amount" type="number" inputmode="decimal" pattern="[0-9]*" placeholder="Amount" disabled>
+
+            <label style="margin-top:10px;">Date</label>
+            <input id="upad_date" type="date" value="${todayISO()}" max="${todayISO()}" disabled>
+
+            <label style="margin-top:10px;">Description (Optional)</label>
+            <input id="upad_desc" type="text" placeholder="Reason / Notes (optional)" disabled>
+
+            <button class="primary" id="btn_upad" style="margin-top:14px;" disabled>Loading…</button>
+          </div>
+
+          <div class="card" style="margin-top:12px;">
+            <h3 style="margin-top:0;">Advance Summary</h3>
+
+            <label>Month</label>
+            <select id="upad_filter_month" disabled>
+              <option value="">Loading months...</option>
+            </select>
+
+            <label style="margin-top:10px;">Worker</label>
+            <select id="upad_filter_worker" disabled>
+              <option value="">Loading workers...</option>
+            </select>
+
+            <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+              <button class="primary" id="btn_upad_load" disabled>Show</button>
+              <button class="primary" id="btn_upad_clear" style="background:#111;" disabled>Clear</button>
+              ${ role === "superadmin"
+                  ? `<button class="primary" id="btn_upad_export" style="background:#1fa971;" disabled>Export CSV</button>`
+                  : ``
+              }
+            </div>
+
+            <p id="upad_total" style="margin-top:10px;font-size:12px;color:#777;"></p>
+            <div id="upad_list" style="margin-top:12px;"></div>
+
+            <p class="dashSmall" style="margin-top:10px;">
+              (Nothing will show until you click <b>Show</b> or change Month/Worker.)
+            </p>
+          </div>
+        </div>
+      `;
 
       const [meta, workers, monthsMerged] = await Promise.all([
         cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" })),
@@ -7636,7 +7728,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
           const month = (document.getElementById("upad_filter_month")?.value || "").trim();
           const worker = (document.getElementById("upad_filter_worker")?.value || "").trim();
 
-          const rows = await api({ action: "listUpad", month, worker });
+                    const key = `${month || "ALL"}|${worker || "ALL"}`;
+          const rows = await cachedMapApi("upadList", key, 60000, () => api({ action: "listUpad", month, worker }));
           lastUpadRows = Array.isArray(rows) ? rows : [];
 
           if (!listBox) return;
@@ -11320,7 +11413,7 @@ const description = String(document.getElementById("upad_desc")?.value || "").tr
     document.getElementById("upad_amount").value = "";
     document.getElementById("upad_desc").value = "";
 
-    invalidateCache(["upadMeta", "monthsMerged"]);
+        invalidateCache(["upadMeta", "monthsMerged", "upadList"]);
   } finally {
     setTimeout(unlock, 600);
   }
