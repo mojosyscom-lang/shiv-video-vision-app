@@ -1228,7 +1228,70 @@ function canFinanceEdit() {
     }
   }
 
+// silent prefetch starts here
 
+async function getDashVersion_(){
+  // ✅ Uses IndexedDB meta cached during dashboard load (fallback = 1)
+  try{
+    const comp = String(localStorage.getItem("company") || "");
+    const metaKey = `DASH_META|${comp}`;
+    const meta = await idbGet_(metaKey);
+    const v = Number(meta?.version || 1);
+    return (v > 0 ? v : 1);
+  }catch(e){
+    return 1;
+  }
+}
+
+function shellKey_(name, ver){
+  const comp = String(localStorage.getItem("company") || "");
+  const v = Number(ver || 1) || 1;
+  return `SHELL|${comp}|v${v}|${name}`;
+}
+
+
+  
+async function prefetchShellCaches(ver){
+  try{
+        console.log("⚡ prefetchShellCaches start, ver=", ver);
+    const comp = String(localStorage.getItem("company") || "");
+    const v = Number(ver || 1) || 1;
+
+    function shellKey_(name){
+      return `SHELL|${comp}|v${v}|${name}`;
+    }
+
+    const jobs = [
+      { name:"WORKERS", action:"listWorkersLite" },
+      { name:"CLIENTS", action:"listClientsLite" },
+      { name:"EXPTYPES", action:"listExpenseTypes", payload:{ onlyActive:true } },
+      { name:"INVENTORY", action:"listInventoryLite" },
+      { name:"ORDERS", action:"listOrdersLite" },
+      { name:"INVOICES", action:"listInvoicesLite" }
+    ];
+
+    // ✅ Run quietly, 1-by-1 (safe for Apps Script quotas)
+    for (const j of jobs){
+      const k = shellKey_(j.name);
+            const hit = await idbGet_(k);
+      if (hit){
+        console.log("✅ SHELL HIT", j.name, k);
+        continue;
+      }
+      console.log("⬇️ SHELL FETCH", j.name);
+
+      const res = await api(Object.assign({ action: j.action }, (j.payload || {})));
+      if (res && !res.error){
+        await idbSet_(k, res);
+                console.log("💾 SHELL SAVED", j.name, k);
+      }
+    }
+  }catch(e){
+    // silent
+  }
+}
+
+  // silent prefetch ends here
 
   
   
@@ -1345,6 +1408,7 @@ function canFinanceEdit() {
         try{
           const meta = await api({ action: "getDashboardCacheMeta" });
           ver = Number(meta?.version || 1);
+                    prefetchShellCaches(ver).catch(()=>{});
           await idbSet_(metaKey, { version: ver, at: Date.now() });
         }catch(e){
           // keep cached ver
@@ -7467,7 +7531,22 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
       }
 
       content.innerHTML = `<div class="card"><h2>Workers</h2><p>Loading…</p></div>`;
-      const workers = await cachedApi("workersRaw", 60000, () => api({ action: "listWorkers" }));
+            // ✅ SHELL CACHE (IndexedDB + Version stamp)
+      const ver = await getDashVersion_();
+      const k = shellKey_("WORKERS", ver);
+
+      // 1) Try instant IndexedDB
+      let workers = await idbGet_(k);
+
+      // 2) If missing, fetch lite + store
+      if (!workers) {
+        workers = await api({ action: "listWorkersLite" });
+        if (workers && !workers.error) await idbSet_(k, workers);
+      }
+
+      // 3) Safety normalize
+      if (workers && workers.error) workers = [];
+      workers = Array.isArray(workers) ? workers : [];
 
       content.innerHTML = `
         <div class="card">
