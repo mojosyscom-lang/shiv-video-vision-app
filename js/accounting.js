@@ -11108,18 +11108,7 @@ const currentYM = `${d0.getFullYear()}-${String(d0.getMonth()+1).padStart(2,"0")
   const btnExport = document.getElementById("btn_sal_export");
   if (btnExport) btnExport.disabled = false;
 
-  // ✅ warm salary cache after UI is ready
-  const ym = String(document.getElementById("sal_month")?.value || "").trim();
-if (!ym) return;
-
-const m = monthLabelFromISO(ym + "-01");
-cachedMapApi(
-  "salarySummary",
-  m,
-  5 * 60 * 1000,
-  () => api({ action: "getSalarySummary", month: m })
-).catch(()=>{});
-
+    // ✅ warm cache moved below (after month picker is rendered)
 
 
 
