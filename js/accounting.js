@@ -11059,12 +11059,79 @@ if (!document.getElementById("sal_inactive_css")) {
 }
     
     if (type === "salary") {
-      content.innerHTML = `<div class="card"><h2>Salary</h2><p>Loading…</p></div>`;
+     
 
-      const [months, workers] = await Promise.all([
-        getMonthOptionsMerged(),
-        getActiveWorkers()
-      ]);
+content.innerHTML = `
+  <div class="card">
+    <h2>Salary</h2>
+    <p class="dashSmall">Loading…</p>
+
+    <label>Month</label>
+    <select id="sal_month" disabled>
+      <option value="">Loading…</option>
+    </select>
+    <br><br>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="primary" id="btn_sal_load" disabled>Load Summary</button>
+      ${role === "superadmin"
+        ? `<button class="primary" id="btn_sal_export" style="background:#1fa971;" disabled>Export CSV</button>`
+        : ``}
+    </div>
+  </div>
+
+  <div class="card" id="sal_result">
+    <p>Select a month and click Load Summary.</p>
+  </div>
+`;
+
+
+
+      
+
+     
+
+      setTimeout(async () => {
+  const [months, workers] = await Promise.all([
+    getMonthOptionsMerged(),
+    getActiveWorkers()
+  ]);
+
+  const salMonthEl = document.getElementById("sal_month");
+  if (salMonthEl) {
+    const current = monthLabelNow();
+    const hasCurrent = months.map(normMonthLabel).includes(normMonthLabel(current));
+
+    salMonthEl.innerHTML = `
+      <option value="">All</option>
+      ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
+    `;
+    salMonthEl.disabled = false;
+
+    if (hasCurrent) salMonthEl.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
+  }
+
+  const btnLoad = document.getElementById("btn_sal_load");
+  if (btnLoad) {
+    btnLoad.disabled = false;
+    btnLoad.onclick = loadSalarySummary;
+  }
+
+  const btnExport = document.getElementById("btn_sal_export");
+  if (btnExport) btnExport.disabled = false;
+
+  // ✅ warm salary cache after UI is ready
+  const m = (document.getElementById("sal_month")?.value || "").trim();
+  cachedMapApi("salarySummary", m || "__ALL__", 5 * 60 * 1000, () => api({ action:"getSalarySummary", month:m })).catch(()=>{});
+
+}, 0);
+
+
+
+
+
+
+      
 
       const current = monthLabelNow();
       const hasCurrent = months.map(normMonthLabel).includes(normMonthLabel(current));
@@ -11155,6 +11222,19 @@ if (!document.getElementById("sal_inactive_css")) {
       if (payMonth && hasCurrent) payMonth.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || payMonth.value;
 
       document.getElementById("btn_sal_load").addEventListener("click", loadSalarySummary);
+
+// ✅ BLINK: silent prefetch (warms cache so "Load Summary" is instant)
+setTimeout(() => {
+  const m = (document.getElementById("sal_month")?.value || "").trim();
+  cachedMapApi(
+    "salarySummary",
+    m || "__ALL__",
+    5 * 60 * 1000,
+    () => api({ action: "getSalarySummary", month: m })
+  ).catch(()=>{});
+}, 0);
+
+      
       /* === STEP 5: Auto-load Salary summary if coming from dashboard activity === */
 (function autoLoadFromActivity_Salary() {
   const raw = sessionStorage.getItem("activity_jump");
