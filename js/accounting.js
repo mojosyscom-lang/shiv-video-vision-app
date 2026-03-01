@@ -1262,6 +1262,14 @@ async function prefetchShellCaches(ver){
     const comp = String(localStorage.getItem("company") || "");
     const v = Number(ver || 1) || 1;
 
+        // ✅ Single-flight: do not run shell prefetch twice for same version
+    if (window.__shellPrefetchInFlight && window.__shellPrefetchVer === v) {
+      console.log("🟡 prefetchShellCaches skipped (same ver inflight)", v);
+      return;
+    }
+    window.__shellPrefetchInFlight = true;
+    window.__shellPrefetchVer = v;
+
     function shellKey_(name){
       return `SHELL|${comp}|v${v}|${name}`;
     }
@@ -1293,6 +1301,8 @@ async function prefetchShellCaches(ver){
     }
   }catch(e){
     // silent
+  } finally {
+    window.__shellPrefetchInFlight = false;
   }
 }
 
@@ -1312,6 +1322,12 @@ async function prefetchShellCaches(ver){
   }
     
         const month = monthLabelNow();
+            // ✅ Single-flight: prevent duplicate dashboard builds
+        if (window.__dashBuildInFlight) {
+          console.log("🟡 showDashboard skipped (inflight)");
+          return;
+        }
+        window.__dashBuildInFlight = true;
 
     // ✅ Instant render (no await) — dashboard appears immediately
     content.innerHTML = `
@@ -1504,8 +1520,11 @@ async function prefetchShellCaches(ver){
         loadDashMonthCards(month);
         loadDashSalaryCard(month);
         loadDashRecentActivity();
+      } finally {
+        // ✅ release dashboard lock even if something fails
+        window.__dashBuildInFlight = false;
       }
-      
+
      /* // Awaken the Scribe
       silentPrefetchHeavyData(); */
     }, 0);
