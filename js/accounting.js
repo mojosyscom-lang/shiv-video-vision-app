@@ -11091,10 +11091,11 @@ content.innerHTML = `
 
      
 
-        const [months, workers] = await Promise.all([
-    getMonthOptionsMerged(),
-    getActiveWorkers()
-  ]);
+      const workers = await getActiveWorkers();
+
+// ✅ Month picker default (like GST Bills report)
+const d0 = new Date();
+const currentYM = `${d0.getFullYear()}-${String(d0.getMonth()+1).padStart(2,"0")}`; // YYYY-MM
 
   const salMonthEl = document.getElementById("sal_month");
   if (salMonthEl) {
@@ -11120,8 +11121,16 @@ content.innerHTML = `
   if (btnExport) btnExport.disabled = false;
 
   // ✅ warm salary cache after UI is ready
-  const m = (document.getElementById("sal_month")?.value || "").trim();
-  cachedMapApi("salarySummary", m || "__ALL__", 5 * 60 * 1000, () => api({ action:"getSalarySummary", month:m })).catch(()=>{});
+  const ym = String(document.getElementById("sal_month")?.value || "").trim();
+if (!ym) return;
+
+const m = monthLabelFromISO(ym + "-01");
+cachedMapApi(
+  "salarySummary",
+  m,
+  5 * 60 * 1000,
+  () => api({ action: "getSalarySummary", month: m })
+).catch(()=>{});
 
 
 
@@ -11129,18 +11138,15 @@ content.innerHTML = `
 
       
 
-      const current = monthLabelNow();
-      const hasCurrent = months.map(normMonthLabel).includes(normMonthLabel(current));
+            const _d = new Date();
+      const currentYM = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,"0")}`; // "YYYY-MM"
 
       content.innerHTML = `
         <div class="card">
           <h2>Salary</h2>
 
           <label>Month</label>
-          <select id="sal_month">
-            <option value="">All</option>
-            ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
-          </select>
+          <input id="sal_month" type="month" value="${escapeAttr(currentYM)}" style="max-width:220px;">
           <br><br>
 
           
@@ -11164,11 +11170,8 @@ content.innerHTML = `
         <div class="card" id="sal_pay_list_card">
           <h3>Edit Salary Payments</h3>
 
-          <label>Month</label>
-          <select id="sal_pay_list_month">
-            <option value="">All</option>
-            ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
-          </select>
+                   <label>Month</label>
+          <input id="sal_pay_list_month" type="month" value="${escapeAttr(currentYM)}" style="max-width:220px;">
           <br><br>
 
           <button class="primary" id="btn_sal_pay_list">Load Payments</button>
@@ -11194,14 +11197,8 @@ content.innerHTML = `
           <label>Amount</label>
           <input id="sal_amount" type="number" placeholder="Amount"><br><br>
 
-          <label>Month</label>
-          <select id="sal_pay_month">
-            ${
-              months.length
-                ? months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")
-                : `<option value="${escapeAttr(current)}">${escapeHtml(current)}</option>`
-            }
-          </select>
+                   <label>Month</label>
+          <input id="sal_pay_month" type="month" value="${escapeAttr(currentYM)}" style="max-width:220px;">
           <br><br>
 
           <button class="primary" id="btn_sal_pay">Add Payment</button>
@@ -11221,13 +11218,16 @@ content.innerHTML = `
 
 // ✅ BLINK: silent prefetch (warms cache so "Load Summary" is instant)
 setTimeout(() => {
-  const m = (document.getElementById("sal_month")?.value || "").trim();
-  cachedMapApi(
-    "salarySummary",
-    m || "__ALL__",
-    5 * 60 * 1000,
-    () => api({ action: "getSalarySummary", month: m })
-  ).catch(()=>{});
+ const ym = String(document.getElementById("sal_month")?.value || "").trim();
+if (!ym) return;
+
+const m = monthLabelFromISO(ym + "-01");
+cachedMapApi(
+  "salarySummary",
+  m,
+  5 * 60 * 1000,
+  () => api({ action: "getSalarySummary", month: m })
+).catch(()=>{});
 }, 0);
 
       
@@ -11258,7 +11258,12 @@ async function loadSalaryPaymentsList(){
 
   box.innerHTML = `<p>Loading…</p>`;
 
-  const month = (document.getElementById("sal_pay_list_month")?.value || "").trim();
+    const ym = String(document.getElementById("sal_pay_list_month")?.value || "").trim();
+  if (!ym) {
+    box.innerHTML = `<p style="color:#b00020;">Please select a month.</p>`;
+    return;
+  }
+  const month = monthLabelFromISO(ym + "-01");
 
   const rows = await api({ action: "listSalaryPayments", month });
 
@@ -11721,15 +11726,17 @@ async function isDuplicateExpense({ company, date, category, description, amount
     const unlock = lockButton(btn, "Loading...");
 
     try {
-      const month = document.getElementById("sal_month").value.trim();
+            const ym = String(document.getElementById("sal_month")?.value || "").trim();
+      if (!ym) return alert("Please select a month.");
+      const month = monthLabelFromISO(ym + "-01");
       const rows = await cachedMapApi(
   "salarySummary",
-  month || "__ALL__",
+    month,
   5 * 60 * 1000, // 5 min
   () => api({ action: "getSalarySummary", month })
 );
 window.__lastSalaryRows = Array.isArray(rows) ? rows : [];
-window.__lastSalaryMonth = month || "";
+window.__lastSalaryMonth = month;
 
       const box = document.getElementById("sal_result");
       if (!rows || rows.length === 0) {
@@ -11833,7 +11840,9 @@ const el = rowEls.find(r =>
     try {
       const worker = document.getElementById("sal_worker").value.trim();
       const amount = Number(document.getElementById("sal_amount").value || 0);
-      const month = document.getElementById("sal_pay_month").value.trim() || monthLabelNow();
+            const ym = String(document.getElementById("sal_pay_month")?.value || "").trim();
+      if (!ym) return alert("Please select a month.");
+      const month = monthLabelFromISO(ym + "-01");
 
       if (!worker || !amount) return alert("Enter worker and amount");
 
