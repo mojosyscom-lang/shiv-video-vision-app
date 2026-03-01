@@ -679,7 +679,8 @@ const body =
     monthsMerged: { data: null, at: 0 },
     workersActive: { data: null, at: 0 },
     upadList: { map: {}, atMap: {} }, // Preparing memory for the list itself
-    expensesList: { map: {}, atMap: {} }
+    expensesList: { map: {}, atMap: {} },
+    salarySummary: { map: {}, atMap: {} }
   
   
   };
@@ -11043,6 +11044,19 @@ return;
 
 
 // salary section starts here
+
+    // ✅ Salary inactive row styling (insert once)
+if (!document.getElementById("sal_inactive_css")) {
+  const st = document.createElement("style");
+  st.id = "sal_inactive_css";
+  st.textContent = `
+    .salInactive td{
+      color:#b00020 !important;
+      background:#fff5f5 !important;
+    }
+  `;
+  document.head.appendChild(st);
+}
     
     if (type === "salary") {
       content.innerHTML = `<div class="card"><h2>Salary</h2><p>Loading…</p></div>`;
@@ -11632,7 +11646,12 @@ async function isDuplicateExpense({ company, date, category, description, amount
 
     try {
       const month = document.getElementById("sal_month").value.trim();
-      const rows = await api({ action: "getSalarySummary", month });
+      const rows = await cachedMapApi(
+  "salarySummary",
+  month || "__ALL__",
+  5 * 60 * 1000, // 5 min
+  () => api({ action: "getSalarySummary", month })
+);
 window.__lastSalaryRows = Array.isArray(rows) ? rows : [];
 window.__lastSalaryMonth = month || "";
 
@@ -11666,16 +11685,23 @@ window.__lastSalaryMonth = month || "";
             );
 
             return `
-              <tr class="salRow" data-sal-worker="${escapeAttr(String(r.worker || ""))}">
+              <tr class="salRow ${String(r.status||"").toUpperCase()==="INACTIVE" ? "salInactive" : ""}" data-sal-worker="${escapeAttr(String(r.worker || ""))}">
 
-                <td>${escapeHtml(r.worker)}</td>
+                <td>
+  ${escapeHtml(r.worker)}
+  ${String(r.status||"").toUpperCase()==="INACTIVE"
+    ? `<span style="margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;background:#ffe5e5;color:#b00020;font-weight:700;">INACTIVE</span>`
+    : ``
+  }
+</td>
                 <td align="right">₹${Number(r.monthly_salary || 0).toFixed(0)}</td>
                 <td align="right">₹${Number(r.prorated_salary || 0).toFixed(0)}</td>
                 <td align="right">₹${upadVal.toFixed(0)}</td>
                 <td align="right">${Number(r.holiday_count || 0).toFixed(0)}</td>
                 <td align="right">₹${Number(r.holiday_deduction || 0).toFixed(0)}</td>
                 <td align="right">₹${Number(r.paid_total || 0).toFixed(0)}</td>
-                <td align="right">₹${Number(r.balance_till_today || 0).toFixed(0)}</td>
+                
+                <td align="right">₹${Number(r.balance_till_today || r.balanceTillToday || 0).toFixed(0)}</td>
                 <td align="right"><strong>₹${Number(r.balance || 0).toFixed(0)}</strong></td>
               </tr>
             `;
@@ -11745,6 +11771,7 @@ const el = rowEls.find(r =>
 
       if (r && r.queued) alert("Payment saved offline. Will sync when online.");
       else alert("Payment added");
+            invalidateCache(["salarySummary"]);
 
       document.getElementById("sal_amount").value = "";
     } finally {
@@ -11838,7 +11865,7 @@ const r = await api({
 
     if (r && r.error) return;
     alert(`Updated: ${worker} → ${status}`);
-    invalidateCache(["workersRaw", "workersActive"]);
+    invalidateCache(["workersRaw", "workersActive", "salarySummary"]);
     loadSection("workers");
   }
 
