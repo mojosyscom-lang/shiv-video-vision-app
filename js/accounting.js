@@ -1351,7 +1351,7 @@ function canFinanceEdit() {
           if (!(ver > 0)) ver = 1;
         }
 
-        const comp = String(localStorage.getItem("company") || "");
+        
                const cacheKey = `MEGA|${comp}|v${ver}|${month}|${yr}`;
 
         // ✅ IndexedDB cache (persistent + fast)
