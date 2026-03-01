@@ -727,6 +727,58 @@ const body =
     return data;
   }
 
+
+
+    /* =========================
+     ✅ INDEXEDDB CACHE (Version-stamp friendly)
+     - Persistent on device
+     - Great for mega payloads + section shells
+  ========================== */
+  const IDB_DB_NAME = "svv_cache_v1";
+  const IDB_STORE = "kv";
+
+  function idbOpen_(){
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDB_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbGet_(key){
+    try{
+      const db = await idbOpen_();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const st = tx.objectStore(IDB_STORE);
+        const rq = st.get(String(key));
+        rq.onsuccess = () => resolve(rq.result ?? null);
+        rq.onerror = () => reject(rq.error);
+      });
+    }catch(e){
+      return null;
+    }
+  }
+
+  async function idbSet_(key, val){
+    try{
+      const db = await idbOpen_();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        const st = tx.objectStore(IDB_STORE);
+        const rq = st.put(val, String(key));
+        rq.onsuccess = () => resolve(true);
+        rq.onerror = () => reject(rq.error);
+      });
+    }catch(e){
+      return false;
+    }
+  }
+
   
 
   function invalidateCache(keys) {
@@ -1282,20 +1334,31 @@ function canFinanceEdit() {
                const yr = (new Date()).getFullYear();
 
         // ✅ Get backend dashboard version (fast) to make cache auto-reset on any write
-        let ver = 1;
+               let ver = 1;
+        const comp = String(localStorage.getItem("company") || "");
+
+        // ✅ Try cached meta first (instant), then revalidate from server
+        const metaKey = `DASH_META|${comp}`;
+        const cachedMeta = await idbGet_(metaKey);
+        if (cachedMeta && cachedMeta.version) ver = Number(cachedMeta.version || 1);
+
         try{
           const meta = await api({ action: "getDashboardCacheMeta" });
           ver = Number(meta?.version || 1);
-        }catch(e){ ver = 1; }
+          await idbSet_(metaKey, { version: ver, at: Date.now() });
+        }catch(e){
+          // keep cached ver
+          if (!(ver > 0)) ver = 1;
+        }
 
         const comp = String(localStorage.getItem("company") || "");
-        const cacheKey = `MEGA|${comp}|v${ver}|${month}|${yr}`;
+               const cacheKey = `MEGA|${comp}|v${ver}|${month}|${yr}`;
 
-        // ✅ Use long-lived local cache if available
-        let mega = lsGet_(cacheKey);
+        // ✅ IndexedDB cache (persistent + fast)
+        let mega = await idbGet_(cacheKey);
         if (!mega){
           mega = await api({ action: "getDashboardMega", month: month, year: yr });
-          lsSet_(cacheKey, mega);
+          await idbSet_(cacheKey, mega);
         }
         
         // Render Account Balance
