@@ -11096,7 +11096,7 @@ content.innerHTML = `
     getMonthOptionsMerged(),
     getActiveWorkers()
   ]);
-
+/*
   const salMonthEl = document.getElementById("sal_month");
   if (salMonthEl) {
     const current = monthLabelNow();
@@ -11123,7 +11123,7 @@ content.innerHTML = `
   // ✅ warm salary cache after UI is ready
   const m = (document.getElementById("sal_month")?.value || "").trim();
   cachedMapApi("salarySummary", m || "__ALL__", 5 * 60 * 1000, () => api({ action:"getSalarySummary", month:m })).catch(()=>{});
-
+*/
 }, 0);
 
 
