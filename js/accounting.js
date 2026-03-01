@@ -671,7 +671,7 @@ const body =
   /* =========================
      SPEED CACHE (NEW)
   ========================== */
-  // REPLACE WITH:
+  
   const CACHE = {
     workersRaw: { data: null, at: 0 },
     upadMeta: { data: null, at: 0 },
@@ -946,6 +946,11 @@ function canFinanceEdit() {
     return monthLabelFromAny(v);
   }
 
+
+// Dashboard starts here
+
+
+  
   // ✅ NEW: Dashboard Upad total fallback (handles different backend response shapes)
   function getUpadTotalFromDash(dash) {
     if (!dash) return 0;
@@ -972,7 +977,7 @@ function canFinanceEdit() {
     return 0;
   }
 
-// REPLACE WITH:
+
   async function getActiveWorkers() {
     // The Silent Scribe: Fetching active workers directly from the unified meta payload
     const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
@@ -999,7 +1004,7 @@ function canFinanceEdit() {
     return months.filter(Boolean);
   }
 
- // REPLACE WITH:
+
   async function getMonthOptionsMerged() {
     return cachedApi("monthsMerged", 60000, async () => {
       // The Unified Meta: Extracting all months from the single upadMeta payload
@@ -1400,75 +1405,97 @@ async function prefetchShellCaches(ver){
                let ver = 1;
         const comp = String(localStorage.getItem("company") || "");
 
-        // ✅ Try cached meta first (instant), then revalidate from server
+               // ✅ Try cached meta first (instant)
         const metaKey = `DASH_META|${comp}`;
         const cachedMeta = await idbGet_(metaKey);
         if (cachedMeta && cachedMeta.version) ver = Number(cachedMeta.version || 1);
 
-        try{
-          const meta = await api({ action: "getDashboardCacheMeta" });
-          ver = Number(meta?.version || 1);
-                    prefetchShellCaches(ver).catch(()=>{});
-          await idbSet_(metaKey, { version: ver, at: Date.now() });
-        }catch(e){
-          // keep cached ver
-          if (!(ver > 0)) ver = 1;
-        }
+        // ✅ Render helper (so we can render twice: cached + refreshed)
+        function renderMega_(mega){
+          // Render Account Balance
+          const elBal = document.getElementById("dashBalanceCard");
+          if (elBal) elBal.innerHTML = `<div class="dashStatLabel">Account Balance (All Time)</div><div class="dashStatValue">₹${Number(mega.balance.balance||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:10px; line-height:1.8;"><div><b>Total Income:</b> ₹${Number(mega.balance.total_income_all||0).toFixed(0)}</div><div><b>Total Expenses:</b> ₹${Number(mega.balance.total_expenses_all||0).toFixed(0)}</div><div><b>Total Advance Paid:</b> ₹${Number(mega.balance.total_upad_all||0).toFixed(0)}</div><div><b>Total Salary Paid:</b> ₹${Number(mega.balance.total_salary_paid_all||0).toFixed(0)}</div></div>`;
 
-        
-               const cacheKey = `MEGA|${comp}|v${ver}|${month}|${yr}`;
+          // Render GST
+          const elGst = document.getElementById("dashGstYearCard");
+          if (elGst) elGst.innerHTML = `<div class="dashStatLabel">GST Net (${mega.gst.year})</div><div class="dashStatValue">₹${Number(mega.gst.net||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Debit (GST Paid):</b> ₹${Number(mega.gst.debit||0).toFixed(0)}</div><div><b>Credit (GST on Invoices):</b> ₹${Number(mega.gst.credit||0).toFixed(0)}</div></div>`;
 
-        // ✅ IndexedDB cache (persistent + fast)
-        let mega = await idbGet_(cacheKey);
-if (mega) {
-      console.log(`%c ⚡ CACHE HIT: ${month} fetched from IDB.`, "color: #00ff00; font-weight: bold;");
-    } else {
-      console.warn(`%c ☁️ CACHE MISS: Fetching from AppScript...`, "color: #ff9900; font-weight: bold;");
-      mega = await api({ action: "getDashboardMega", month: month, year: yr });
-      if (mega) await idbSet_(cacheKey, mega);
-    }
+          // Render TDS
+          const elTds = document.getElementById("dashTdsYearCard");
+          if (elTds) elTds.innerHTML = `<div class="dashStatLabel">TDS Net (${mega.tds.year})</div><div class="dashStatValue">₹${Number(mega.tds.net||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Debit (IN Payments):</b> ₹${Number(mega.tds.credit||0).toFixed(0)}</div><div><b>Credit (Expenses TDS):</b> ₹${Number(mega.tds.debit||0).toFixed(0)}</div></div>`;
 
-    // 3. Guard Clause: If still no data, we cannot render
-    if (!mega) throw new Error("No mega data returned from server");
-        
-        // Render Account Balance
-        const elBal = document.getElementById("dashBalanceCard");
-        if (elBal) elBal.innerHTML = `<div class="dashStatLabel">Account Balance (All Time)</div><div class="dashStatValue">₹${Number(mega.balance.balance||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:10px; line-height:1.8;"><div><b>Total Income:</b> ₹${Number(mega.balance.total_income_all||0).toFixed(0)}</div><div><b>Total Expenses:</b> ₹${Number(mega.balance.total_expenses_all||0).toFixed(0)}</div><div><b>Total Advance Paid:</b> ₹${Number(mega.balance.total_upad_all||0).toFixed(0)}</div><div><b>Total Salary Paid:</b> ₹${Number(mega.balance.total_salary_paid_all||0).toFixed(0)}</div></div>`;
-        
-        // Render GST
-        const elGst = document.getElementById("dashGstYearCard");
-        if (elGst) elGst.innerHTML = `<div class="dashStatLabel">GST Net (${mega.gst.year})</div><div class="dashStatValue">₹${Number(mega.gst.net||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Debit (GST Paid):</b> ₹${Number(mega.gst.debit||0).toFixed(0)}</div><div><b>Credit (GST on Invoices):</b> ₹${Number(mega.gst.credit||0).toFixed(0)}</div></div>`;
-        
-        // Render TDS
-        const elTds = document.getElementById("dashTdsYearCard");
-        if (elTds) elTds.innerHTML = `<div class="dashStatLabel">TDS Net (${mega.tds.year})</div><div class="dashStatValue">₹${Number(mega.tds.net||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Debit (IN Payments):</b> ₹${Number(mega.tds.credit||0).toFixed(0)}</div><div><b>Credit (Expenses TDS):</b> ₹${Number(mega.tds.debit||0).toFixed(0)}</div></div>`;
-        
-        // Render Income & Expenses
-        const elIncVal = document.getElementById("dashIncomeVal");
-        if (elIncVal) elIncVal.textContent = `₹${Number(mega.dash.total_income || 0).toFixed(0)}`;
-        const elIncRec = document.getElementById("dashIncomeRecent");
-        if (elIncRec) elIncRec.innerHTML = (mega.dash.last_income_transactions || []).length ? mega.dash.last_income_transactions.map(t => `<div>₹${Number(t.amount || 0).toFixed(0)}</div>`).join("") : `<div>No recent income transactions</div>`;
-        
-        const elExpVal = document.getElementById("dashExpenseVal");
-        if (elExpVal) elExpVal.textContent = `₹${Number(mega.dash.monthly_expense_total || 0).toFixed(0)}`;
-        
-        const elAdvVal = document.getElementById("dashAdvanceVal");
-        if (elAdvVal) elAdvVal.textContent = `₹${(getUpadTotalFromDash(mega.dash)).toFixed(0)}`;
-        
-        // Render Salary
-        const elSal = document.getElementById("dashSalaryCard");
-        if (elSal) elSal.innerHTML = `<div class="dashStatLabel">Salary (${mega.salary.month})</div><div class="dashStatValue">₹${Number(mega.salary.salary_left||0).toFixed(0)}</div><div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Left to Pay:</b> ₹${Number(mega.salary.salary_left||0).toFixed(0)}</div><div><b>Total Prorated:</b> ₹${Number(mega.salary.total_prorated_salary||0).toFixed(0)}</div></div>`;
-        
-        // Render Activity
-        const boxAct = document.getElementById("dashActivity");
-        if (boxAct) {
-            boxAct.innerHTML = (mega.activity || []).length ? mega.activity.map((r,i) => `<div class="dashActRow" data-act-index="${i}" style="cursor:pointer;"><div class="dashActMain"><div><b>${escapeHtml(r.action||"")}</b></div><div class="dashSmall">${escapeHtml(r.details||"")}</div></div><div class="dashActTime">${escapeHtml(r.time||"")}</div></div>`).join("") : `<div class="dashSmall">No activity found.</div>`;
+          // Render Income & Expenses
+          const elIncVal = document.getElementById("dashIncomeVal");
+          if (elIncVal) elIncVal.textContent = `₹${Number(mega.dash.total_income || 0).toFixed(0)}`;
+          const elIncRec = document.getElementById("dashIncomeRecent");
+          if (elIncRec) elIncRec.innerHTML = (mega.dash.last_income_transactions || []).length ? mega.dash.last_income_transactions.map(t => `<div>₹${Number(t.amount || 0).toFixed(0)}</div>`).join("") : `<div>No recent income transactions</div>`;
+
+          const elExpVal = document.getElementById("dashExpenseVal");
+          if (elExpVal) elExpVal.textContent = `₹${Number(mega.dash.monthly_expense_total || 0).toFixed(0)}`;
+
+          const elAdvVal = document.getElementById("dashAdvanceVal");
+          if (elAdvVal) elAdvVal.textContent = `₹${(getUpadTotalFromDash(mega.dash)).toFixed(0)}`;
+
+          // Render Salary
+          const elSal = document.getElementById("dashSalaryCard");
+          if (elSal) elSal.innerHTML = `<div class="dashStatLabel">Salary (${mega.salary.month})</div><div class="dashStatValue">₹${Number(mega.salary.salary_left||0).toFixed(0)}</div>
+          <div class="dashSmall" style="margin-top:8px; line-height:1.8;"><div><b>Left to Pay:</b> ₹${Number(mega.salary.salary_left||0).toFixed(0)}</div>
+          <div><b>Total Prorated:</b> ₹${Number(mega.salary.total_prorated_salary||0).toFixed(0)}</div></div>`;
+
+          // Render Activity
+          const boxAct = document.getElementById("dashActivity");
+          if (boxAct) {
+            boxAct.innerHTML = (mega.activity || []).length ? mega.activity.map((r,i) => `<div class="dashActRow" data-act-index="${i}" style="cursor:pointer;"><div class="dashActMain">
+            <div><b>${escapeHtml(r.action||"")}</b></div><div class="dashSmall">${escapeHtml(r.details||"")}</div></div>
+            <div class="dashActTime">${escapeHtml(r.when || r.time || "")}</div></div>`).join("") : `<div class="dashSmall">No activity found.</div>`;
             // Re-bind activity clicks
             boxAct.querySelectorAll(".dashActRow").forEach((el, idx) => {
               el.addEventListener("click", () => showActivityModal(mega.activity[idx]));
             });
+          }
         }
-    // REPLACE WITH:
+
+        // ✅ 1) IDB-first MEGA load (instant if cached)
+        const cacheKey = `MEGA|${comp}|v${ver}|${month}|${yr}`;
+        let mega = await idbGet_(cacheKey);
+
+        if (mega) {
+          console.log(`%c ⚡ CACHE HIT: ${month} fetched from IDB.`, "color: #00ff00; font-weight: bold;");
+          renderMega_(mega);
+        } else {
+          console.warn(`%c ☁️ CACHE MISS: Fetching from AppScript...`, "color: #ff9900; font-weight: bold;");
+          mega = await api({ action: "getDashboardMega", month: month, year: yr });
+          if (mega) {
+            await idbSet_(cacheKey, mega);
+            renderMega_(mega);
+          }
+        }
+
+        // ✅ 2) Non-blocking meta revalidate: only refresh if version changed
+        api({ action: "getDashboardCacheMeta" }).then(async (meta) => {
+          const newVer = Number(meta?.version || 1);
+          if (!(newVer > 0)) return;
+
+          await idbSet_(metaKey, { version: newVer, at: Date.now() });
+          prefetchShellCaches(newVer).catch(()=>{});
+
+          if (newVer !== ver) {
+            const newKey = `MEGA|${comp}|v${newVer}|${month}|${yr}`;
+            let mega2 = await idbGet_(newKey);
+            if (!mega2) {
+              mega2 = await api({ action: "getDashboardMega", month: month, year: yr });
+              if (mega2) await idbSet_(newKey, mega2);
+            }
+            if (mega2) renderMega_(mega2);
+          }
+        }).catch(() => {
+          // ignore: keep cached content
+        });
+
+        // 3. Guard Clause: If still no data, we cannot render
+        if (!mega) throw new Error("No mega data returned from server");
+                // ✅ Already rendered via renderMega_(mega) above (no duplicate DOM work)
+   
       } catch(e) {
         console.warn("Mega payload failed, retreating to individual streams...", e);
         loadAccountBalanceCard();
