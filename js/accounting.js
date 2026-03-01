@@ -8208,7 +8208,23 @@ if (type === "clients") {
   content.innerHTML = `<div class="card"><h2>Clients</h2><p>Loading…</p></div>`;
 
   // We will NOT auto-render list. Only fetch once, then filter on UI.
-  const rows = await api({ action: "listClients" });
+    // ✅ SHELL CACHE (IndexedDB + Version stamp)
+  const ver = await getDashVersion_();
+  const k = shellKey_("CLIENTS", ver);
+
+  // 1) Try instant IndexedDB first
+  let rows = await idbGet_(k);
+
+  // 2) If missing, fetch lite + store
+  if (!rows) {
+    rows = await api({ action: "listClientsLite" });
+    if (rows && !rows.error) await idbSet_(k, rows);
+  }
+
+  // 3) Safety normalize
+  if (rows && rows.error) rows = [];
+
+  
   const allClients = Array.isArray(rows) ? rows : [];
 
   const canAdd = (role === "owner" || role === "superadmin");
@@ -8596,10 +8612,21 @@ const phone2 = normINPhonePlus91_(document.getElementById("cl_phone2")?.value ||
   const isSuper = (role === "superadmin");
 
   // Load inventory list (all statuses for superadmin; only active for others)
-  const rows = await api({
-    action: "listInventoryMaster",
-    onlyActive: isSuper ? false : true
-  });
+    // ✅ SHELL CACHE (IndexedDB + Version stamp)
+  const ver = await getDashVersion_();
+  const k = shellKey_("INVENTORY", ver);
+
+  // 1) Try instant IndexedDB first
+  let rows = await idbGet_(k);
+
+  // 2) If missing, fetch lite + store
+  if (!rows) {
+    rows = await api({ action: "listInventoryLite" });
+    if (rows && !rows.error) await idbSet_(k, rows);
+  }
+
+  // 3) Safety normalize
+  if (rows && rows.error) rows = [];
 
   const items = Array.isArray(rows) ? rows : [];
   const activeItems = items.filter(x => String(x.status || "ACTIVE").toUpperCase() === "ACTIVE");
@@ -10657,10 +10684,23 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
     </div>
   `;
 
-  const [months, typesRes] = await Promise.all([
-    getMonthOptionsMerged(),
-    api({ action: "listExpenseTypes" })
-  ]);
+   const months = await getMonthOptionsMerged();
+
+  // ✅ SHELL CACHE (IndexedDB + Version stamp) for Expense Types
+  const ver = await getDashVersion_();
+  const k = shellKey_("EXPTYPES", ver);
+
+  // 1) Try instant IndexedDB
+  let typesRes = await idbGet_(k);
+
+  // 2) If missing, fetch + store
+  if (!typesRes) {
+    typesRes = await api({ action: "listExpenseTypes" });
+    if (typesRes && !typesRes.error) await idbSet_(k, typesRes);
+  }
+
+  // 3) Safety normalize
+  if (typesRes && typesRes.error) typesRes = [];
 
   /* =========================
      NORMALIZE TYPES RESPONSE
