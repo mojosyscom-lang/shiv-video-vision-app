@@ -1356,10 +1356,16 @@ function canFinanceEdit() {
 
         // ✅ IndexedDB cache (persistent + fast)
         let mega = await idbGet_(cacheKey);
-        if (!mega){
-          mega = await api({ action: "getDashboardMega", month: month, year: yr });
-          await idbSet_(cacheKey, mega);
-        }
+if (mega) {
+      console.log(`%c ⚡ CACHE HIT: ${month} fetched from IDB.`, "color: #00ff00; font-weight: bold;");
+    } else {
+      console.warn(`%c ☁️ CACHE MISS: Fetching from AppScript...`, "color: #ff9900; font-weight: bold;");
+      mega = await api({ action: "getDashboardMega", month: month, year: yr });
+      if (mega) await idbSet_(cacheKey, mega);
+    }
+
+    // 3. Guard Clause: If still no data, we cannot render
+    if (!mega) throw new Error("No mega data returned from server");
         
         // Render Account Balance
         const elBal = document.getElementById("dashBalanceCard");
@@ -1401,7 +1407,12 @@ function canFinanceEdit() {
     // REPLACE WITH:
       } catch(e) {
         console.warn("Mega payload failed, retreating to individual streams...", e);
-        loadAccountBalanceCard(); loadGstYearCard(); loadTdsYearCard(); loadDashMonthCards(month); loadDashSalaryCard(month); loadDashRecentActivity();
+        loadAccountBalanceCard();
+        loadGstYearCard();
+        loadTdsYearCard();
+        loadDashMonthCards(month);
+        loadDashSalaryCard(month);
+        loadDashRecentActivity();
       }
       
      /* // Awaken the Scribe
