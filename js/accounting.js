@@ -11097,19 +11097,7 @@ content.innerHTML = `
 const d0 = new Date();
 const currentYM = `${d0.getFullYear()}-${String(d0.getMonth()+1).padStart(2,"0")}`; // YYYY-MM
 
-  const salMonthEl = document.getElementById("sal_month");
-  if (salMonthEl) {
-    const current = monthLabelNow();
-    const hasCurrent = months.map(normMonthLabel).includes(normMonthLabel(current));
-
-    salMonthEl.innerHTML = `
-      <option value="">All</option>
-      ${months.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join("")}
-    `;
-    salMonthEl.disabled = false;
-
-    if (hasCurrent) salMonthEl.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
-  }
+ // Month handled by <input type="month"> (no dropdown rendering needed)
 
   const btnLoad = document.getElementById("btn_sal_load");
   if (btnLoad) {
@@ -11138,8 +11126,7 @@ cachedMapApi(
 
       
 
-            const _d = new Date();
-      const currentYM = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,"0")}`; // "YYYY-MM"
+           // currentYM already defined above
 
       content.innerHTML = `
         <div class="card">
@@ -11208,11 +11195,7 @@ cachedMapApi(
         </div>
       `;
 
-      const salMonth = document.getElementById("sal_month");
-      if (salMonth && hasCurrent) salMonth.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || "";
-
-      const payMonth = document.getElementById("sal_pay_month");
-      if (payMonth && hasCurrent) payMonth.value = months.find(m => normMonthLabel(m) === normMonthLabel(current)) || payMonth.value;
+     // Month picker already defaults to currentYM
 
       document.getElementById("btn_sal_load").addEventListener("click", loadSalarySummary);
 
