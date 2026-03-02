@@ -4587,9 +4587,37 @@ if (type === "invoice") {
   // Prefetch
 const [companyRes, clientsRes, ordersRes, invMasterRes, gstListRes, gstDefRes, bankAccRes] = await Promise.all([
   api({ action: "getCompanyProfile" }),
-  api({ action: "listClients" }),
-  api({ action: "listOrders", month: "" }),
-  api({ action: "listInventoryMaster" }),
+    
+  (async () => {
+    const ver = await getDashVersion_();
+    const k = shellKey_("CLIENTS", ver);
+    let rows = await idbGet_(k);
+    if (!rows) {
+      rows = await api({ action: "listClientsLite" });
+      if (rows && !rows.error) await idbSet_(k, rows);
+    }
+    return Array.isArray(rows) ? rows : [];
+  })(),
+  (async () => {
+    const ver = await getDashVersion_();
+    const k = shellKey_("ORDERS", ver);
+    let rows = await idbGet_(k);
+    if (!rows) {
+      rows = await api({ action: "listOrdersLite" });
+      if (rows && !rows.error) await idbSet_(k, rows);
+    }
+    return Array.isArray(rows) ? rows : [];
+  })(),
+  (async () => {
+    const ver = await getDashVersion_();
+    const k = shellKey_("INVENTORY", ver);
+    let rows = await idbGet_(k);
+    if (!rows) {
+      rows = await api({ action: "listInventoryLite" });
+      if (rows && !rows.error) await idbSet_(k, rows);
+    }
+    return Array.isArray(rows) ? rows : [];
+  })(),
   api({ action: "listGST" }).catch(() => []),
   api({ action: "getDefaultGST" }).catch(() => null),
   api({ action: "listBankAccountsForCompany" }).catch(() => [])
@@ -9068,9 +9096,27 @@ if (type === "orders") {
   const isSuper = (role === "superadmin");
   const canAddEdit = (role === "owner" || role === "superadmin");
 
+   const ver = await getDashVersion_();
+
   const [clientRes, orderRes] = await Promise.all([
-    api({ action: "listClients" }),
-    api({ action: "listOrders", month: "" })
+    (async () => {
+      const k = shellKey_("CLIENTS", ver);
+      let rows = await idbGet_(k);
+      if (!rows) {
+        rows = await api({ action: "listClientsLite" });
+        if (rows && !rows.error) await idbSet_(k, rows);
+      }
+      return Array.isArray(rows) ? rows : [];
+    })(),
+    (async () => {
+      const k = shellKey_("ORDERS", ver);
+      let rows = await idbGet_(k);
+      if (!rows) {
+        rows = await api({ action: "listOrdersLite" });
+        if (rows && !rows.error) await idbSet_(k, rows);
+      }
+      return Array.isArray(rows) ? rows : [];
+    })()
   ]);
 
   const allClients = Array.isArray(clientRes) ? clientRes : [];
@@ -9989,8 +10035,18 @@ if (type === "inventoryTxn") {
   const isAdmin = (role === "owner" || role === "superadmin");
 
   // Load orders + for admin load pending adjustments
+  const ver = await getDashVersion_();
+
   const [ordersRes, pendingRes] = await Promise.all([
-    api({ action: "listOrders", month: "" }),
+    (async () => {
+      const k = shellKey_("ORDERS", ver);
+      let rows = await idbGet_(k);
+      if (!rows) {
+        rows = await api({ action: "listOrdersLite" });
+        if (rows && !rows.error) await idbSet_(k, rows);
+      }
+      return Array.isArray(rows) ? rows : [];
+    })(),
     isAdmin ? api({ action: "listPendingInvAdjust" }) : Promise.resolve([])
   ]);
 
