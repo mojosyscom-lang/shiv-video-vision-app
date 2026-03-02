@@ -1000,7 +1000,7 @@ function canFinanceEdit() {
   } 
 
 // this is old version just remember culprit
-
+*/
   async function getActiveWorkers() {
     // ✅ IndexedDB-first (Shell WORKERS) + version stamp
     const ver = await getDashVersion_();
@@ -1030,8 +1030,8 @@ function canFinanceEdit() {
     return list;
   }
 
-  */
-
+  
+/*
  async function getActiveWorkers() {
     try{
     const ver = await getDashVersion_();
@@ -1062,7 +1062,7 @@ function canFinanceEdit() {
   }
  }
 
-
+*/
    
 
   async function getSalaryMonthsFromUpad() {
@@ -4253,7 +4253,7 @@ if (type === "letterpad") {
             ${printBg ? `<img src="${escapeAttr(printBg)}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;" />` : ``}
 
             <div style="position:relative; z-index:1;">
-             <div class="hdr">
+             <div class="hdr" style="padding: 50px 10px">
   <div class="hdrLeft">
     <div class="brand">${escapeHtml(companyName)}</div>
     <div class="sub">${escapeHtml(companySub)}</div>
@@ -4294,7 +4294,7 @@ if (type === "letterpad") {
                 border-radius:10px;
               "></div>
 
-              <div style="position:absolute; left:56px; right:56px; bottom:72px; display:flex; justify-content:flex-end;">
+              <div style="position:absolute; left:56px; right:56px; bottom:32px; display:flex; justify-content:flex-end;">
                 <div style="text-align:center; width:220px; font-size:12px;">
                   <div>For ${escapeHtml(companyName)}</div>
                   <div style="border-bottom:1px solid #222; margin:38px 0 6px;"></div>
@@ -8047,11 +8047,35 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
         </div>
       `;
 
+      /* culprit for advance/upad section loading
       const [meta, workers, monthsMerged] = await Promise.all([
         cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" })),
         getActiveWorkers(),
         getMonthOptionsMerged()
       ]);
+
+      */
+
+      const ver = await getDashVersion_();
+
+const [meta, workers, monthsMerged] = await Promise.all([
+  idbGetOrFetch_(
+    vKey_("UPAD_META", ver, "ALL"),
+    () => api({ action: "getUpadMeta" }),
+    "UPAD meta"
+  ),
+  getActiveWorkers(),
+  getMonthOptionsMerged()
+]);
+
+
+
+
+
+
+
+
+      
 
       const current = monthLabelNow();
       const monthOptionsRaw = (monthsMerged && monthsMerged.length) ? monthsMerged : (meta.months || []);
