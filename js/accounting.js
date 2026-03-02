@@ -1254,6 +1254,22 @@ function shellKey_(name, ver){
   return `SHELL|${comp}|v${v}|${name}`;
 }
 
+  // ✅ Version-stamp IDB helper (no logic change)
+function vKey_(prefix, ver, label){
+  const comp = String(localStorage.getItem("company") || "");
+  const v = Number(ver || 1) || 1;
+  const lab = String(label || "ALL");
+  return `${prefix}|${comp}|v${v}|${lab}`;
+}
+
+async function idbGetOrFetch_(key, fetchFn){
+  const hit = await idbGet_(key);
+  if (hit) return hit;
+  const res = await fetchFn();
+  if (res && !res.error) await idbSet_(key, res);
+  return res;
+}
+
 
   
 async function prefetchShellCaches(ver){
@@ -1995,9 +2011,12 @@ if (type === "incomes") {
   // ✅ Clients
   // ---------------------------
   async function loadClients_(){
-    if (IN_CACHE.clients) return IN_CACHE.clients;
+        if (IN_CACHE.clients) return IN_CACHE.clients;
 
-    const rows = await api({ action: "listClients" });
+    const ver = await getDashVersion_();
+    const k2 = vKey_("CLIENTS_FULL", ver, "ALL");
+
+    const rows = await idbGetOrFetch_(k2, () => api({ action: "listClients" }));
     const list = Array.isArray(rows) ? rows : [];
     IN_CACHE.clients = list;
     return list;
@@ -3473,7 +3492,13 @@ if (type === "reports") {
     content.innerHTML = `<div class="card"><h2>Financial Intelligence</h2><p>Loading Data...</p></div>`;
 
     // Fetch invoices to build month list
-    const invRes = await api({ action: "listInvoices", month: "", q: "" });
+    const ver = await getDashVersion_();
+const k = shellKey_("INVOICES", ver);
+let invRes = await idbGet_(k);
+if (!invRes) {
+  invRes = await api({ action: "listInvoicesLite" });
+  if (invRes && !invRes.error) await idbSet_(k, invRes);
+}
     const invListAll = Array.isArray(invRes)
       ? invRes
       : Array.isArray(invRes?.rows) ? invRes.rows
@@ -7991,7 +8016,9 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
           const worker = (document.getElementById("upad_filter_worker")?.value || "").trim();
 
                     const key = `${month || "ALL"}|${worker || "ALL"}`;
-          const rows = await cachedMapApi("upadList", key, 60000, () => api({ action: "listUpad", month, worker }));
+                 const ver = await getDashVersion_();
+          const k2 = vKey_("UPAD", ver, key);
+          const rows = await idbGetOrFetch_(k2, () => api({ action: "listUpad", month, worker }));
           lastUpadRows = Array.isArray(rows) ? rows : [];
 
           if (!listBox) return;
@@ -10976,7 +11003,9 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
       const category = (document.getElementById("exp_filter_type")?.value || "").trim();
 
             const key = `${month || "ALL"}|${category || "ALL"}`;
-      const rows = await cachedMapApi("expensesList", key, 60000, () => api({ action: "listExpenses", month, category }));
+         const ver = await getDashVersion_();
+      const k2 = vKey_("EXP", ver, key);
+      const rows = await idbGetOrFetch_(k2, () => api({ action: "listExpenses", month, category }));
       lastExpenseRows = Array.isArray(rows) ? rows : [];
 
       if (!listBox) return;
@@ -11532,7 +11561,9 @@ async function loadSalaryPaymentsList(){
   }
   const month = monthLabelFromISO(ym + "-01");
 
-  const rows = await api({ action: "listSalaryPayments", month });
+   const ver = await getDashVersion_();
+  const k2 = vKey_("SALPAY", ver, month);
+  const rows = await idbGetOrFetch_(k2, () => api({ action: "listSalaryPayments", month }));
 
   if (rows && rows.error) {
     box.innerHTML = `<p style="color:red;">${escapeHtml(String(rows.error))}</p>`;
