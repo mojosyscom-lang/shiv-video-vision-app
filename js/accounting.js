@@ -1,3 +1,11 @@
+/* run console debug 
+
+window.DEBUG_IDB = true
+
+*/
+
+
+
 document.addEventListener("DOMContentLoaded", async() => {
 
   const role = localStorage.getItem("role") || "";
@@ -989,8 +997,9 @@ function canFinanceEdit() {
     CACHE.workersActive.data = list;
     CACHE.workersActive.at = Date.now();
     return list;
-  } */
+  } 
 
+// this is old version just remember culprit
 
   async function getActiveWorkers() {
     // ✅ IndexedDB-first (Shell WORKERS) + version stamp
@@ -1020,6 +1029,41 @@ function canFinanceEdit() {
     CACHE.workersActive.at = Date.now();
     return list;
   }
+
+  */
+
+ async function getActiveWorkers() {
+    try{
+    const ver = await getDashVersion_();
+    const k = shellKey_("WORKERS", ver);
+
+    let rows = await idbGet_(k);
+    if (rows){
+      idbLog_("⚡ IDB HIT", "WORKERS shell");
+    } else {
+      idbLog_("☁️ IDB MISS", "WORKERS shell");
+      rows = await api({ action: "listWorkersLite" });
+      if (rows && !rows.error){
+        await idbSet_(k, rows);
+        idbLog_("💾 IDB SAVED", "WORKERS shell");
+      }
+    }
+
+    const list = (rows || [])
+      .map(w => String(w?.worker_name || w?.name || w || "").trim())
+      .filter(Boolean)
+      .sort((a,b) => a.localeCompare(b));
+
+    CACHE.workersActive.data = list;
+    CACHE.workersActive.at = Date.now();
+    return list;
+  }catch(e){
+    return [];
+  }
+ }
+
+
+   
 
   async function getSalaryMonthsFromUpad() {
     const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
@@ -1336,6 +1380,27 @@ async function idbGetOrFetch_(key, fetchFn){
   return res;
 }
 
+
+
+  // ✅ Debug helper: shows IDB HIT/MISS per section/action
+function idbLog_(...a){
+  if (window.DEBUG_IDB) console.log(...a);
+}
+
+async function idbGetOrFetchLogged_(key, fetchFn, tag){
+  const hit = await idbGet_(key);
+  if (hit){
+    idbLog_("⚡ IDB HIT", tag || key);
+    return hit;
+  }
+  idbLog_("☁️ IDB MISS", tag || key);
+  const res = await fetchFn();
+  if (res && !res.error){
+    await idbSet_(key, res);
+    idbLog_("💾 IDB SAVED", tag || key);
+  }
+  return res;
+}
 
   
 async function prefetchShellCaches(ver){
