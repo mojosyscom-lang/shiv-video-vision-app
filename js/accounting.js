@@ -977,7 +977,7 @@ function canFinanceEdit() {
     return 0;
   }
 
-
+/* // if upad section or section where workers list is give shows problems this culprit should return 
   async function getActiveWorkers() {
     // The Silent Scribe: Fetching active workers directly from the unified meta payload
     const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
@@ -986,6 +986,36 @@ function canFinanceEdit() {
       .filter(Boolean)
       .sort((a,b) => a.localeCompare(b));
     
+    CACHE.workersActive.data = list;
+    CACHE.workersActive.at = Date.now();
+    return list;
+  } */
+
+
+  async function getActiveWorkers() {
+    // ✅ IndexedDB-first (Shell WORKERS) + version stamp
+    const ver = await getDashVersion_();
+    const k = shellKey_("WORKERS", ver);
+
+    // 1) Try instant IndexedDB
+    let workers = await idbGet_(k);
+
+    // 2) If missing, fetch lite + store
+    if (!workers) {
+      workers = await api({ action: "listWorkersLite" });
+      if (workers && !workers.error) await idbSet_(k, workers);
+    }
+
+    // 3) Normalize into active worker name list (same output shape as before)
+    if (workers && workers.error) workers = [];
+    workers = Array.isArray(workers) ? workers : [];
+
+    const list = workers
+      .filter(w => String(w.status || "ACTIVE").toUpperCase() === "ACTIVE")
+      .map(w => String(w.worker || "").trim())
+      .filter(Boolean)
+      .sort((a,b) => a.localeCompare(b));
+
     CACHE.workersActive.data = list;
     CACHE.workersActive.at = Date.now();
     return list;
@@ -1004,7 +1034,7 @@ function canFinanceEdit() {
     return months.filter(Boolean);
   }
 
-
+/* // if months goes wrong bring this back 
   async function getMonthOptionsMerged() {
     return cachedApi("monthsMerged", 60000, async () => {
       // The Unified Meta: Extracting all months from the single upadMeta payload
@@ -1024,7 +1054,43 @@ function canFinanceEdit() {
       list.sort((a,b) => (monthKey(b) || 0) - (monthKey(a) || 0));
       return list;
     });
+  } */
+
+
+async function getMonthOptionsMerged() {
+    // ✅ IndexedDB-first months list (persists until version changes)
+    const comp = String(localStorage.getItem("company") || "");
+    const ver = await getDashVersion_();
+    const k = `MONTHS_MERGED|${comp}|v${ver}`;
+
+    // 1) Try instant IndexedDB
+    let hit = await idbGet_(k);
+    if (Array.isArray(hit) && hit.length) return hit;
+
+    // 2) Compute using existing logic (no logic change)
+    const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
+    const allMonths = (meta.months || []).map(m => normMonthLabel(monthLabelFromAny(m)));
+
+    const set = new Set(allMonths.filter(Boolean));
+    const nowKey = monthKey(monthLabelNow());
+
+    const list = [...set].filter(m => {
+      const kk = monthKey(m);
+      if (!kk) return false;
+      if (nowKey && kk > nowKey) return false;
+      return true;
+    });
+
+    list.sort((a,b) => (monthKey(b) || 0) - (monthKey(a) || 0));
+
+    // 3) Save to IDB
+    await idbSet_(k, list);
+
+    return list;
   }
+
+
+  
 
   /* =========================
      UI
