@@ -16,27 +16,93 @@ document.addEventListener("DOMContentLoaded", async() => {
   return;
 }
 
-// enable notification button starts here
+// enable android back button starts here
 
+// ✅ Android Back button / browser back integration (History stack)
+window.__navPopstate = false;
+window.__currentSection = window.__currentSection || "";
 
+function navNormalizeSection_(s){
+  const x = String(s || "").replace(/^#/, "").trim();
+  return x || "dashboard";
+}
+
+function navRememberSection_(sec){
+  const s = navNormalizeSection_(sec);
+
+  // same section -> keep one history entry
+  if (window.__currentSection === s){
+    try { history.replaceState({ sec: s }, "", "#" + s); } catch(e){}
+    return;
+  }
+
+  window.__currentSection = s;
+  try { history.pushState({ sec: s }, "", "#" + s); } catch(e){}
+}
+
+function navStartSection_(){
+  // allow deep-link: #workers / #invoice etc
+  return navNormalizeSection_(window.location.hash);
+}
+
+// bind popstate once
+(function bindPopstateOnce_(){
+  if (window.__popBound) return;
+  window.__popBound = true;
+
+  window.addEventListener("popstate", async (e)=>{
+    const sec = navNormalizeSection_(e && e.state ? e.state.sec : window.location.hash);
+
+    // prevent pushState loop
+    window.__navPopstate = true;
+    window.__currentSection = sec;
+
+    try{
+      if (sec === "dashboard") await showDashboard();
+      else await loadSection(sec);
+    } finally {
+      window.__navPopstate = false;
+    }
+  });
+})();
   
-  // notification button ends here 
+  // android back button ends here 
 
 
   
 /*  try different dashboards starts here */
 // --- Role-Based Entry Logic ---
   try {
+
+    // ✅ Start section from URL hash (e.g. #clients / #invoice / #inventoryTxn)
+    // If empty -> default based on role
+    const start = navStartSection_();
+
     if (role === "owner" || role === "superadmin") {
       console.log("👑 Access granted: Initializing Dashboard...");
-      // Ensure showDashboard() is called (which is your async function name in the file)
-      await showDashboard(); 
-    } 
+
+      // default: dashboard
+      const sec = (start && start !== "dashboard") ? start : "dashboard";
+
+      // ✅ push initial state once (so Android back goes inside app)
+      if (!window.__navPopstate) navRememberSection_(sec);
+
+      if (sec === "dashboard") {
+        await showDashboard();
+      } else {
+        await loadSection(sec);
+      }
+    }
     else if (role === "staff") {
       console.log("🛠️ Staff Access: Loading Inventory Transactions...");
-      // Calls your existing section loader
-      loadSection("inventoryTxn"); 
-    } 
+
+      // default: inventoryTxn
+      const sec = start || "inventoryTxn";
+
+      if (!window.__navPopstate) navRememberSection_(sec);
+
+      await loadSection(sec);
+    }
     else {
       content.innerHTML = `
         <div style="text-align:center; padding: 40px;">
@@ -1459,6 +1525,14 @@ async function prefetchShellCaches(ver){
   
   async function showDashboard() {
 
+    // android back button starts here
+
+      // ✅ History for dashboard
+  if (!window.__navPopstate) navRememberSection_("dashboard");
+  else window.__currentSection = "dashboard";
+
+    // android back button ends here
+
       // 🔒 Security Gate
   const isAdmin = (role === "owner" || role === "superadmin");
   if (!isAdmin) {
@@ -1823,10 +1897,12 @@ showDashboard();
     } */
 
 
-// Company details section starts here
-
+// android back button starts here
+  // ✅ History: remember section when navigation happens (not when popstate triggers)
+  type = navNormalizeSection_(type);
+  if (!window.__navPopstate) navRememberSection_(type);
     
-    // Company details section ends here
+    // android back button ends here
 
 
 
