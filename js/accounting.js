@@ -7164,6 +7164,19 @@ try {
       b.addEventListener("click", async ()=>{
         const id = b.getAttribute("data-edit");
         const full = await api({ action: "getInvoiceFull", invoice_id: id });
+
+              // ✅ Always fetch full client for edit (no shell cache here)
+        const h0 = (full && full.header) ? full.header : {};
+        let clientFull = null;
+
+        const cid = String(h0.client_id || "").trim();
+        if (cid) {
+          const c = await api({ action: "getClientById", client_id: cid });
+          if (c && !c.error) clientFull = c;
+        }
+
+
+        
         if (full && full.error) return alert(String(full.error));
 
         editingInvoiceId = id;
@@ -7208,15 +7221,18 @@ applyDocTypeRules();
         // set client dropdown + full details
         const cp = document.getElementById("inv_client_pick");
         if (cp) cp.value = String(h.client_id||"");
-        setClientFields({
-          client_id: h.client_id,
-          client_name: h.client_name,
-          client_company: h.client_company || "",
-          phone1: h.client_phone,
-          phone2: h.client_phone2 || "",
-          address: h.client_address,
-          gstin: h.client_gstin || ""
-        });
+       // Prefer latest client from shell cache
+const freshClient = clientById[String(h.client_id || "").trim()] || null;
+
+setClientFields({
+  client_id: h.client_id,
+  client_name: freshClient?.client_name || h.client_name || "",
+  client_company: freshClient?.company_name || h.client_company || "",
+  phone1: freshClient?.phone1 || h.client_phone || "",
+  phone2: freshClient?.phone2 || h.client_phone2 || "",
+  address: freshClient?.address || h.client_address || "",
+  gstin: freshClient?.gstin || h.client_gstin || ""
+});
 
         document.getElementById("inv_order_id").textContent = String(h.order_id||"");
         document.getElementById("inv_venue").value = String(h.venue||"");
