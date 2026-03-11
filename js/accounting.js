@@ -1468,7 +1468,7 @@ async function idbGetOrFetchLogged_(key, fetchFn, tag){
   return res;
 }
 
-  async function refreshDashMetaNow_(){
+async function refreshDashMetaNow_(){
   try{
     const comp = String(localStorage.getItem("company") || "");
     if (!comp) return 1;
@@ -1478,6 +1478,18 @@ async function idbGetOrFetchLogged_(key, fetchFn, tag){
 
     const metaKey = `DASH_META|${comp}`;
     await idbSet_(metaKey, { version: ver, at: Date.now() });
+
+    // ✅ clear in-memory caches that may still hold old data
+    invalidateCache([
+      "workersRaw",
+      "upadMeta",
+      "holidaysAll",
+      "monthsMerged",
+      "workersActive",
+      "upadList",
+      "expensesList",
+      "salarySummary"
+    ]);
 
     return ver;
   }catch(e){
@@ -2688,6 +2700,7 @@ if (qInfoBox) qInfoBox.textContent = (st === "ACTIVE")
       const r = await api({ action: "addInPayment", ...payload });
       if (r && r.error) return alert(String(r.error));
 
+      await refreshDashMetaNow_();
       alert("Saved Income: " + (r.pay_id || ""));
       if (elStatus) elStatus.textContent = "Saved: " + (r.pay_id || "");
 
@@ -3311,7 +3324,7 @@ ocr_text: String((lastUpload?.ocr_text || existingFile.ocr_text || "")),
         : await api({ action: "addGSTBill", ...payload });
 
       if (r && r.error) return alert(String(r.error));
-
+await refreshDashMetaNow_();
       alert(editingBillId ? "Updated" : "Saved");
       // reset for next entry
       editingBillId = "";
@@ -6456,6 +6469,7 @@ currentHeaderCache = {
       
 
 const no = lastSavedInvoiceNo;
+      await refreshDashMetaNow_();
 alert(editingInvoiceId ? "Saved" : (doc_type === "QUOTATION" ? ("Quotation saved: " + no) : ("Invoice saved: " + no)));
 // ✅ Persist last saved invoice info across reload
 sessionStorage.setItem("lastSavedInvoiceId", lastSavedInvoiceId || "");
@@ -9805,9 +9819,10 @@ if (String(newSetup) > String(newStart)) return alert("Setup date cannot be afte
               end_date: (chkFixed ? "" : String(newEnd).trim()),
               fixed_install: (chkFixed ? "1" : "0")
             });
-            if (r && r.error) return alert(String(r.error));
-            alert("Order updated");
-            loadSection("orders");
+          if (r && r.error) return alert(String(r.error));
+await refreshDashMetaNow_();
+alert("Order updated");
+loadSection("orders");
           } finally {
             setTimeout(unlock, 500);
           }
@@ -9827,6 +9842,7 @@ if (String(newSetup) > String(newStart)) return alert("Setup date cannot be afte
           try {
             const r = await api({ action: "updateOrderStatus", rowIndex: Number(row), status: String(next).trim() });
             if (r && r.error) return alert(String(r.error));
+            await refreshDashMetaNow_();
             alert("Status updated");
             loadSection("orders");
           } finally {
@@ -10141,6 +10157,7 @@ try {
   console.warn("Auto planned LED item failed:", e);
 }
 
+await refreshDashMetaNow_();
 alert("Order created");
 loadSection("orders");
     } finally {
@@ -12557,7 +12574,7 @@ const r = await api({
       });
 
       if (r && r.error) return;
-
+await refreshDashMetaNow_();
       alert("Holiday saved");
       document.getElementById("hol_reason").value = "";
       invalidateCache(["holidaysAll", "monthsMerged"]);
@@ -12675,6 +12692,7 @@ const canDelete = (role === "superadmin");
               reason: String(newReason || "").trim()
             });
             if (r && r.error) return alert(String(r.error));
+            await refreshDashMetaNow_();
             alert("Holiday updated");
             invalidateCache(["holidaysAll", "monthsMerged"]);
             loadHolidays();
@@ -12694,6 +12712,7 @@ const canDelete = (role === "superadmin");
           try {
             const r = await api({ action: "deleteHoliday", rowIndex: Number(row) });
             if (r && r.error) return alert(String(r.error));
+            await refreshDashMetaNow_();
             alert("Holiday deleted");
             invalidateCache(["holidaysAll", "monthsMerged"]);
             loadHolidays();
