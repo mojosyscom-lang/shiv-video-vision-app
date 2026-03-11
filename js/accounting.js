@@ -1069,20 +1069,23 @@ function canFinanceEdit() {
 // this is old version just remember culprit
 */
   async function getActiveWorkers() {
-    // ✅ IndexedDB-first (Shell WORKERS) + version stamp
+    // ✅ 0) Memory-first for instant repeat opens
+    if (fresh("workersActive", 600000)) {
+      return CACHE.workersActive.data || [];
+    }
+
+    // ✅ 1) IndexedDB-first (Shell WORKERS) + version stamp
     const ver = await getDashVersion_();
     const k = shellKey_("WORKERS", ver);
 
-    // 1) Try instant IndexedDB
     let workers = await idbGet_(k);
 
-    // 2) If missing, fetch lite + store
+    // ✅ 2) Backend only if missing for this version
     if (!workers) {
       workers = await api({ action: "listWorkersLite" });
       if (workers && !workers.error) await idbSet_(k, workers);
     }
 
-    // 3) Normalize into active worker name list (same output shape as before)
     if (workers && workers.error) workers = [];
     workers = Array.isArray(workers) ? workers : [];
 
