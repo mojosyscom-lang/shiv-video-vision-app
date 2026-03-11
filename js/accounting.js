@@ -11904,11 +11904,19 @@ async function loadSalaryPaymentsList(){
     box.innerHTML = `<p style="color:#b00020;">Please select a month.</p>`;
     return;
   }
-  const month = monthLabelFromISO(ym + "-01");
+  const monthLabel = monthLabelFromISO(ym + "-01");
+  const monthRaw = ym;
 
-   const ver = await getDashVersion_();
-  const k2 = vKey_("SALPAY", ver, month);
-  const rows = await idbGetOrFetch_(k2, () => api({ action: "listSalaryPayments", month }));
+  const ver = await getDashVersion_();
+
+  const kLabel = vKey_("SALPAY", ver, monthLabel);
+  let rows = await idbGetOrFetch_(kLabel, () => api({ action: "listSalaryPayments", month: monthLabel }));
+
+  // ✅ fallback: support old/raw saved month format like YYYY-MM
+  if ((!Array.isArray(rows) || !rows.length) && monthRaw) {
+    const kRaw = vKey_("SALPAY_RAW", ver, monthRaw);
+    rows = await idbGetOrFetch_(kRaw, () => api({ action: "listSalaryPayments", month: monthRaw }));
+  }
 
   if (rows && rows.error) {
     box.innerHTML = `<p style="color:red;">${escapeHtml(String(rows.error))}</p>`;
@@ -11977,6 +11985,7 @@ async function loadSalaryPaymentsList(){
         });
 
         if (r && r.error) return alert(String(r.error));
+        await refreshDashMetaNow_();
         alert("Salary payment updated");
         await loadSalaryPaymentsList();
       } finally {
