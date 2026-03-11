@@ -11912,7 +11912,6 @@ async function loadSalaryPaymentsList(){
   const kLabel = vKey_("SALPAY", ver, monthLabel);
   let rows = await idbGetOrFetch_(kLabel, () => api({ action: "listSalaryPayments", month: monthLabel }));
 
-  // ✅ fallback: support old/raw saved month format like YYYY-MM
   if ((!Array.isArray(rows) || !rows.length) && monthRaw) {
     const kRaw = vKey_("SALPAY_RAW", ver, monthRaw);
     rows = await idbGetOrFetch_(kRaw, () => api({ action: "listSalaryPayments", month: monthRaw }));
