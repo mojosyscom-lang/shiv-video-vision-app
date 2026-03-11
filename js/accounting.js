@@ -8965,7 +8965,6 @@ const phone2 = normINPhonePlus91_(document.getElementById("cl_phone2")?.value ||
 
       await refreshDashMetaNow_();
 alert("Client added");
-sessionStorage.setItem("clients_auto_view", "ACTIVE");
 loadSection("clients");
       } finally {
         setTimeout(unlock, 500);
