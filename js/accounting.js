@@ -759,16 +759,17 @@ const body =
   
   };
 
-  /* // THE SILENT SCRIBE: Pre-fetching the future into the present
+  // ✅ Warm Upad shell/meta quietly after dashboard
   function silentPrefetchHeavyData() {
     setTimeout(() => {
       console.log("Oracle: Silently pre-fetching Advance/Upad data...");
-      // Fetching the meta and workers instantly in the background for 10 minutes of cache
-      cachedApi("upadMeta", 600000, () => api({ action: "getUpadMeta" })).catch(()=>{});
+      getUpadMetaFast_().catch(()=>{});
       getActiveWorkers().catch(()=>{});
-    }, 1500); // Waits 1.5 seconds so the dashboard renders completely unhindered first
+      getMonthOptionsMerged().catch(()=>{});
+    }, 1200);
   }
-*/
+
+  
   function fresh(cacheKey, ttlMs) {
     return CACHE[cacheKey]?.data && (Date.now() - CACHE[cacheKey].at) < ttlMs;
   }
@@ -1132,7 +1133,7 @@ function canFinanceEdit() {
    
 
   async function getSalaryMonthsFromUpad() {
-    const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
+    const meta = await getUpadMetaFast_();
     return (meta.months || []).map(monthLabelFromAny);
   }
 
@@ -1178,7 +1179,7 @@ async function getMonthOptionsMerged() {
     if (Array.isArray(hit) && hit.length) return hit;
 
     // 2) Compute using existing logic (no logic change)
-    const meta = await cachedApi("upadMeta", 60000, () => api({ action: "getUpadMeta" }));
+       const meta = await getUpadMetaFast_();
     const allMonths = (meta.months || []).map(m => normMonthLabel(monthLabelFromAny(m)));
 
     const set = new Set(allMonths.filter(Boolean));
@@ -1424,6 +1425,35 @@ async function getDashVersion_(){
   }
 }
 
+  async function getUpadMetaFast_(){
+  try{
+    const comp = String(localStorage.getItem("company") || "");
+    const ver = await getDashVersion_();
+    const k = `UPAD_META|${comp}|v${ver}`;
+
+    // 1) instant IDB hit
+    let meta = await idbGet_(k);
+    if (meta && !meta.error) {
+      CACHE.upadMeta.data = meta;
+      CACHE.upadMeta.at = Date.now();
+      return meta;
+    }
+
+    // 2) backend fetch only if missing
+    meta = await api({ action: "getUpadMeta" });
+    if (meta && !meta.error) {
+      await idbSet_(k, meta);
+      CACHE.upadMeta.data = meta;
+      CACHE.upadMeta.at = Date.now();
+      return meta;
+    }
+
+    return meta || {};
+  }catch(e){
+    return {};
+  }
+}
+
 function shellKey_(name, ver){
   const comp = String(localStorage.getItem("company") || "");
   const v = Number(ver || 1) || 1;
@@ -1490,6 +1520,13 @@ async function refreshDashMetaNow_(){
       "expensesList",
       "salarySummary"
     ]);
+
+    // ✅ quietly re-warm the heaviest section dependencies
+    setTimeout(() => {
+      getUpadMetaFast_().catch(()=>{});
+      getActiveWorkers().catch(()=>{});
+      getMonthOptionsMerged().catch(()=>{});
+    }, 0);
 
     return ver;
   }catch(e){
@@ -1775,8 +1812,8 @@ async function prefetchShellCaches(ver){
         window.__dashBuildInFlight = false;
       }
 
-     /* // Awaken the Scribe
-      silentPrefetchHeavyData(); */
+         // ✅ warm Advance/Upad after dashboard paint
+      silentPrefetchHeavyData();
     }, 0);
 
     
@@ -3651,7 +3688,7 @@ if (type === "gst") {
 
       const r = await api(payload);
       if (r && r.error) return alert(r.error);
-
+await refreshDashMetaNow_();
       alert("GST Rate Saved Successfully");
       loadSection("gst"); // refresh
     } finally {
@@ -6525,7 +6562,7 @@ document.getElementById("btn_quote_convert")?.addEventListener("click", async ()
 
     const r = await api({ action: "convertQuotationToInvoice", quotation_id: editingInvoiceId });
     if (r && r.error) return alert(String(r.error));
-
+ await refreshDashMetaNow_();
     alert(`Converted ✅\nNew Invoice No: ${r.new_invoice_no || ""}\nApplied Advance: ₹${Number(r.applied_total||0).toFixed(2)}`);
 
     // Reload invoice list / section so user can see the new invoice
@@ -7374,6 +7411,7 @@ setClientFields({
         try {
           const r = await api({ action: "cancelInvoice", invoice_id: id });
           if (r && r.error) return alert(String(r.error));
+            await refreshDashMetaNow_();
           alert("Cancelled");
           renderInvoiceList();
         } finally { setTimeout(unlock, 350); }
@@ -7646,7 +7684,7 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
 
       const r = await api({ action: "saveCompanyProfile", ...payload });
       if (r && r.error) return alert(String(r.error));
-
+await refreshDashMetaNow_();
       document.getElementById("cp_status").textContent = "Saved ✅";
       alert("Company Profile Saved ✅");
     } finally {
@@ -7818,8 +7856,8 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
         : await api({ action: "addCompanyBankAccount", ...payload });
 
       if (r && r.error) return alert(String(r.error));
-
-      alert("Saved ✅");
+await refreshDashMetaNow_();
+      alert("Saved ✅ Bank Account");
       loadSection("companyBankAccounts");
     } finally {
       setTimeout(unlock, 350);
@@ -7861,6 +7899,7 @@ document.getElementById("cp_print_file")?.addEventListener("change", ()=> _uploa
       try {
         const r = await api({ action: "setCompanyBankAccountActive", bank_account_id: id, is_active: next });
         if (r && r.error) return alert(String(r.error));
+         await refreshDashMetaNow_();
         loadSection("companyBankAccounts");
       } finally {
         setTimeout(unlock, 350);
@@ -9242,6 +9281,7 @@ loadSection("clients");
 
             
             if (r && r.error) return alert(String(r.error));
+               await refreshDashMetaNow_();
             alert("Item updated");
             loadSection("inventory");
           } finally {
@@ -9264,6 +9304,7 @@ loadSection("clients");
               status: String(next).trim()
             });
             if (r && r.error) return alert(String(r.error));
+            await refreshDashMetaNow_();
             alert("Status updated");
             loadSection("inventory");
           } finally {
@@ -9315,7 +9356,7 @@ const r = await api({
 });
      
       if (r && r.error) return alert(String(r.error));
-
+await refreshDashMetaNow_();
       alert("Item added");
       loadSection("inventory");
     } finally {
@@ -10040,7 +10081,7 @@ loadSection("orders");
               }
 
               if (bad) return alert("Save failed: " + bad);
-
+   await refreshDashMetaNow_();
               alert("Plan saved");
               loadSection("orders");
             } finally {
@@ -10740,7 +10781,7 @@ const item_id = String(inp.getAttribute(attr) || "").trim();
     await saveType(retInputs, "RETURN");
     await saveType(lostInputs, "LOST");
     await saveType(damInputs, "DAMAGED");
-
+await refreshDashMetaNow_();
     alert("Saved. (LOST/DAMAGED will be PENDING for approval)");
     await loadOrderItemsUI();
     if (isAdmin) await renderPendingBox();
@@ -11024,6 +11065,7 @@ const BG_URL = "https://mojosyscom-lang.github.io/shiv-video-vision-app/assets/p
         try {
           const r = await api({ action: "decideInvAdjust", txn_id, decision });
           if (r && r.error) return alert(String(r.error));
+             await refreshDashMetaNow_();
           alert(`Saved: ${String(r.status || decision)}`);
           await renderPendingBox();
           // also refresh current order display if loaded
@@ -11425,6 +11467,7 @@ const canDelete = (role === "superadmin");
                 month: String(newMonth).trim()
               });
               if (r && r.error) return alert(String(r.error));
+               await refreshDashMetaNow_();
               alert("Expense updated");
               invalidateCache(["expensesList"]);
               await loadExpenseSummary();
@@ -11444,6 +11487,7 @@ const canDelete = (role === "superadmin");
             try {
               const r = await api({ action: "deleteExpense", rowIndex: Number(row) });
               if (r && r.error) return alert(String(r.error));
+              await refreshDashMetaNow_();
               alert("Expense deleted");
               invalidateCache(["expensesList"]);
               await loadExpenseSummary();
@@ -11633,6 +11677,7 @@ const canDelete = (role === "superadmin");
           try {
             const r = await api({ action: "updateExpenseTypeStatus", type: t, status: next });
             if (r && r.error) return alert(String(r.error));
+            await refreshDashMetaNow_();
             await renderTypes();
             loadSection("expenses"); // refresh dropdowns (active/inactive)
           } finally {
@@ -11649,7 +11694,7 @@ const canDelete = (role === "superadmin");
 
       const r = await api({ action: "addExpenseType", type: t });
       if (r && r.error) return alert(String(r.error));
-
+     await refreshDashMetaNow_();
       inp.value = "";
       await renderTypes();
       loadSection("expenses");
@@ -12201,8 +12246,12 @@ const description = String(document.getElementById("upad_desc")?.value || "").tr
       description
     });
 
-    if (r && r.queued) alert("Saved offline. Will sync when online.");
-    else alert("Advance added");
+    if (r && r.queued) {
+      alert("Saved offline. Will sync when online.");
+    } else {
+      await refreshDashMetaNow_();
+      alert("Advance added");
+    }
 
     document.getElementById("upad_amount").value = "";
     document.getElementById("upad_desc").value = "";
@@ -12301,8 +12350,12 @@ async function isDuplicateExpense({ company, date, category, description, amount
       tds_amount: tdsAmount
     });
 
-    if (r && r.queued) alert("Saved offline. Will sync when online.");
-    else alert("Expense added");
+      if (r && r.queued) {
+      alert("Saved offline. Will sync when online.");
+    } else {
+      await refreshDashMetaNow_();
+      alert("Expense added");
+    }
         invalidateCache(["expensesList"]);
 
     document.getElementById("exp_desc").value = "";
@@ -12452,8 +12505,12 @@ const el = rowEls.find(r =>
         month
       });
 
-      if (r && r.queued) alert("Payment saved offline. Will sync when online.");
-      else alert("Payment added");
+        if (r && r.queued) {
+        alert("Payment saved offline. Will sync when online.");
+      } else {
+        await refreshDashMetaNow_();
+        alert("Payment added");
+      }
             invalidateCache(["salarySummary"]);
 
       document.getElementById("sal_amount").value = "";
@@ -12496,7 +12553,7 @@ const el = rowEls.find(r =>
       });
 
       if (r && r.error) return;
-
+await refreshDashMetaNow_();
       alert("Worker saved");
       invalidateCache(["workersRaw", "workersActive"]);
       loadSection("workers");
@@ -12527,7 +12584,7 @@ const el = rowEls.find(r =>
       });
 
       if (r && r.error) return;
-
+  await refreshDashMetaNow_();
       alert("Worker updated");
       invalidateCache(["workersRaw", "workersActive"]);
       loadSection("workers");
@@ -12547,6 +12604,7 @@ const r = await api({
 });
 
     if (r && r.error) return;
+      await refreshDashMetaNow_();
     alert(`Updated: ${worker} → ${status}`);
     invalidateCache(["workersRaw", "workersActive", "salarySummary"]);
     loadSection("workers");
