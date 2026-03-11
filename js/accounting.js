@@ -1468,6 +1468,23 @@ async function idbGetOrFetchLogged_(key, fetchFn, tag){
   return res;
 }
 
+  async function refreshDashMetaNow_(){
+  try{
+    const comp = String(localStorage.getItem("company") || "");
+    if (!comp) return 1;
+
+    const meta = await api({ action: "getDashboardCacheMeta" });
+    const ver = Number(meta?.version || 1) || 1;
+
+    const metaKey = `DASH_META|${comp}`;
+    await idbSet_(metaKey, { version: ver, at: Date.now() });
+
+    return ver;
+  }catch(e){
+    return await getDashVersion_();
+  }
+}
+
   
 async function prefetchShellCaches(ver){
   try{
@@ -8579,8 +8596,13 @@ if (type === "clients") {
   const isSuper = (role === "superadmin");
 
   // UI state
-  let viewMode = ""; // "ACTIVE" | "ALL"
-  let lastShown = []; // rows currently shown (after mode + search)
+ let viewMode = ""; // "ACTIVE" | "ALL"
+let lastShown = []; // rows currently shown (after mode + search)
+const autoView = String(sessionStorage.getItem("clients_auto_view") || "").trim().toUpperCase();
+if (autoView === "ACTIVE" || autoView === "ALL") {
+  viewMode = autoView;
+  sessionStorage.removeItem("clients_auto_view");
+}
 
   content.innerHTML = `
     <div class="card">
@@ -8796,9 +8818,9 @@ function phoneDigitsOnly10_(raw){
           const newGst = prompt("GST:", String(cur.gst || ""));
           if (newGst === null) return;
 
-          if (!String(newName).trim() || !String(newPhone1).trim()) {
-            return alert("Name and phone1 required");
-          }
+        if (!String(newName).trim()) {
+  return alert("Name required");
+}
 
           const unlock = lockButton(b, "Saving...");
           try {
@@ -8813,8 +8835,9 @@ function phoneDigitsOnly10_(raw){
               gst: String(newGst || "").trim()
             });
             if (r && r.error) return alert(String(r.error));
-            alert("Client updated");
-            loadSection("clients");
+         await refreshDashMetaNow_();
+alert("Client updated");
+loadSection("clients");
           } finally {
             setTimeout(unlock, 500);
           }
@@ -8835,8 +8858,9 @@ function phoneDigitsOnly10_(raw){
               status: String(next).trim()
             });
             if (r && r.error) return alert(String(r.error));
-            alert("Status updated");
-            loadSection("clients");
+            await refreshDashMetaNow_();
+alert("Client status updated");
+loadSection("clients");
           } finally {
             setTimeout(unlock, 500);
           }
@@ -8846,17 +8870,22 @@ function phoneDigitsOnly10_(raw){
   }
 
   // Buttons: load lists (no auto load)
-  document.getElementById("btn_cl_show_active")?.addEventListener("click", () => {
-    viewMode = "ACTIVE";
-    if (hint) hint.textContent = "Active clients loaded. Use search to filter.";
-    applySearchAndRender();
-  });
+document.getElementById("btn_cl_show_active")?.addEventListener("click", () => {
+  viewMode = "ACTIVE";
+  if (hint) hint.style.display = "none";
+  applySearchAndRender();
+});
 
-  document.getElementById("btn_cl_show_all")?.addEventListener("click", () => {
-    viewMode = "ALL";
-    if (hint) hint.textContent = "All clients loaded (Active + Inactive). Use search to filter.";
-    applySearchAndRender();
-  });
+document.getElementById("btn_cl_show_all")?.addEventListener("click", () => {
+  viewMode = "ALL";
+  if (hint) hint.style.display = "none";
+  applySearchAndRender();
+});
+
+if (viewMode === "ACTIVE" || viewMode === "ALL") {
+  if (hint) hint.style.display = "none";
+  applySearchAndRender();
+}
 
   // Search live filtering (only after user loaded some view)
   searchInput?.addEventListener("input", () => {
@@ -8921,7 +8950,7 @@ const phone2 = normINPhonePlus91_(document.getElementById("cl_phone2")?.value ||
         const address = (document.getElementById("cl_address")?.value || "").trim();
         const gst = (document.getElementById("cl_gst")?.value || "").trim();
 
-        if (!client_name || !phone1) return alert("Name and phone1 required");
+        if (!client_name) return alert("Name required");
 
         const r = await api({
           action: "addClient",
@@ -8934,8 +8963,10 @@ const phone2 = normINPhonePlus91_(document.getElementById("cl_phone2")?.value ||
         });
         if (r && r.error) return alert(String(r.error));
 
-        alert("Client added");
-        loadSection("clients");
+      await refreshDashMetaNow_();
+alert("Client added");
+sessionStorage.setItem("clients_auto_view", "ACTIVE");
+loadSection("clients");
       } finally {
         setTimeout(unlock, 500);
       }
@@ -9744,15 +9775,21 @@ setTimeout(applyFixedInstallOrderUI_, 0);
           const newStart = prompt("Start Date (YYYY-MM-DD):", String(prettyISODate(cur.start_date || todayISO())));
           if (newStart === null) return;
 
-          const newEnd = prompt("End Date (YYYY-MM-DD):", String(prettyISODate(cur.end_date || todayISO())));
-          if (newEnd === null) return;
+const curFixed = String(cur.fixed_install || "").toUpperCase() === "YES";
+const newEnd = prompt("End Date (YYYY-MM-DD):", String(prettyISODate(cur.end_date || todayISO())));
+if (newEnd === null) return;
 
-          if (!String(newVenue).trim()) return alert("Venue is required");
-          if (!String(newSetup).trim() || !String(newStart).trim() || !String(newEnd).trim()) {
-            return alert("Setup, start and end required");
-          }
-          if (String(newEnd) < String(newStart)) return alert("End date cannot be before start date");
-          if (String(newSetup) > String(newStart)) return alert("Setup date cannot be after start date");
+const chkFixed = curFixed;
+
+if (!String(newVenue).trim()) return alert("Venue is required");
+if (!String(newSetup).trim() || !String(newStart).trim()) {
+  return alert("Setup and start required");
+}
+if (!chkFixed && !String(newEnd).trim()) {
+  return alert("End date required");
+}
+if (!chkFixed && String(newEnd) < String(newStart)) return alert("End date cannot be before start date");
+if (String(newSetup) > String(newStart)) return alert("Setup date cannot be after start date");
 
           const unlock = lockButton(b, "Saving...");
           try {
